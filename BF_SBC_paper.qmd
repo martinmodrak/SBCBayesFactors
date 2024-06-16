@@ -1,0 +1,43 @@
+---
+title: "Simulation-based calibration for Bayes Factors"
+format: html
+---
+
+## Theoretical background
+
+BF and BMA
+
+Calibration of BF as prediction calibration
+
+This requires simulations (we do not know real-world ground truth and don't belive our models too much either)
+
+DAP vs SBC
+
+SBC for BF (BF to prob to ranks)
+
+SBC for BF as prediction calibration
+
+Testing the full BMA model
+
+Data-dependent quantities (those require full SBC)
+
+## Toy examples
+
+### Single binary observation
+
+- DAP does not recognize some failures
+-
+
+### Pois vs. negbinom
+
+- DAP is slow to find problems
+- SBC allows detecting posterior = prior
+
+
+## Real examples
+
+### Schad et al.
+
+Are BMA quantities useful?
+
+### Something where bridgesampling works
