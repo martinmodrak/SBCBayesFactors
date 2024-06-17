@@ -1,0 +1,146 @@
+---
+title: "Schad Aggregate examples"
+format: html
+---
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(SBC)
+library(designr)
+library(brms)
+library(hypr)
+devtools::load_all()
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir))  {
+  dir.create(cache_dir)
+}
+
+options("brms.backend" = "rstan")
+rstan::rstan_options(auto_write = TRUE)
+
+future::plan(future::multisession, workers = 8)
+```
+
+
+Multiple reasons to expect miscalibration (the null has two 0 params, but testing nulls with just a single zero), sigma_u1, sigma_u2 not taken from prior.
+
+Also had to fix rlkj sampling to get correct dimension of correlation matrix...
+
+```{r, echo=FALSE}
+design <-
+  fixed.factor("X", levels=c("X1", "X2", "X3")) +
+  random.factor("subj", instances=20) +
+  random.factor("trial", instances=10)
+dat <- design.codes(design)
+
+hm <- hypr(X1~X2, X1~X3)
+contrasts(dat$X) <- contr.hypothesis(hm)
+dat[,c("c2vs1","c3vs1")] <- model.matrix(~X,dat)[,2:3]
+dat$ysim <- 1
+
+priors2 <- c( set_prior("normal(200, 10)", class = "Intercept"), 
+             set_prior("normal(0,  20)", class = "b"),
+             set_prior("normal(0, 150)", class = "sd"), 
+             set_prior("normal(0,  20)", class = "sigma"), 
+             set_prior("lkj(2)", class = "cor") ) 
+
+simulate_agg <- function(model) {
+  beta0 <- -1; while (beta0<0)
+    beta0  <- SimFromPrior(priors2,class="Intercept")
+  sigma_u0 <- SimFromPrior(priors2,class="sd")
+  sigma_u1 <- 90 # SimFromPrior(priors, class="sd", coef="c2vs1") # 
+  sigma_u2 <- 10 # SimFromPrior(priors, class="sd", coef="c3vs1") # 
+  #rho_u    <- SimFromPrior(priors2,class="cor")
+  rho_u <- rlkjcorr(1, 3, eta = 2)
+  sigma    <- SimFromPrior(priors2,class="sigma")  
+  
+  if (model == 0) {
+    beta1 <- 0
+    beta2 <- 0
+  } else {
+    beta1    <- SimFromPrior(priors2,class="b")
+    beta2    <- SimFromPrior(priors2,class="b")
+  }
+
+  
+  dat$ysim <- simLMM(form = ~ 1 + c2vs1 + c3vs1 + (1 + c2vs1 + c3vs1 | subj), 
+                            data   = dat, 
+                            Fixef  = c(beta0, beta1, beta2), 
+                            VC_sd  = list(c(sigma_u0, sigma_u1, sigma_u2), sigma),
+                            CP     = list(rho_u),
+                            empirical = FALSE, verbose=FALSE)
+  
+
+  variables = list(
+    Intercept = beta0,
+    sd_subj__Intercept = sigma_u0,
+#    sd_subj__x = sigma_u1,
+#    cor_subj__Intercept__x = rho_u,
+    sigma = sigma
+  )
+  if(model == 1) {
+    variables$b_c2vs1 <- beta1
+    variables$b_c3vs1 <- beta2
+  }
+  
+  list(
+    generated = dat,
+    variables = variables
+  )
+}
+```
+
+```{r}
+set.seed(32215252)
+n_sims <- 250
+ds_agg_H0 <- generate_datasets(SBC_generator_function(simulate_agg, model = 0), n_sims = n_sims)
+ds_agg_H1 <- generate_datasets(SBC_generator_function(simulate_agg, model = 1), n_sims = n_sims)
+```
+
+
+```{r}
+backend_agg_H0_a <- SBC_backend_brms(ysim ~ 1 +        c3vs1 + (1 + c2vs1 + c3vs1|subj), 
+            family=gaussian(), prior=priors2, 
+            save_pars = save_pars(all = TRUE),
+            chains = 12,
+            warmup=2000, iter=4700,
+            control=list(adapt_delta=0.99, max_treedepth=15),
+            template_data = dat,
+            out_stan_file = file.path("cache/agg_H0_a.stan"))
+
+
+backend_issue_2_H1 <- SBC_backend_brms(ysim ~ 1 + c2vs1 + c3vs1 + (1 + c2vs1 + c3vs1|subj), 
+            family=gaussian(), prior=priors2, 
+            save_pars = save_pars(all = TRUE),
+            chains = 12,
+            warmup=2000, iter=4700,
+            control=list(adapt_delta=0.99, max_treedepth=15),
+            template_data = dat,
+            out_stan_file = file.path("cache/agg_H1.stan"))
+
+
+```
+
+
+```{r}
+ds_agg <- SBC_datasets_for_bf(ds_agg_H0, ds_agg_H1)
+backend_agg <- SBC_backend_bridgesampling(backend_agg_H0_a, backend_agg_H1)
+
+res_agg <- compute_SBC(
+  ds_agg[1:2], 
+  backend_agg,
+  keep_fits = FALSE,
+  cache_mode = "results",
+  cache_location = file.path(cache_dir, "SBC_agg.rds"))
+
+```
+
+```{r}
+plot_ecdf_diff(res_agg)
+
+plot_binary_calibration_diff(res_agg$stats)
+calibrationband::calibration_bands(round(res_agg$backend_diagnostics$prob_H1, 8), res_agg$stats %>% filter(variable == "model") %>% pull(simulated_value) %>% as.logical())
+```
+

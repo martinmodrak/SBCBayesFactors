@@ -3,6 +3,19 @@ title: "Simulation-based calibration for Bayes Factors"
 format: html
 ---
 
+Throughout this paper we assume there is a single shared data space $Y$ and a set of Bayesian statistical models $\mathcal{M_i}$ for $i \in \{1, ..., K\}$, each model associated  and parameter space $\Theta_i$. For $y \in Y, \theta \in \Theta_i$ each model implies the following joint, marginal, and posterior distributions:
+
+$$
+\begin{gather*}
+    \pi^i_\text{joint}(y, \theta) = \pi^i_\text{obs}(y | \theta) \pi^i_\text{prior}(\theta)\\
+    \pi^i_\text{marg}\left(y \right) = \int_\Theta \mathrm{d} \theta \: \pi^i_{\text{obs}}(y | \theta) \pi^i_\text{prior}(\theta)\\
+    \pi^i_\text{post}(\theta | y) = \frac{\pi^i_\text{obs}(y | \theta) \pi^i_\text{prior}(\theta)}{\pi^i_\text{marg}\left(y \right)}.
+\end{gather*}
+$$
+When there is no risk of confusion we may omit the model index.
+
+we primarily focus on the two-model situation, but the results generalize quite directly to multiple model comparisons.
+
 ## Theoretical background
 
 BF and BMA
@@ -11,7 +24,31 @@ Calibration of BF as prediction calibration
 
 This requires simulations (we do not know real-world ground truth and don't belive our models too much either)
 
-DAP vs SBC
+
+## Bayesian model consistency via simulations 
+
+The data-averaged posterior criterion relies on the identity:
+
+$$
+\forall \theta: \pi_\text{prior}(\theta) = \int_Y \mathrm{d} y \: \pi_\text{post}(\theta |y)\int_\Theta \mathrm{d}\tilde\theta  \:  \pi_\text{obs}(y | \tilde\theta) \pi_\text{prior}(\tilde \theta)
+$$
+
+SBC relies on the joint distribution of the prior and posterior samples
+
+$$
+\pi_\text{SBC}(y, \theta, \tilde\theta) = \pi_\text{prior}(\tilde\theta) \pi_\text{obs}(y | \tilde\theta) \pi_\text{post}(\theta | y)
+$$
+
+we then obtain that conditional on $y$, the $\tilde\theta$ and $\theta$ are exchangeable, i.e. that
+
+$$
+\forall y \in Y, \theta, \tilde\theta \in \Theta: \pi_\text{SBC}(y, \theta, \tilde\theta) = \pi_\text{SBC}(y, \tilde\theta, \theta)
+$$
+
+SBC then checks this property by ranks
+
+in other words, we can take the prior as a single draw from the correct posterior.
+
 
 SBC for BF (BF to prob to ranks)
 
@@ -26,7 +63,18 @@ Data-dependent quantities (those require full SBC)
 ### Single binary observation
 
 - DAP does not recognize some failures
--
+  - Permutations
+  - 0/1 probs
+  - Constructing sets of numbers with correct average is trivial...
+
+DAP for posterior model probability with uniform prior is:
+
+$$
+\frac{1}{2} =  \int_Y \mathrm{d} y \: P(M=1 | y) \frac{1}{2}\left( \int_{\Theta_0} \mathrm{d}\tilde\theta  \:  \pi^0_\text{obs}(y | \tilde\theta) \pi^0_\text{prior}(\tilde \theta) + \int_{\Theta_1} \mathrm{d}\tilde\theta  \:  \pi^1_\text{obs}(y | \tilde\theta) \pi^1_\text{prior}(\tilde \theta) \right)
+$$
+
+
+
 
 ### Pois vs. negbinom
 
