@@ -111,7 +111,7 @@ backend_agg_H0_a <- SBC_backend_brms(ysim ~ 1 +        c3vs1 + (1 + c2vs1 + c3vs
             out_stan_file = file.path("cache/agg_H0_a.stan"))
 
 
-backend_issue_2_H1 <- SBC_backend_brms(ysim ~ 1 + c2vs1 + c3vs1 + (1 + c2vs1 + c3vs1|subj), 
+backend_agg_H1 <- SBC_backend_brms(ysim ~ 1 + c2vs1 + c3vs1 + (1 + c2vs1 + c3vs1|subj), 
             family=gaussian(), prior=priors2, 
             save_pars = save_pars(all = TRUE),
             chains = 12,

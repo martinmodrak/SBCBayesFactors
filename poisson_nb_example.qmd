@@ -1,0 +1,340 @@
+---
+title: "BF - tests"
+format: html
+---
+
+TODO: Aki suggests using Aldor-Noiman et al. (2013) for continuous CDF checks...
+TODO: For binary variables, we can directly detect the posterior = prior situation
+
+```{r setup}
+library(tidyverse)
+library(SBC)
+library(future)
+library(patchwork)
+devtools::load_all()
+plan(multisession)
+theme_set(theme_minimal())
+
+py1 <- c(0.1, 0.9)
+pm1_given_y1 <- py1[1] / sum(py1)
+pm1_given_y2 <- (1 - py1[1]) / sum(1 - py1)
+correct_prob <- c(pm1_given_y1, pm1_given_y2)
+
+```
+
+
+```{r}
+
+
+
+res_correct <- test_SBC_BF(py1, correct_prob, title = "Correct BF", N_sims = 100)
+res_rev <- test_SBC_BF(py1, rev(correct_prob), title = "Reversed BF", N_sims = 100)
+res_small_error <- test_SBC_BF(py1, 0.3 * rev(correct_prob) + 0.7 * correct_prob, title = "0.3 * Reversed + 0.7 * Corect", N_sims = 400)
+#res_prior <- test_SBC_BF(py1, c(0.5, 0.5), title = "Prior = posterior", N_sims = 100)
+
+
+```
+
+```{r}
+(plot_ecdf_diff(res_rev) + ggtitle("Random tie braking for ranks") |
+  plot_q_diff(res_rev) + ggtitle("Piecewise-linear ECDF")) + plot_annotation("One binary parameter, one binary observation")
+
+
+plot_q_bootstrap_diff(res_rev)
+plot_q_bootstrap_diff(res_rev, bayesian = TRUE)
+
+```
+
+
+```{r, fig.width=8, fig.height=8}
+# An example where Dimitriadis works better
+#res_small_error <- test_SBC_BF(py1, 0.3 * rev(correct_prob) + 0.7 * correct_prob, title = "0.3 * Reversed + 0.7 * Corect", N_sims = 40)
+#res_small_error <- test_SBC_BF(py1, 0.6 * rev(correct_prob) + 0.4 * correct_prob, title = "0.3 * Reversed + 0.7 * Corect", N_sims = 40)
+
+((plot_ecdf_diff(res_small_error) + ggtitle("Random tie braking for ranks") | plot_Dimitriadis_res_diff(res_small_error)
+  ) /
+   (plot_q_diff(res_small_error) + ggtitle("Piecewise-linear ECDF", "Standard confidence ellipse around the null") |
+   plot_q_bootstrap_diff(res_small_error, bayesian = TRUE) + ggtitle("Piecewise-linear ECDF", "Bootstrap-derived confidence interval"))) + plot_annotation("One binary parameter, one binary observation")
+
+
+#plot_q_bootstrap_diff(res_small_error)
+
+
+```
+
+```{r}
+plot_q_bootstrap_diff(res_small_error, bayesian = TRUE)
+plot_q_bootstrap_diff(res_small_error, bayesian = TRUE, bbinom = TRUE)
+plot_q_bootstrap_diff(res_small_error, bayesian = FALSE)
+```
+
+
+```{r}
+plot_log_gamma_history(res_rev, max_sim_id = 50)
+plot_log_gamma_q_history(res_rev, max_sim_id = 50)
+```
+
+
+```{r, fig.width=8, fig.height=8}
+((plot_ecdf_diff(res_correct) + ggtitle("Random tie braking for ranks") | plot_Dimitriadis_res_diff(res_correct)
+  ) /
+   (plot_q_diff(res_correct) + ggtitle("Piecewise-linear ECDF", "Standard confidence ellipse around the null") |
+   plot_q_bootstrap_diff(res_correct, bayesian = TRUE, bbinom = TRUE) + ggtitle("Piecewise-linear ECDF", "Bootstrap-derived confidence interval"))) + plot_annotation("One binary parameter, one binary observation", "Correct posterior")
+
+```
+
+
+```{r}
+plot_log_gamma_history(res_correct)
+plot_log_gamma_q_history(res_correct)
+```
+
+```{r, fig.width=8, fig.height=8}
+# ((plot_ecdf_diff(res_prior) + ggtitle("Random tie braking for ranks") | patchwork::plot_spacer()
+#   ) /
+#    (plot_q_diff(res_prior) + ggtitle("Piecewise-linear ECDF", "Standard confidence ellipse around the null") |
+#    plot_q_bootstrap_diff(res_prior, bayesian = TRUE, bbinom = TRUE) + ggtitle("Piecewise-linear ECDF", "Bootstrap-derived confidence interval"))) + plot_annotation("One binary parameter, one binary observation", "Posterior = prior")
+```
+
+
+```{r}
+(plot_ecdf_diff(res_small_error) + ggtitle("Random tie braking for ranks") |
+  plot_q_diff(res_small_error) + ggtitle("Piecewise-linear ECDF")) + plot_annotation("One binary parameter, one binary observation", subtitle = "Slightly incorrect posterior")
+
+plot_q_bootstrap_diff(res_small_error, bbinom = TRUE)
+
+```
+
+
+```{r}
+plot_log_gamma_history(res_small_error)
+plot_log_gamma_q_history(res_small_error)
+```
+
+```{r}
+for(j in 1:10) {
+  ps <- list()
+  for(i in 1:9) {
+    res_correct <- test_SBC_BF(py1, correct_prob, title = "Correct BF", N_sims = 100)
+    ps[[i]] <- plot_q_diff(res_correct)
+  }
+  print((ps[[1]] | ps[[2]] | ps[[3]]) /
+        (ps[[4]] | ps[[5]] | ps[[6]]) /
+        (ps[[7]] | ps[[8]] | ps[[9]]))
+}
+```
+
+
+```{r}
+res_test <- test_SBC_BF(py1, correct_prob, title = "Correct BF", N_sims = 10)
+#plot_q_bootstrap_diff(res_test, interval_type = "jeffreys", bbinom  = TRUE)
+plot_q_bootstrap_diff(res_test, interval_type = "jeffreys", bbinom  = TRUE, bayesian = TRUE)
+
+```
+
+```{r}
+restest10 <- test_SBC_BF(py1, correct_prob, title = "Correct BF", N_sims = 10)
+interval_type <- "cp"
+gamma <- adjust_q_gamma_bootstrap(restest10$rank_low, restest10$rank_high, bbinom = TRUE, interval_type = interval_type)
+
+
+K <- 100
+q_x <- (1:(K-1)) / K
+q_obs <- compute_q_base(restest10$rank_low, restest10$rank_high, q_x = q_x)
+actual <- q_gamma(q_obs, q_x, nrow(restest10), interval_type = interval_type, bbinom = TRUE)
+
+
+plot_q_bootstrap_diff(restest10,bayesian = TRUE, bbinom = TRUE, gamma = gamma, interval_type = interval_type) + ggtitle(paste0("Gamma: ", round(gamma, 3), ", q: ", round(actual, 3), ", reject: ", actual < gamma))
+```
+
+
+
+```{r}
+size <- 1000
+microbenchmark::microbenchmark(
+  my_pbbinom(-1:(size-1), size = size, 1.3, 0.5)[size + 1],
+  my_pbbinom(size - 1, size = size, 1.3, 0.5),
+  extraDistr::pbbinom(-1:(size-1), size = size, 1.3,0.5)[1001],
+  extraDistr::pbbinom(size - 1, size = size, 1.3, 0.5),
+  check = "equal"
+)
+```
+
+
+## Pois vs. nbinom no par
+
+
+```{r}
+for(j in 1:10) {
+  ps <- list()
+  for(i in 1:9) {
+    res_correct <- test_poisson_nb_no_par(N_sims = 1000, mu = 3, phi = 5, N_obs = 25)
+    ps[[i]] <- plot_q_diff(res_correct)
+  }
+  print((ps[[1]] | ps[[2]] | ps[[3]]) /
+        (ps[[4]] | ps[[5]] | ps[[6]]) /
+        (ps[[7]] | ps[[8]] | ps[[9]]))
+}
+```
+
+
+```{r}
+res_pnb <- test_poisson_nb_no_par(N_sims = 1000, mu = 3, phi = 5, N_obs = 25)
+#test_SBC_BF(py1, c(0.5, 0.5), title = "Prior = posterior")
+
+res_pnb %>% ggplot(aes(x = pm1)) + facet_wrap(~true_model, ncol = 1) + geom_histogram(binwidth = 0.01)
+```
+
+
+
+```{r}
+microbenchmark::microbenchmark( 
+  compute_q_base(res_pnb$rank_low, res_pnb$rank_high, (1:99) / 100),
+  compute_q_base_eigen(res_pnb$rank_low, res_pnb$rank_high, (1:99) / 100),
+  compute_q_base(res_pnb$rank_low, res_pnb$rank_high, (1:99) / 100, compute_q_base_single_old),
+  times = 100,
+  check = "equal")
+```
+
+```{r}
+plot_q_bootstrap_diff(res_pnb)
+plot_q_diff(res_pnb)
+```
+
+
+```{r}
+(plot_ecdf_diff(res_pnb) + ggtitle("Random tie braking for ranks") |
+  plot_q_diff(res_pnb) + ggtitle("Piecewise-linear ECDF")) + plot_annotation("One binary parameter, infinite observations", subtitle = "Correct posterior")
+```
+
+```{r}
+((plot_ecdf_diff(res_pnb) + ggtitle("Random tie braking for ranks") | plot_Dimitriadis_res_diff(res_pnb)
+  ) /
+   (plot_q_diff(res_pnb) + ggtitle("Piecewise-linear ECDF", "Standard confidence ellipse around the null") |
+   plot_q_bootstrap_diff(res_pnb, bayesian = TRUE) + ggtitle("Piecewise-linear ECDF", "Bootstrap-derived confidence interval")))  + plot_annotation("One binary parameter, infinite observations", subtitle = "Correct posterior")
+```
+
+
+
+
+```{r}
+plot_q_bootstrap_diff(res_pnb, bayesian = TRUE)
+plot_q_bootstrap_diff(res_pnb, bayesian = TRUE, bbinom = TRUE)
+```
+
+
+
+```{r}
+plot_log_gamma_history(res_pnb)
+plot_log_gamma_q_history(res_pnb)
+```
+
+
+```{r}
+res_pnb_noise <- test_poisson_nb_no_par(N_sims = 1000, mu = 3, phi = 1, N_obs = 5, noise_sigma = 1.5)
+#test_SBC_BF(py1, c(0.5, 0.5), title = "Prior = posterior")
+
+res_pnb_noise %>% ggplot(aes(x = pm1)) + facet_wrap(~true_model, ncol = 1) + geom_histogram(binwidth = 0.01)
+```
+
+
+```{r}
+((plot_ecdf_diff(res_pnb_noise) + ggtitle("Random tie braking for ranks") | plot_Dimitriadis_res_diff(res_pnb_noise)
+  ) /
+   (plot_q_diff(res_pnb_noise) + ggtitle("Piecewise-linear ECDF", "Standard confidence ellipse around the null") |
+   plot_q_bootstrap_diff(res_pnb_noise, bayesian = TRUE) + ggtitle("Piecewise-linear ECDF", "Bootstrap-derived confidence interval")))  + plot_annotation("One binary parameter, infinite observations", subtitle = "Incorrect posterior")
+```
+
+```{r}
+calibrationband::calibration_bands(res_pnb_noise$pm1, res_pnb_noise$true_model == 1)
+givitBelt <- givitiR::givitiCalibrationBelt(as.numeric(res_pnb_noise$true_model == 1), res_pnb_noise$pm1, devel = "external")
+plot(givitBelt)
+```
+
+```{r}
+plot_q_bootstrap_diff(res_pnb_noise, bayesian = TRUE)
+plot_q_bootstrap_diff(res_pnb_noise, bayesian = TRUE, bbinom = TRUE)
+```
+
+
+```{r}
+plot_log_gamma_history(res_pnb_noise)
+plot_log_gamma_q_history(res_pnb_noise)
+```
+
+
+## Fully uniform ranks
+
+```{r}
+res_unif <- test_SBC_unif(10)
+plot_ecdf_diff(res_unif)
+plot_q_bootstrap_diff(res_unif, bbinom = TRUE)
+plot_q_bootstrap_diff(res_unif, bayesian = TRUE, bbinom = TRUE)
+
+res_unif_100 <- test_SBC_unif(100)
+plot_ecdf_diff(res_unif_100)
+plot_q_bootstrap_diff(res_unif_100, bbinom = TRUE)
+plot_q_bootstrap_diff(res_unif_100, bayesian = TRUE, bbinom = TRUE)
+
+```
+
+
+## AOV (Faulknerry)
+
+```{r}
+res_aov <- test_faulknerry(N_sims = 1000, alpha = 5)
+#test_SBC_BF(py1, c(0.5, 0.5), title = "Prior = posterior")
+
+res_aov %>% ggplot(aes(x = pm1)) + facet_wrap(~true_model, ncol = 1) + geom_histogram(binwidth = 0.01)
+
+```
+
+```{r}
+plot_ecdf_diff(res_aov)
+plot_q_diff(res_aov)
+
+```
+
+```{r}
+res_aov_01 <- test_faulknerry(N_sims = 1000, alpha = 10, noise_sigma = 5)
+#test_SBC_BF(py1, c(0.5, 0.5), title = "Prior = posterior")
+
+
+```
+
+```{r}
+plot_ecdf_diff(res_aov_01)
+plot_q_diff(res_aov_01)
+
+```
+
+```{r}
+plot_log_gamma_history(res_aov_01)
+plot_log_gamma_q_history(res_aov_01)
+```
+
+
+
+```{r}
+max_rank <- 20
+discrete <- crossing(type = c("no-ties", "ties"), form = "discrete", x = c(seq(0, 1, by = 0.001)-1e-8,seq(0, 1, by = 0.001) + 1e-8)) %>%
+  mutate(rank = if_else(type == "ties", 
+                     case_when(x < 0.2 ~ 0,
+                               x <= 0.6 ~ floor(max_rank * (x - 0.2) / 0.4),
+                               x > 0.6 ~ max_rank),
+                     as.numeric(x >= 0.4) * max_rank))
+
+continuous <- crossing(type = c("no-ties", "ties"), form = "continous", x = c(c(0, 0.2, 0.4,0.6, 1)-1e-8,c(0, 0.2,0.4, 0.6, 1) + 1e-8)) %>%
+  mutate(rank = if_else(type == "ties", 
+                     case_when(x < 0.2 ~ 0,
+                               x <= 0.6 ~ max_rank * (x - 0.2) / 0.4,
+                               x > 0.6 ~ max_rank),
+                     as.numeric(x >= 0.4) * max_rank))
+
+rbind(discrete, continuous) %>%  
+  ggplot(aes(x, rank/max_rank)) + geom_line() + facet_wrap(form~type) + 
+  labs(y = "ECDF contribution", x = "") +
+  ggtitle("Contribution of a single simulation to the observed rank CDF")
+```
+
+

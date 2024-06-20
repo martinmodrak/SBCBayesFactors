@@ -58,6 +58,8 @@ Testing the full BMA model
 
 Data-dependent quantities (those require full SBC)
 
+The good check (bad theoretically - large or even infinite variance)
+
 ## Toy examples
 
 ### Single binary observation

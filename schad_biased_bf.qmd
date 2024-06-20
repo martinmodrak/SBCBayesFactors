@@ -1,0 +1,174 @@
+---
+title: "Schad Biased BF examples"
+format: html
+---
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(SBC)
+library(designr)
+library(brms)
+library(hypr)
+devtools::load_all()
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir))  {
+  dir.create(cache_dir)
+}
+
+options("brms.backend" = "rstan")
+rstan::rstan_options(auto_write = TRUE)
+
+future::plan(future::multisession, workers = 8)
+```
+
+
+# 2step_Item
+
+```{r, echo=FALSE}
+priors2step <- c(set_prior("normal(0.7, 0.1)", class = "Intercept"), 
+                 set_prior("normal(0  , 0.1)", class = "b"),
+                 set_prior("normal(0  , 0.1)", class = "sd"), 
+                 set_prior("normal(0  , 0.1)", class = "sigma"), 
+                 set_prior("lkj(2)", class = "cor") )
+
+design <-
+  fixed.factor("reward", levels=c("rew", "pun")) +
+  fixed.factor("transition", levels=c("comm", "rare")) +
+  random.factor("subj", instances= 4) + #10
+  random.factor("item", instances= 2) + # 5
+  random.factor(c("subj", "item"), groups=c("reward","transition"))
+simdat2step <- design.codes(design)
+#length(unique(simdat2step$subj)) # 16
+#length(unique(simdat2step$item)) #  8
+#nrow(simdat2step) # 128
+simdat2step$ysim <- 0.5 # Dummy value to create the column
+
+randomItemSlope <- 0.001
+
+#contrasts(simdat2step$PavValueF) <- contr.sdif(5)
+contrasts(simdat2step$reward) <- c(+0.5,-0.5)*2
+contrasts(simdat2step$transition) <- c(+0.5,-0.5)*2
+contrasts(simdat2step$reward)
+contrasts(simdat2step$transition)
+
+#simdat2step[,c("c_m1_m2","c_0_m1","c_p1_0","c_p2_p1")] <- model.matrix(~PavValueF, simdat2step)[,2:5]
+simdat2step[,c("rew","trans","rew_trans")] <- model.matrix(~reward*transition, simdat2step)[,2:4]
+
+simulate_2step <- function(model) {
+    beta0 <- -1; while (beta0<0)
+      beta0  <- SimFromPrior(priors2step,class="Intercept")
+    beta1    <- SimFromPrior(priors2step,class="b")
+    beta2    <- SimFromPrior(priors2step,class="b")
+    beta3    <- SimFromPrior(priors2step,class="b")
+    sigma_u0 <- SimFromPrior(priors2step,class="sd")
+    sigma_u1 <- SimFromPrior(priors2step,class="sd") # 0
+    sigma_u2 <- SimFromPrior(priors2step,class="sd") # 0
+    sigma_u3 <- SimFromPrior(priors2step,class="sd") # 0.4
+    sigma_w0 <- randomItemSlope # SimFromPrior(priors2step,class="sd")
+    sigma_w1 <- randomItemSlope # SimFromPrior(priors2step,class="sd")
+    sigma_w2 <- randomItemSlope # SimFromPrior(priors2step,class="sd")
+    sigma_w3 <- randomItemSlope # SimFromPrior(priors2step,class="sd")
+    rho_u <- rlkjcorr(1, 4, eta = 2)    
+    rho_w <- rlkjcorr(1, 4, eta = 2)    
+    #rho_u    <- SimFromPrior(priors2step,class="cor") # 0 # 
+    #rho_w    <- SimFromPrior(priors2step,class="cor") # 0 # 
+    sigma    <- SimFromPrior(priors2step,class="sigma")
+  
+    if (model==0) {
+      beta1 <- 0
+      beta2 <- 0
+      beta3 <- 0
+    }
+    # SIMULATE DATA
+  
+      
+  ysim <- simLMM(form = ~ 1 + rew + trans + rew_trans + (1 + rew + trans + rew_trans | subj) + (1 + rew + trans + rew_trans | item), 
+                               data   = simdat2step, 
+                               Fixef  = c(beta0, beta1, beta2, beta3), 
+                               VC_sd  = list(c(sigma_u0, sigma_u1, sigma_u2, sigma_u3), 
+                                             c(sigma_w0, sigma_w1, sigma_w2, sigma_w3), 
+                                             sigma),
+                               CP     = list(subj = rho_u, item = rho_w),
+                               empirical = FALSE, verbose=FALSE)
+
+  if(any(is.na(ysim))) {
+    stop("NAs")
+  }
+  simdat2step$ysim <- ysim
+
+  variables = list(
+    Intercept = beta0,
+    sd_subj__Intercept = sigma_u0,
+    sd_subj__rew = sigma_u1,
+    sd_subj__trans = sigma_u2,
+    sd_subj__rew_trans = sigma_u3,
+    cor_subj__Intercept__rew = rho_u[1,2],
+    # Ignoring the other correlation terms for simplicity
+    sigma = sigma
+  )
+  if(model == 1) {
+    variables$b_rew <- beta1
+    variables$b_trans <- beta2
+    variables$b_rew_trans <- beta3
+  }
+  
+  list(
+    generated = simdat2step,
+    variables = variables
+  )
+}
+```
+
+```{r}
+set.seed(32215252)
+n_sims <- 200
+ds_2step_H0 <- generate_datasets(SBC_generator_function(simulate_2step, model = 0), n_sims = n_sims)
+ds_2step_H1 <- generate_datasets(SBC_generator_function(simulate_2step, model = 1), n_sims = n_sims)
+```
+
+
+```{r}
+backend_2step_H1 <- SBC_backend_brms(ysim ~ 1 + rew + trans + rew_trans + (1 + rew + trans + rew_trans | subj) + (1 + rew + trans + rew_trans | item),                   family=gaussian(), prior=priors2step, 
+                  save_pars = save_pars(all = TRUE),
+                  warmup=2000, iter=10000,
+            template_data = simdat2step,
+            out_stan_file = file.path("cache/2step_H1.stan"))
+
+
+backend_2step_H0_1 <- SBC_backend_brms(ysim ~ 1 +      trans + rew_trans + (1 + rew + trans + rew_trans  | subj) + (1 + rew + trans + rew_trans | item),                          family=gaussian(), prior=priors2step, 
+                  save_pars = save_pars(all = TRUE),
+                  warmup=2000, iter=10000,
+            template_data = simdat2step,
+            out_stan_file = file.path("cache/2step_H0_1.stan"))
+
+
+backend_2step_H0_correct <- SBC_backend_brms(ysim ~ 1 +      (1 + rew + trans + rew_trans  | subj) + (1 + rew + trans + rew_trans | item),                          family=gaussian(), prior=priors2step[-2,], 
+                  save_pars = save_pars(all = TRUE),
+                  warmup=2000, iter=10000,
+            template_data = simdat2step,
+            out_stan_file = file.path("cache/2step_H0_correct.stan"))
+```
+
+
+```{r}
+ds_2step <- SBC_datasets_for_bf(ds_2step_H0, ds_2step_H1)
+backend_2step <- SBC_backend_bridgesampling(backend_2step_H0_correct, backend_2step_H1)
+
+res_2step <- compute_SBC(
+  ds_2step[1:8], 
+  backend_2step,
+  keep_fits = FALSE,
+  cache_mode = "results",
+  cache_location = file.path(cache_dir, "SBC_2step.rds"))
+
+```
+
+```{r}
+plot_ecdf_diff(res_2step)
+
+plot_binary_calibration_diff(res_2step$stats)
+calibrationband::calibration_bands(round(res_2step$backend_diagnostics$prob_H1, 8), res_2step$stats %>% filter(variable == "model") %>% pull(simulated_value) %>% as.logical())
+```
+

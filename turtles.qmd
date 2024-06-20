@@ -1,0 +1,284 @@
+---
+title: "Turtles"
+format: html
+---
+
+Let's setup the environment (bridgesampling currently works only with rstan):
+
+```{r setup, message=FALSE,warning=FALSE, results="hide"}
+library(SBC)
+library(ggplot2)
+library(bridgesampling)
+library(dplyr)
+library(tidyr)
+library(calibrationband)
+
+use_cmdstanr <- FALSE
+library(rstan)
+rstan_options(auto_write = TRUE)
+
+options(mc.cores = parallel::detectCores())
+
+library(future)
+plan(multisession)
+
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir)) {
+  dir.create(cache_dir)
+}
+
+theme_set(theme_minimal())
+```
+
+
+
+There's a weird $(1 + \sigma)^{-2}$ prior on sigma, sampling with an inverse CDF rejection scheme:
+
+```{r}
+
+r_inv_one_plus_sq <- function(n) {
+  p <- runif(n)
+  return(p / (1 - p))
+}
+
+samps <- r_inv_one_plus_sq(1e6)
+xlim <- 100
+
+samps <- samps[samps < xlim]
+
+x_vals <- seq(1e-2, max(xlim), length.out = 200)
+
+nc <- xlim / (1 + xlim)
+pdf_df <- data.frame(x = x_vals, y = (1 + x_vals)^-2 / nc)
+
+
+
+p <- ggplot(data.frame(x = samps), aes(x)) + geom_density(bounds = c(0, xlim)) + 
+  geom_line(data = pdf_df, aes(y = y), color = "blue") + coord_cartesian(xlim = c(0, xlim))
+p
+p + scale_y_log10()
+
+```
+
+
+
+```{r, comment = ""}
+cat(readLines("stan/turtles_H0.stan"), sep = "\n")
+```
+
+```{r}
+m_H0 <- stan_model("stan/turtles_H0.stan")
+m_H1 <- stan_model("stan/turtles_H1.stan")
+```
+
+```{r}
+data("turtles", package = "bridgesampling")
+
+sim_turtles <- function(model, N = NULL, C = NULL) {
+  if(is.null(N)) {
+    stopifnot(is.null(C))
+    fixed_predictors <- TRUE
+    
+    N <- nrow(turtles)
+    C <- max(turtles$clutch)
+    clutch <- turtles$clutch
+    x <- turtles$x
+  } else {
+    stopifnot(!is.null(C))
+    stopifnot(N >= 3 * C)
+    fixed_predictors <- FALSE
+  }
+
+  ## Rejection sampling to avoid low-variability datasets
+  for(i in 1:200) {
+
+    alpha0_raw <- rnorm(1) 
+    alpha1_raw <- rnorm(1) 
+    alpha0 <- sqrt(10) * alpha0_raw
+    alpha1 <- sqrt(10) * alpha1_raw
+    
+    if(!fixed_predictors) {
+      clutch <- rep(1:C, length.out = N)
+
+      x <- rnorm(N) / 3  
+    }
+    
+    
+    log_lik_shared <- dnorm(alpha0_raw, log = TRUE) +
+      dnorm(alpha1_raw, log = TRUE)
+    
+    if(model == 0) {
+      predictor <- alpha0 + alpha1 * x
+      log_lik_spec <- 0
+    } else {
+      sigma2_clutch <- r_inv_one_plus_sq(1)
+      sigma_clutch <- sqrt(sigma2_clutch)      
+      
+      b_clutch_raw <- rnorm(C)
+      b_clutch <- b_clutch_raw * sigma_clutch
+      
+      predictor <- alpha0 + alpha1 * x + b_clutch[clutch]
+      
+      log_lik_spec <- 
+        log(sigma2_clutch)  +# Jacobian
+        (- 2 * log1p(sigma2_clutch)) + 
+        #log(sigma_clutch) + dnorm(sigma_clutch, log = TRUE) + log(2) +
+        sum(dnorm(b_clutch_raw, log = TRUE))
+    }
+    
+    #prob <- plogis(predictor)
+    prob <- pnorm(predictor)
+    y <- rbinom(N, p = prob, size = 1)
+    if(mean(y == 0) < 0.9 && mean(y == 1) < 0.9) {
+      break
+    }
+  }
+  if(i >= 200) {
+    warning("Could not generate nice dataset")
+  }
+  
+  log_lik_predictor <- sum(dbinom(y, size = 1, p = prob, log = TRUE))
+  
+  variables <- list(
+      alpha0 = alpha0,
+      alpha1 = alpha1,
+      lp__ = log_lik_shared + log_lik_spec + log_lik_predictor
+    )
+  
+  if(model == 1) {
+    variables$sigma <- sigma_clutch
+    variables$b <- b_clutch
+  } 
+
+  list(
+    generated = list(
+      N = N,
+      y = y,
+      x = x,
+      C = C,
+      clutch = clutch
+    ),
+    variables = variables
+  )
+}
+```
+
+
+
+```{r}
+set.seed(4524865)
+N <- NULL
+C <- NULL
+ds_test_1 <- generate_datasets(SBC_generator_function(sim_turtles, N = N, C = C, model = 1), n_sims = 400)
+backend_H1 <- SBC_backend_rstan_sample(m_H1, init = 0, control = list(adapt_delta = 0.9))
+res_test1 <- compute_SBC(ds_test_1, backend_H1, 
+                         keep_fits = FALSE,
+                         cache_mode = "results",
+                         cache_location = file.path(cache_dir, paste0("SBC_turtles_H1_N", N, "_C",C,"_", length(ds_test_1), ".rds")))
+```
+
+```{r}
+plot_ecdf_diff(res_test1, combine_variables = combine_array_elements)
+```
+
+```{r}
+set.seed(54223248)
+N_sims <- 1000
+ds_turtles_m0 <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C), n_sims = N_sims)
+ds_turtles_m1 <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C), n_sims = N_sims)
+ds_turtles <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1)
+```
+```{r}
+iter <- 15500
+warmup <- 500
+init <- 0
+backend_turtles <- SBC_backend_bridgesampling(
+  SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
+  SBC_backend_rstan_sample(m_H1, iter = iter, warmup = warmup, init = init)
+)
+res_turtles <- compute_SBC(ds_turtles, backend_turtles, 
+                           keep_fits = FALSE,
+                           cache_mode = "results",
+                           cache_location = file.path(cache_dir, "turtles_1.rds"))
+```
+
+```{r}
+res_turtles$stats
+```
+
+
+```{r}
+plot_ecdf_diff(res_turtles, combine_variables = combine_array_elements)
+plot_binary_calibration_diff(res_turtles$stats)
+plot_rank_hist(res_turtles, variables = "model", bins = 20)
+
+```
+
+```{r}
+no_error_index <- res_turtles$backend_diagnostics$bs_error_H0 == "0%" & res_turtles$backend_diagnostics$bs_error_H1 == "0%"
+plot_ecdf_diff(res_turtles[no_error_index], combine_variables = combine_array_elements)
+
+```
+
+
+```{r}
+# GOOd test?
+true_model <- res_turtles$stats %>% filter(variable == "model") %>% pull(simulated_value)
+p_H1 <- res_turtles$backend_diagnostics$prob_H1
+bf01 <- (1 - p_H1) / p_H1
+mean(bf01[true_model == 1])
+mean(bf01[true_model == 0])
+
+```
+
+
+```{r}
+stats_split <- split_SBC_results_for_bf(res_turtles)
+plot_ecdf_diff(stats_split$stats_H0)
+plot_ecdf_diff(stats_split$stats_H1, combine_variables = combine_array_elements)
+```
+
+
+```{r}
+set.seed(784522)
+N_sims <- 500
+N <- 80
+C <- 10
+ds_turtles_m0_2 <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C), n_sims = N_sims)
+ds_turtles_m1_2 <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C), n_sims = N_sims)
+ds_turtles_2 <- SBC_datasets_for_bf(ds_turtles_m0_2, ds_turtles_m1_2)
+
+res_turtles_2 <- compute_SBC(ds_turtles_2, backend_turtles, 
+                           keep_fits = FALSE,
+                           cache_mode = "results",
+                           cache_location = file.path(cache_dir, "turtles_2.rds"))
+
+```
+
+```{r}
+plot_binary_calibration_diff(res_turtles_all$stats)
+```
+
+
+```{r}
+res_turtles_all <- bind_results(res_turtles, res_turtles_2)
+plot_ecdf_diff(res_turtles_all)
+```
+```{r}
+res_turtles_all$stats
+```
+
+
+```{r}
+stats_test <- res_turtles_all$stats %>% group_by(sim_id) %>% filter(simulated_value[variable == "model"] == 1) %>% ungroup()
+plot_ecdf_diff(stats_test, variables = c(paste0("alpha",0:1,""), paste0(".m1.alpha",0:1,"")))
+plot_ecdf_diff(stats_test, variables = paste0(".m1.b[",1:9,"]"))
+```
+
+```{r}
+stats_test0 <- res_turtles_all$stats %>% group_by(sim_id) %>% filter(simulated_value[variable == "model"] == 0) %>% ungroup()
+plot_ecdf_diff(stats_test0, variables = c(paste0("alpha",0:1,""), paste0(".m0.alpha",0:1,"")))
+
+```
+

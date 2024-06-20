@@ -1,0 +1,210 @@
+---
+title: "Binary example"
+format: html
+---
+
+TODO: Aki suggests using Aldor-Noiman et al. (2013) for continuous CDF checks...
+TODO: For binary variables, we can directly detect the posterior = prior situation (but not partial data ignore)
+
+```{r setup}
+library(SBC)
+library(ggplot2)
+library(calibrationband)
+library(dplyr)
+
+future::plan(future::multisession)
+options(SBC.min_chunk_size = 100)
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir)) {
+  dir.create(cache_dir)
+}
+
+devtools::load_all()
+theme_set(theme_minimal())
+```
+
+```{r}
+py1 <- c(0.2, 0.9)
+
+compute_correct_pm1 <- function(py1) {
+  pm1_given_y0 <- (1 - py1[2]) / sum(1 - py1)
+  pm1_given_y1 <- py1[2] / sum(py1)
+  correct_prob <- c(pm1_given_y0, pm1_given_y1)
+  return(correct_prob)  
+}
+
+sim_binary <- function(py1) {
+  model <- rbinom(1, size = 1, prob = 0.5)
+  y <- rbinom(1, size = 1, prob = py1[model + 1])
+  list(
+    variables = list(model = model),
+    generated = list(y = y),
+    var_attributes = var_attributes(
+      model = c(binary_var_attribute(), possibly_constant_var_attribute())
+    )
+  )
+}
+
+set.seed(55621)
+ds_bin <- generate_datasets(SBC_generator_function(sim_binary, py1 = py1), n_sims = 10000)
+```
+
+
+```{r}
+SBC_backend_bin_example <- function(pm1, n_draws) {
+  structure(list(
+    pm1 = pm1,
+    n_draws = n_draws
+  ), class = "SBC_backend_bin_example")
+}
+
+SBC_fit.SBC_backend_bin_example <- function(backend,generated,cores) {
+  structure(list(
+    pm1 = backend$pm1[generated$y + 1],
+    n_draws = backend$n_draws
+  ), class = "SBC_fit_bin_example")
+}
+
+SBC_backend_iid_draws.SBC_backend_bin_example <- function(...) {
+  TRUE
+}
+
+SBC_fit_to_draws_matrix.SBC_fit_bin_example <- function(fit) {
+  posterior::draws_matrix(model = rbinom(fit$n_draws, size = 1, prob = fit$pm1))
+}
+
+binary_to_cdf <- function(variables, prob1, simulated_value) {
+  data.frame(variable = variables,
+             cdf_low = dplyr::if_else(simulated_value == 0, 0, prob1),
+             cdf_high = dplyr::if_else(simulated_value == 0, prob1, 1))
+}
+
+SBC_posterior_cdf.SBC_fit_bin_example <- function(fit, variables) {
+  binary_to_cdf("model", fit$pm1, variables["model"])
+}
+
+dquants_bin <- derived_quantities(
+  log_lik = dplyr::if_else(y == 1,  py1[model + 1], 1 - py1[model + 1])
+)
+
+binary_globals <- c("SBC_fit.SBC_backend_bin_example", 
+                    "SBC_backend_iid_draws.SBC_backend_bin_example",
+                    "SBC_fit_to_draws_matrix.SBC_fit_bin_example",
+                    "binary_to_cdf",
+                    "SBC_posterior_cdf.SBC_fit_bin_example",
+                    "py1"
+                    )
+
+res_bin_correct <- compute_SBC(ds_bin, SBC_backend_bin_example(compute_correct_pm1(py1), 100),
+                               dquants = dquants_bin,
+                               globals = binary_globals,
+                               cache_mode = "results", cache_location = file.path(cache_dir, "binary_correct.rds"))
+```
+
+```{r}
+plot_ecdf_diff(res_bin_correct)
+plot_binary_calibration_diff(res_bin_correct$stats)
+```
+
+```{r}
+# Good test?
+true_model <- res_bin_correct$stats %>% filter(variable == "model") %>% pull(simulated_value)
+p_M1 <- purrr::map_dbl(res_bin_correct$fits, \(x) x$pm1)
+good_check(true_model, p_M1)
+```
+
+
+```{r}
+res_bin_flip <- compute_SBC(ds_bin[1:1000], SBC_backend_bin_example(rev(compute_correct_pm1(py1)), 100),
+                               dquants = dquants_bin,
+                            globals = binary_globals,
+                            cache_mode = "results", cache_location = file.path(cache_dir, "binary_flip.rds"))
+
+plot_ecdf_diff(res_bin_flip)
+plot_binary_calibration_diff(res_bin_flip$stats)
+```
+
+
+```{r}
+hist_flip <- compute_bootstrapped_histories(res_bin_flip$stats, history_length = 50, n_histories = 100,
+                                            compute_log_gamma_history)
+plot_log_gamma_histories(hist_flip)
+```
+
+
+```{r}
+true_model <- res_bin_flip$stats %>% filter(variable == "model") %>% pull(simulated_value)
+p_M1 <- purrr::map_dbl(res_bin_flip$fits, \(x) x$pm1)
+good_check(true_model, p_M1)
+```
+
+
+```{r}
+res_bin_prior <- compute_SBC(ds_bin[1:1000], SBC_backend_bin_example(c(0.5,0.5), 100),
+                               dquants = dquants_bin,
+                            globals = binary_globals,
+                            cache_mode = "results", cache_location = file.path(cache_dir, "binary_prior.rds"))
+
+plot_ecdf_diff(res_bin_prior)
+plot_binary_calibration_diff(res_bin_prior$stats)
+```
+
+
+```{r}
+hist_prior <- compute_bootstrapped_histories(res_bin_prior$stats, history_length = 50, n_histories = 100,
+                                            compute_log_gamma_history)
+plot_log_gamma_histories(hist_prior)
+
+```
+
+
+
+
+```{r}
+res_bin_small <- compute_SBC(ds_bin, SBC_backend_bin_example(0.9 * compute_correct_pm1(py1) + 0.1 * c(0.5,0.5), 100),
+                               dquants = dquants_bin,
+                            globals = binary_globals,
+                            cache_mode = "results", cache_location = file.path(cache_dir, "binary_small.rds"))
+
+plot_ecdf_diff(res_bin_small)
+plot_binary_calibration_diff(res_bin_small$stats)
+```
+
+```{r}
+hist_small <- compute_bootstrapped_histories(res_bin_small$stats, history_length = 5000, n_histories = 100,
+                                             step = 50,
+                                            compute_log_gamma_history)
+plot_log_gamma_histories(hist_small)
+
+```
+
+```{r}
+res_bin_bad <- compute_SBC(ds_bin[1:1000], SBC_backend_bin_example(c(0.3,0.5), 100),
+                               dquants = dquants_bin,
+                            globals = binary_globals,
+                            cache_mode = "results", cache_location = file.path(cache_dir, "binary_bad.rds"))
+
+plot_ecdf_diff(res_bin_bad)
+plot_binary_calibration_diff(res_bin_bad$stats)
+```
+
+```{r}
+hist_bad <- compute_bootstrapped_histories(res_bin_bad$stats, history_length = 100, n_histories = 100,
+                                            compute_log_gamma_history, min_sim_id = 5)
+plot_log_gamma_histories(hist_bad)
+
+hist_bad_schad <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
+                                            compute_schad_history, min_sim_id = 5)
+plot_log_p_histories(hist_bad_schad, "Schad")
+
+hist_bad_giviti <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
+                                            compute_giviti_history, min_sim_id = 5)
+plot_log_p_histories(hist_bad_giviti, "Giviti")
+```
+
+```{r}
+probs <- seq(0.1,0.8, length.out = 5)
+true_model <- rbinom(5, size = 1, prob = 0.5)
+```
+

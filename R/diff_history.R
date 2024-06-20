@@ -83,119 +83,144 @@ log_gamma_stat <- function(rank_counts, ranks_to_check = NULL) {
 
 }
 
-compute_log_gamma_history <- function(ranks, max_rank) {
+include_step <- function(sim_id, step) {
+  sim_id %% step == 0
+}
+
+step_id <- function(sim_id, step) {
+  sim_id[include_step(sim_id, step)] / step
+}
+
+compute_log_gamma_history_single <- function(ranks, max_rank, step = 1) {
   rank_t <- rep(0, max_rank + 1)
-  log_gamma <- rep(NA_real_, length(ranks))
-  dummy <- rep(NA_real_, length(ranks))
+  log_gamma <- rep(NA_real_, floor(length(ranks) / step))
 
   for(i in 1:length(ranks)) {
     rank_t[ranks[i] + 1] <- rank_t[ranks[i] + 1] + 1
-    log_gamma[i] <- log_gamma_stat(rank_t)
-    #dummy[i] <- log(2) + pbinom(scaled_ecdf[max_rank + 1] - 1, i, z[max_rank + 1], lower.tail = FALSE, log = TRUE)
-  }
-  #print(dummy)
-  log_gamma
-}
-
-compute_ks_test_history <- function(ranks, max_rank) {
-  ranks_cont <- (ranks + runif(length(ranks))) / (max_rank + 1)
-  ks_p <- rep(NA_real_, length(ranks))
-  for(i in 1:length(ranks)) {
-    ks_p[i] <- ks.test(ranks_cont[1:i], "punif")$p.value
-  }
-  ks_p
-}
-
-
-compute_log_gamma_q_history <- function(pm1, true_model, K = 101) {
-  log_gamma <- rep(NA_real_, length(pm1))
-
-  z = unique(pm1)
-
-  gamma_thresholds_df <- get_precomputed_gamma_thresholds(K = K,
-                                                          min_sims = 1, max_sims = max(length(pm1), 1000))
-
-  for(i in 1:length(pm1)) {
-    stopifnot(gamma_thresholds_df$N_sims[i] == i)
-    q <- compute_q(data.frame(pm1 = pm1[1:i], true_model = true_model[1:i]), include_01 = FALSE, K = K,
-                   gamma = exp(gamma_thresholds_df$log_gamma_threshold[i]))
-
-
-    log_gamma[i] <- log(2) + min(
-      pbinom(q$q_sum, i, q$q_x, log = TRUE),
-      pbinom(q$q_sum - 1, i, q$q_x, lower.tail = FALSE, log = TRUE)
-    )
+    if(include_step(i, step)) {
+      log_gamma[step_id(i, step)] <- log_gamma_stat(rank_t)
+    }
   }
   log_gamma
 }
 
-plot_log_gamma_history <- function(stats, min_sim_id = 0, max_sim_id = Inf, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
+compute_log_gamma_history <- function(stats, step = step, min_sim_id = 1) {
   unique_max_rank <- unique(stats$max_rank)
   if(length(unique_max_rank) > 1) {
     stop("Requires all max_rank to be equal")
   }
 
-  max_sim_id_to_show <- min(max_sim_id, max(stats$sim_id))
-
+  max_n_sims <- stats %>% group_by(variable) %>% summarise(n = n()) %>% pull(n) %>% max()
   gamma_thresholds_df <- get_precomputed_gamma_thresholds(K = unique_max_rank + 1,
-                                                          min_sims = 1, max_sims = max(max_sim_id_to_show, 1000))
-
-  stats <- stats
-  if(!is.null(variables_regex)) {
-     stats <- stats %>% filter(grepl(variables_regex, variable))
-  }
-
+                                                          min_sims = 1, max_sims = max(max_n_sims, 1000))
   stats %>%
-    filter(sim_id <= max_sim_id) %>%
     group_by(variable) %>%
-    mutate(log_gamma = compute_log_gamma_history(rank, unique_max_rank)) %>%
+    reframe(
+      sim_id = sim_id[include_step(sim_id, step)],
+      log_gamma = compute_log_gamma_history_single(rank, unique_max_rank, step = step)
+      ) %>%
     filter(sim_id >= min_sim_id) %>%
-    inner_join(gamma_thresholds_df, by = c("sim_id" = "N_sims")) %>%
-    ggplot(aes(x = sim_id, y = log_gamma - log_gamma_threshold)) +
-    geom_hline(yintercept = 0, color = "lightblue") +
-    geom_line() +
+    inner_join(gamma_thresholds_df, by = c("sim_id" = "N_sims"))
+}
+
+compute_schad_history_single <- function(probs, step = 1) {
+  steps_to_include <- include_step(1:length(probs), step)
+  sums <- cumsum(probs)[steps_to_include]
+  ns <- (1:length(probs))[steps_to_include]
+
+  sds <- numeric(floor(length(probs)/step))
+  for(i in which(steps_to_include)) {
+    sds[step_id(i,step)] <- sd(probs[1:i])
+  }
+  t_stat <- ((sums/ns) - 0.5) / (sds / sqrt(ns))
+
+  dfs <- ns - 1
+  log_ps <- log(2) + pt(-abs(t_stat), dfs, log.p = TRUE)
+
+  return(log_ps)
+}
+
+compute_schad_history <- function(stats, step = 1, min_sim_id = 1) {
+  if(!("prob" %in% names(stats))) {
+    stop("Stats must contain prob - maybe you forgot to call `binary_probabilities_from_stats`?")
+  }
+  stats %>%
+    group_by(variable) %>%
+    reframe(
+      sim_id = sim_id[include_step(sim_id, step)],
+      log_p = compute_schad_history_single(prob, step = step)
+    ) %>%
+    filter(sim_id >= min_sim_id)
+}
+
+compute_giviti_history_single <- function(probs, true_model, step = 1) {
+  steps_to_include <- which(include_step(1:length(probs), step))
+
+  ps <- numeric(length(steps_to_include))
+  for(i in 1:length(steps_to_include)) {
+    probs_to_test <- probs[1:steps_to_include[i]]
+    true_to_test <- true_model[1:steps_to_include[i]]
+    if(length(true_to_test) < 5 || all(true_to_test == 0) || all(true_to_test == 1)){
+      ps[i] <- 1
+    } else {
+      print(true_to_test)
+      givi <- givitiR::givitiCalibrationTest(true_to_test, probs_to_test, devel = "external")
+      ps[i] <- givi$p.value
+    }
+  }
+  return(log(ps))
+}
+
+compute_giviti_history <- function(stats, step = 1, min_sim_id = 1) {
+  if(!("prob" %in% names(stats))) {
+    stop("Stats must contain prob - maybe you forgot to call `binary_probabilities_from_stats`?")
+  }
+  stats %>%
+    group_by(variable) %>%
+    reframe(
+      sim_id = sim_id[include_step(sim_id, step)],
+      log_p = compute_giviti_history_single(prob, simulated_value, step = step)
+    ) %>%
+    filter(sim_id >= min_sim_id)
+}
+
+compute_bootstrapped_histories <- function(stats, history_length, n_histories, history_fun, step = 1, min_sim_id = 1) {
+  res_df <- list()
+  for(h in 1:n_histories) {
+    stats_boot <- stats %>%
+      group_by(variable) %>%
+      sample_n(history_length) %>%
+      mutate(sim_id = 1:n()) %>%
+      ungroup()
+    res_df[[h]] <- history_fun(stats_boot, step = step, min_sim_id = min_sim_id)
+    res_df[[h]]$history_id = h
+  }
+  do.call(rbind, res_df)
+}
+
+
+plot_log_gamma_histories <- function(histories_df, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
+  alpha <- sqrt(1/length(unique(histories_df$history_id)))
+
+  histories_df %>%
+    filter(sim_id >= min_sim_id) %>%
+    ggplot(aes(x = sim_id, y = log_gamma - log_gamma_threshold, group = history_id)) +
+    geom_line(alpha = alpha) +
+    geom_hline(yintercept = 0, color = "lightblue", linewidth = 1) +
     scale_y_continuous("Log Gamma - Threshold", limits = ylim) +
     scale_x_continuous("Number of simulations") +
     facet_wrap(~variable, ncol = wrap_cols)
 }
 
-plot_ks_test_history <- function(stats, min_sim_id = 0, max_sim_id = Inf, wrap_cols = 4, ylim = NULL) {
-  stats %>%
-    filter(sim_id <= max_sim_id) %>%
-    group_by(variable) %>%
-    mutate(ks_p = compute_ks_test_history(rank, unique(max_rank))) %>%
+plot_log_p_histories <- function(histories_df, title, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
+  alpha <- sqrt(1/length(unique(histories_df$history_id)))
+
+  histories_df %>%
     filter(sim_id >= min_sim_id) %>%
-    ggplot(aes(x = sim_id, y = ks_p)) +
-    geom_hline(yintercept = 0.05,  color = "lightblue") +
-    geom_line() +
-    scale_y_log10("P - value (KS test)", limits = ylim) +
-    scale_x_continuous("Number of simulations") +
-    facet_wrap(~variable, ncol = wrap_cols)
-}
-
-
-plot_log_gamma_q_history <- function(stats, min_sim_id = 0, max_sim_id = Inf, wrap_cols = 4, variables_regex = NULL, ylim = NULL, K = 101) {
-  max_sim_id_to_show <- min(max_sim_id, max(stats$sim_id))
-
-  # TODO: this is only approximate
-  gamma_thresholds_df <- get_precomputed_gamma_thresholds(K = K,
-                                                          min_sims = 1, max_sims = max(max_sim_id_to_show, 1000))
-
-
-  if(!is.null(variables_regex)) {
-    stats <- stats %>% filter(grepl(variables_regex, variable))
-  }
-
-  stats %>%
-    filter(sim_id <= max_sim_id) %>%
-    group_by(variable) %>%
-    mutate(log_gamma_q = compute_log_gamma_q_history(pm1, true_model)) %>%
-    filter(sim_id >= min_sim_id) %>%
-    inner_join(gamma_thresholds_df, by = c("sim_id" = "N_sims")) %>%
-    ggplot(aes(x = sim_id, y = log_gamma_q - log_gamma_threshold)) +
-    geom_hline(yintercept = 0, color = "lightblue") +
-    geom_line() +
-    scale_y_continuous("Log Gamma - Threshold", limits = ylim) +
+    ggplot(aes(x = sim_id, y = log_p, group = history_id)) +
+    geom_line(alpha = alpha) +
+    geom_hline(yintercept = log(0.05), color = "lightblue", linewidth = 1) +
+    scale_y_continuous(paste0("Log p (", title,")"), limits = ylim) +
     scale_x_continuous("Number of simulations") +
     facet_wrap(~variable, ncol = wrap_cols)
 }
