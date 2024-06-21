@@ -123,7 +123,7 @@ compute_log_gamma_history <- function(stats, step = step, min_sim_id = 1) {
     inner_join(gamma_thresholds_df, by = c("sim_id" = "N_sims"))
 }
 
-compute_schad_history_single <- function(probs, step = 1) {
+compute_schad_history_single <- function(probs, true_model, step = 1) {
   steps_to_include <- include_step(1:length(probs), step)
   sums <- cumsum(probs)[steps_to_include]
   ns <- (1:length(probs))[steps_to_include]
@@ -140,18 +140,46 @@ compute_schad_history_single <- function(probs, step = 1) {
   return(log_ps)
 }
 
-compute_schad_history <- function(stats, step = 1, min_sim_id = 1) {
-  if(!("prob" %in% names(stats))) {
-    stop("Stats must contain prob - maybe you forgot to call `binary_probabilities_from_stats`?")
-  }
-  stats %>%
-    group_by(variable) %>%
-    reframe(
-      sim_id = sim_id[include_step(sim_id, step)],
-      log_p = compute_schad_history_single(prob, step = step)
-    ) %>%
-    filter(sim_id >= min_sim_id)
+compute_schad_history <- function(...) {
+  compute_calibration_history(compute_schad_history_single, ...)
 }
+
+compute_schad_bf_history_single <- function(probs, true_model, step = 1) {
+  steps_to_include <- include_step(1:length(probs), step)
+
+  log_ps <- numeric(floor(length(probs)/step))
+  uniform_sd <- sqrt(1/12) # Assume alternative matching the variance of the uniform distribution
+  for(i in which(steps_to_include)) {
+    # Handling some edge cases typically with few sims where the Bayes factors
+    # don't play nicely
+    if(i <= 5) {
+      log_ps[i] <- 0
+    } else if(sd(probs) == 0) {
+      if(abs(mean(probs) - 0.5) < 1e-8) {
+        log_ps[i] <- 0
+      } else {
+        log_ps[i] <- NA_real_
+      }
+    } else if(sd(probs) < 0.001) {
+      if(abs(mean(probs) - 0.5) < 0.001) {
+        log_ps[i] <- 0
+      } else {
+        log_ps[i] <- pnorm(-abs(mean(probs) - 0.05, 0, 0.001), log.p = TRUE) + log(2)
+      }
+    } else {
+      bf <- tryCatch(BayesFactor::ttestBF(probs[1:i], mu = 0.5, rscale = uniform_sd),
+                     error = \(e) { message("ttestBF failed for c(",paste0(probs[1:i], collapse = ", "), ")");  NA_real_ })
+      log_ps[i] <-  plogis(-bf@bayesFactor[1, "bf"], log.p = TRUE)
+    }
+  }
+
+  return(log_ps)
+}
+
+compute_schad_bf_history <- function(...) {
+  compute_calibration_history(compute_schad_bf_history_single, ...)
+}
+
 
 compute_giviti_history_single <- function(probs, true_model, step = 1) {
   steps_to_include <- which(include_step(1:length(probs), step))
@@ -160,18 +188,63 @@ compute_giviti_history_single <- function(probs, true_model, step = 1) {
   for(i in 1:length(steps_to_include)) {
     probs_to_test <- probs[1:steps_to_include[i]]
     true_to_test <- true_model[1:steps_to_include[i]]
-    if(length(true_to_test) < 5 || all(true_to_test == 0) || all(true_to_test == 1)){
+    if(length(true_to_test) < 10 || all(true_to_test == 0) || all(true_to_test == 1)){
       ps[i] <- 1
     } else {
-      print(true_to_test)
-      givi <- givitiR::givitiCalibrationTest(true_to_test, probs_to_test, devel = "external")
-      ps[i] <- givi$p.value
+      ps[i] <- tryCatch({
+        givi <- givitiR::givitiCalibrationTest(true_to_test, probs_to_test, devel = "external")
+        givi$p.value
+      }, error = \(e) {
+        message("giviti failed for c(",paste0(probs[1:i], collapse = ", "), "), c(",paste0(true_model[1:i], collapse = ", "), ")");
+        #message(e)
+        NA_real_
+      })
     }
   }
   return(log(ps))
 }
 
-compute_giviti_history <- function(stats, step = 1, min_sim_id = 1) {
+
+compute_giviti_history <- function(...) {
+  compute_calibration_history(compute_giviti_history_single, ...)
+}
+
+compute_dimitriadis_history_single <- function(probs, true_model, step = 1, adjust.method = "holm") {
+  steps_to_include <- which(include_step(1:length(probs), step))
+
+  log_ps <- numeric(length(steps_to_include))
+  for(i in 1:length(steps_to_include)) {
+    probs_to_test <- probs[1:steps_to_include[i]]
+    true_to_test <- true_model[1:steps_to_include[i]]
+    log_ps[i] <- log(calibration_p(probs_to_test, true_to_test, adjust.method = adjust.method))
+  }
+  return(log_ps)
+}
+
+compute_dimitriadis_history <- function(...) {
+  compute_calibration_history(compute_dimitriadis_history_single, ...)
+}
+
+compute_reliabilitydiag_history_single <- function(probs, true_model, step = 1) {
+  steps_to_include <- which(include_step(1:length(probs), step))
+
+  ps <- numeric(length(steps_to_include))
+  for(i in 1:length(steps_to_include)) {
+    probs_to_test <- probs[1:steps_to_include[i]]
+    true_to_test <- true_model[1:steps_to_include[i]]
+    capture.output({
+      mt <- reliabilitydiag::miscalibration_test(probs, y = true_model)
+      ps[i] <- mt$pvalue
+    }, type = "message")
+  }
+  return(log(ps))
+}
+
+compute_reliabilitydiag_history <- function(...) {
+  compute_calibration_history(compute_reliabilitydiag_history_single, ...)
+}
+
+compute_calibration_history <- function(history_single_func, stats, step = 1, min_sim_id = 1, ...) {
   if(!("prob" %in% names(stats))) {
     stop("Stats must contain prob - maybe you forgot to call `binary_probabilities_from_stats`?")
   }
@@ -179,12 +252,13 @@ compute_giviti_history <- function(stats, step = 1, min_sim_id = 1) {
     group_by(variable) %>%
     reframe(
       sim_id = sim_id[include_step(sim_id, step)],
-      log_p = compute_giviti_history_single(prob, simulated_value, step = step)
+      log_p = history_single_func(prob, simulated_value, step = step, ...)
     ) %>%
     filter(sim_id >= min_sim_id)
 }
 
-compute_bootstrapped_histories <- function(stats, history_length, n_histories, history_fun, step = 1, min_sim_id = 1) {
+
+compute_bootstrapped_histories <- function(stats, history_length, n_histories, history_fun, step = 1, min_sim_id = 1, ...) {
   res_df <- list()
   for(h in 1:n_histories) {
     stats_boot <- stats %>%
@@ -192,7 +266,7 @@ compute_bootstrapped_histories <- function(stats, history_length, n_histories, h
       sample_n(history_length) %>%
       mutate(sim_id = 1:n()) %>%
       ungroup()
-    res_df[[h]] <- history_fun(stats_boot, step = step, min_sim_id = min_sim_id)
+    res_df[[h]] <- history_fun(stats_boot, step = step, min_sim_id = min_sim_id, ...)
     res_df[[h]]$history_id = h
   }
   do.call(rbind, res_df)
@@ -212,6 +286,21 @@ plot_log_gamma_histories <- function(histories_df, min_sim_id = 0, wrap_cols = 4
     facet_wrap(~variable, ncol = wrap_cols)
 }
 
+log_p_breaks <- function(lim) {
+  min_log10 <- min(lim) / log(10)
+  if(min_log10 > -2) {
+    return(log(c(0.5, 0.05,0.01)))
+  }
+  n_extra_breaks <- 4
+  step <- ceiling(min_log10 / n_extra_breaks)
+  extra_breaks_log10 <- -1 + step * (1:n_extra_breaks)
+  return(c(log(0.05), extra_breaks_log10 * log(10)))
+}
+
+log_p_labels <- function(breaks) {
+  signif(exp(breaks), digits = 3)
+}
+
 plot_log_p_histories <- function(histories_df, title, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
   alpha <- sqrt(1/length(unique(histories_df$history_id)))
 
@@ -220,7 +309,7 @@ plot_log_p_histories <- function(histories_df, title, min_sim_id = 0, wrap_cols 
     ggplot(aes(x = sim_id, y = log_p, group = history_id)) +
     geom_line(alpha = alpha) +
     geom_hline(yintercept = log(0.05), color = "lightblue", linewidth = 1) +
-    scale_y_continuous(paste0("Log p (", title,")"), limits = ylim) +
+    scale_y_continuous(paste0("p (", title,"), log scale"), limits = ylim, breaks = log_p_breaks, labels = log_p_labels) +
     scale_x_continuous("Number of simulations") +
     facet_wrap(~variable, ncol = wrap_cols)
 }

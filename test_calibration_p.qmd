@@ -1,0 +1,42 @@
+---
+title: "test_calibration"
+format: html
+---
+
+```{r setup}
+devtools::load_all()
+```
+
+
+```{r}
+test_single <- function(probs_generator, bias = 0, sd = 0, ...) {
+  dotlist <- list(...)
+  ps <- replicate(100, {
+    probs <- do.call(probs_generator, dotlist)
+    if(bias != 0 | sd != 0) {
+      probs_to_sim <- plogis(
+        qlogis(probs) + bias + rnorm(length(probs), mean = 0, sd = sd)
+        )
+    } else {
+      probs_to_sim <- probs
+    }
+    ys <- rbinom(length(probs), size = 1, prob = probs_to_sim)
+    calibration_p(probs, ys)
+  })
+  
+  return(ps)
+}
+
+ps <- test_single(runif, n = 10)
+hist(ps)
+
+
+ps <- test_single(runif, n = 100, bias = 10)
+hist(ps)
+
+
+ps <- test_single(\(n) rbinom(n, size = 1, prob = 0.4) * 0.3 + 0.2, n = 100, bias = 1)
+hist(ps)
+
+```
+

@@ -190,18 +190,64 @@ plot_binary_calibration_diff(res_bin_bad$stats)
 ```
 
 ```{r}
+K <- 50
+idx <- sample.int(length(res_bin_bad), size = K)
+
+bp <- binary_probabilities_from_stats(res_bin_bad$stats)
+
+plot_binary_calibration_diff(res_bin_bad$stats %>% filter(sim_id %in% idx)) + ggtitle(calibration_p(bp$prob[idx], bp$simulated_value[idx]))
+
+
+#x <- bp$prob[1:K]
+#y <- bp$simulated_value[1:K]
+```
+
+
+```{r}
 hist_bad <- compute_bootstrapped_histories(res_bin_bad$stats, history_length = 100, n_histories = 100,
                                             compute_log_gamma_history, min_sim_id = 5)
-plot_log_gamma_histories(hist_bad)
 
 hist_bad_schad <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
                                             compute_schad_history, min_sim_id = 5)
+
+hist_bad_schad_bf <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
+
+                                                                                                compute_schad_bf_history, min_sim_id = 10)
+
+plot_log_gamma_histories(hist_bad)
 plot_log_p_histories(hist_bad_schad, "Schad")
 
-hist_bad_giviti <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
-                                            compute_giviti_history, min_sim_id = 5)
-plot_log_p_histories(hist_bad_giviti, "Giviti")
+plot_log_p_histories(hist_bad_schad_bf, "schad_bf")
 ```
+
+```{r}
+hist_bad_dimitriadis_holm <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 1000,
+                                            compute_dimitriadis_history, min_sim_id = 10, adjust.method = "holm")
+
+
+hist_bad_dimitriadis_bonferroni <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 1000,
+                                            compute_dimitriadis_history, min_sim_id = 10, adjust.method = "bonferroni")
+
+
+hist_bad_dimitriadis_my <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 1000,
+                                            compute_dimitriadis_history, min_sim_id = 10, adjust.method = "my")
+
+
+plot_log_p_histories(hist_bad_dimitriadis_holm, "Dimitriadis 2023") + expand_limits(y = log(c(1, 1e-14)))
+
+plot_log_p_histories(hist_bad_dimitriadis_bonferroni, "Dimitriadis 2023")  + expand_limits(y = log(c(1, 1e-14)))
+
+plot_log_p_histories(hist_bad_dimitriadis_my, "Dimitriadis 2023")  + expand_limits(y = log(c(1, 1e-14)))
+
+```
+
+```{r}
+hist_bad_dimitriadis <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
+                                            compute_dimitriadis_history, min_sim_id = 10)
+plot_log_p_histories(hist_bad_dimitriadis, "Dimitriadis 2023")
+
+```
+
 
 ```{r}
 probs <- seq(0.1,0.8, length.out = 5)

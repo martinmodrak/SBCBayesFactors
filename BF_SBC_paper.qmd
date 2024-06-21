@@ -22,16 +22,13 @@ BF and BMA
 
 Calibration of BF as prediction calibration
 
-This requires simulations (we do not know real-world ground truth and don't belive our models too much either)
+This requires simulations (we do not know real-world ground truth and don't believe our models too much either)
 
 
 ## Bayesian model consistency via simulations 
 
-The data-averaged posterior criterion relies on the identity:
 
-$$
-\forall \theta: \pi_\text{prior}(\theta) = \int_Y \mathrm{d} y \: \pi_\text{post}(\theta |y)\int_\Theta \mathrm{d}\tilde\theta  \:  \pi_\text{obs}(y | \tilde\theta) \pi_\text{prior}(\tilde \theta)
-$$
+### SBC
 
 SBC relies on the joint distribution of the prior and posterior samples
 
@@ -45,20 +42,41 @@ $$
 \forall y \in Y, \theta, \tilde\theta \in \Theta: \pi_\text{SBC}(y, \theta, \tilde\theta) = \pi_\text{SBC}(y, \tilde\theta, \theta)
 $$
 
-SBC then checks this property by ranks
+This cannot be checked directly, so we make two changes: 1) check on average over $Y$ and 2) use a test quantity $f: \Theta \times Y \to \mathbb{R} \cup \{-\infty,\infty\}$ we then compare the ranks (sample SBC) or CDF (continous SBC)  of $f$. Note that $f$ is used only for the ordering it implies
 
 in other words, we can take the prior as a single draw from the correct posterior.
 
 
 SBC for BF (BF to prob to ranks)
 
-SBC for BF as prediction calibration
+SBC for BF as prediction calibration, i.e. for any $f: \Theta \times Y \to \{0,1\}$ $\phi$ passes continuous SBC w.r.t $f$ 
 
 Testing the full BMA model
 
 Data-dependent quantities (those require full SBC)
 
-The good check (bad theoretically - large or even infinite variance)
+Can in principle detect any mismatch between $\phi(\theta | y)$ and $\pi_\text{post}(\theta | y)$ --- we only need a suitable test quantity that is sensitive to the problem at hand. Modrák et al. provide theoretical and empirical evidence that the likelihood $f(\theta, y) = \pi_\text{obs}(y | theta)$ is highly sensitive in that regard.
+
+### Data-averaged posterior
+
+Used by Schad.
+The data-averaged posterior criterion relies on the identity:
+
+$$
+\forall \theta: \pi_\text{prior}(\theta) = \int_Y \mathrm{d} y \: \pi_\text{post}(\theta |y)\int_\Theta \mathrm{d}\tilde\theta  \:  \pi_\text{obs}(y | \tilde\theta) \pi_\text{prior}(\tilde \theta)
+$$
+
+Typically not full joint distribution but univariate projections $f: \Theta \to \mathbb{R}$
+
+Alternatively, we can compare the moments of the prior to the moments of the data-averaged posterior.
+
+The fundamental problem is that data-averaged posterior ignores the mapping between data --- it only checks that the observed Bayes factors look like reasonable Bayes factors for _some_ model, but cannot check that they are correct for the model under investigation. For example, if we have uniform prior over the models and replace each Bayes factor with its inverse, although this violates prediction calibration and SBC. Data-averaged posterior also won't necessarily flag assigning posterior probability of 0 to the correct model, which is immediately flagged by SBC/prediction calibration.
+
+Data-averaged posterior is repeatedly confused with SBC in the literature on model validation, but it is a fundamentally different check (e.g. because it is insensitive to some types of problems SBC is sensitive to as can be seen in  the theoretical analysis above as well as practical examples below)
+
+### Other approaches
+
+The good check. This shares some of the big problems with data-averaged posterior --- ignores the mapping between BFs and data. Additionally, both the variance and second raw moment of the Bayes factor in favor of the false hypothesis can have very large or even undefined variance, which explains the slow convergence. Even though large variance of BFs is not a problem for either SBC or data-averaged posterior (see appendix) 
 
 ## Toy examples
 

@@ -17,7 +17,7 @@ use_cmdstanr <- FALSE
 library(rstan)
 rstan_options(auto_write = TRUE)
 
-options(mc.cores = parallel::detectCores())
+options(mc.cores = 8)
 
 library(future)
 plan(multisession)
@@ -257,28 +257,31 @@ res_turtles_2 <- compute_SBC(ds_turtles_2, backend_turtles,
 ```
 
 ```{r}
-plot_binary_calibration_diff(res_turtles_all$stats)
+plot_binary_calibration_diff(res_turtles_2$stats)
+plot_ecdf_diff(res_turtles_2$stats)
+```
+
+
+```{r}
+```
+
+```{r}
+if(!("log_prob_H1" %in% names(res_turtles$backend_diagnostics))) {
+  res_turtles$backend_diagnostics$log_prob_H1 <- log(res_turtles$backend_diagnostics$prob_H1)
+}
 ```
 
 
 ```{r}
 res_turtles_all <- bind_results(res_turtles, res_turtles_2)
-plot_ecdf_diff(res_turtles_all)
+plot_ecdf_diff(res_turtles_all, variables = c("model", "lp__"))
+res_turtles_all$stats %>% group_by(variable) %>% tally()
+plot_binary_calibration_diff(res_turtles_all$stats)
 ```
 ```{r}
 res_turtles_all$stats
 ```
 
 
-```{r}
-stats_test <- res_turtles_all$stats %>% group_by(sim_id) %>% filter(simulated_value[variable == "model"] == 1) %>% ungroup()
-plot_ecdf_diff(stats_test, variables = c(paste0("alpha",0:1,""), paste0(".m1.alpha",0:1,"")))
-plot_ecdf_diff(stats_test, variables = paste0(".m1.b[",1:9,"]"))
-```
 
-```{r}
-stats_test0 <- res_turtles_all$stats %>% group_by(sim_id) %>% filter(simulated_value[variable == "model"] == 0) %>% ungroup()
-plot_ecdf_diff(stats_test0, variables = c(paste0("alpha",0:1,""), paste0(".m0.alpha",0:1,"")))
-
-```
 
