@@ -12,7 +12,6 @@ library(ggplot2)
 library(calibrationband)
 library(dplyr)
 
-future::plan(future::multisession, workers = parallel::detectCores)
 options(SBC.min_chunk_size = 100)
 
 cache_dir <- here::here("cache")
@@ -22,7 +21,15 @@ if(!dir.exists(cache_dir)) {
 
 devtools::load_all()
 theme_set(theme_minimal())
+
+n_histories <- 100
 ```
+
+
+```{r cluster}
+future::plan(future::multisession, workers = parallel::detectCores)
+```
+
 
 ```{r}
 py1 <- c(0.2, 0.9)
@@ -131,16 +138,10 @@ plot_log_p_histories(hist_correct_schad, "Schad")
 plot_log_p_histories(hist_correct_schad_bf, "Schad BF")
 plot_log_p_histories(hist_correct_miscalibration, "Miscalibration resampling")
 
-```
-
-```{r}
-compute_bootstrapped_histories(bp_correct, history_length = hist_length_correct, n_histories = 10, step = hist_step_correct,
-                                                           compute_miscalibration_history, min_sim_id = 10, cache = FALSE)
-```
-
-
-```{r}
-save_histories("bin_correct", gamma = hist_correct, schad = hist_correct_schad, miscalibration = hist_correct_miscalibration)
+save_histories("binary_correct",
+               log_gamma = hist_correct,
+               schad = hist_correct_schad,
+               miscalibration = hist_correct_miscalibration)
 ```
 
 
@@ -159,7 +160,25 @@ plot_binary_calibration_diff(res_bin_flip$stats)
 ```{r}
 hist_flip <- compute_bootstrapped_histories(res_bin_flip$stats, history_length = 50, n_histories = 100,
                                             compute_log_gamma_history)
+
+bp_flip <- binary_probabilities_from_stats(res_bin_flip$stats)
+
+hist_flip_schad <- compute_bootstrapped_histories(bp_flip, history_length = 50, n_histories = 100,
+                                            compute_schad_history, min_sim_id = 10)
+
+
+hist_flip_miscalib <- compute_bootstrapped_histories(bp_flip, history_length = 50, n_histories = 100,
+                                            compute_miscalibration_history)
+
 plot_log_gamma_histories(hist_flip)
+plot_log_p_histories(hist_flip_schad, "Schad")
+plot_log_p_histories(hist_flip_miscalib, "Miscalibration resampling")
+
+save_histories("binary_flip",
+               log_gamma = hist_flip,
+               schad = hist_flip_schad,
+               miscalibration = hist_flip_miscalib)
+
 ```
 
 

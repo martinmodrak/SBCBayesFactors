@@ -286,12 +286,12 @@ compute_calibration_history <- function(history_single_func, stats, step = 1, mi
   if(!("prob" %in% names(stats))) {
     stop("Stats must contain prob - maybe you forgot to call `binary_probabilities_from_stats`?")
   }
-  stats %>%
-    group_by(variable) %>%
-    reframe(
+  stats |>
+    dplyr::group_by(variable) |>
+    dplyr::reframe(
       sim_id = sim_id[include_step(sim_id, step)],
       log_p = history_single_func(prob, simulated_value, step = step, ...)
-    ) %>%
+    ) |>
     filter(sim_id >= min_sim_id)
 }
 
@@ -387,7 +387,7 @@ plot_log_p_histories <- function(histories_df, title, min_sim_id = 0, wrap_cols 
     ggplot(aes(x = sim_id, y = log_p, group = history_id)) +
     geom_line(alpha = alpha) +
     geom_hline(yintercept = log(0.05), color = "lightblue", linewidth = 1) +
-    scale_y_continuous(paste0("p (", title,"), log scale"), limits = ylim, breaks = log_p_breaks, labels = log_p_labels) +
+    scale_y_continuous(paste0("p - ", title), limits = ylim, breaks = log_p_breaks, labels = log_p_labels) +
     scale_x_continuous("Number of simulations") +
     facet_wrap(~variable, ncol = wrap_cols)
 }

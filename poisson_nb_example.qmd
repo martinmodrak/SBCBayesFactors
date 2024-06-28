@@ -8,6 +8,7 @@ library(SBC)
 library(ggplot2)
 library(calibrationband)
 library(dplyr)
+library(magrittr)
 
 options(SBC.min_chunk_size = 100)
 
@@ -174,10 +175,32 @@ plot_binary_calibration_diff(res_pnb_ignore_all$stats, method = "round")
 
 
 
+
 ```{r}
-hist_ignore_all <- compute_bootstrapped_histories(res_pnb_ignore_all$stats, history_length = 100, n_histories = 100,
+hist_length_ignore_all <- 100
+hist_step_ignore_all <- 1
+hist_pnb_ignore_all <- compute_bootstrapped_histories(res_pnb_ignore_all$stats, history_length = hist_length_ignore_all, n_histories = 100,
+                                                       step = hist_step_ignore_all,
                                             compute_log_gamma_history)
-plot_log_gamma_histories(hist_ignore_all)
+
+bp_pnb_ignore_all <- binary_probabilities_from_stats(res_pnb_ignore_all$stats)
+
+hist_pnb_ignore_all_schad <- compute_bootstrapped_histories(bp_pnb_ignore_all, history_length = hist_length_ignore_all, n_histories = 100, step = hist_step_ignore_all,
+                                            compute_schad_history, min_sim_id = 10)
+
+
+hist_pnb_ignore_all_miscalib <- compute_bootstrapped_histories(bp_pnb_ignore_all, history_length = hist_length_ignore_all, n_histories = 100, step = hist_step_ignore_all,
+                                            compute_miscalibration_history)
+
+plot_log_gamma_histories(hist_pnb_ignore_all)
+plot_log_p_histories(hist_pnb_ignore_all_schad, "Schad")
+plot_log_p_histories(hist_pnb_ignore_all_miscalib, "Miscalibration resampling")
+
+save_histories("pnb_ignore_all",
+               log_gamma = hist_pnb_ignore_all,
+               schad = hist_pnb_ignore_all_schad,
+               miscalibration = hist_pnb_ignore_all_miscalib)
+
 ```
 
 ## Ignore half
@@ -188,15 +211,34 @@ res_pnb_ignore_half <-  compute_SBC(ds_pnb, SBC_backend_pnb_example(100, ignore_
                                globals = poisson_nb_globals,
                                cache_mode = "results", cache_location = file.path(cache_dir, "poisson_nb_ignore_half.rds"))
 
-plot_ecdf_diff(res_pnb_ignore_half)
-plot_binary_calibration_diff(res_pnb_ignore_half$stats, method = "round")
 ```
 
 
 ```{r}
-hist_ignore_half <- compute_bootstrapped_histories(res_pnb_ignore_half$stats, history_length = 1000, n_histories = 100,
+hist_length_ignore_half <- 1000
+hist_step_ignore_half <- 10
+hist_pnb_ignore_half <- compute_bootstrapped_histories(res_pnb_ignore_half$stats, history_length = hist_length_ignore_half, n_histories = 100,
+                                                       step = hist_step_ignore_half,
                                             compute_log_gamma_history)
-plot_log_gamma_histories(hist_ignore_half)
+
+bp_pnb_ignore_half <- binary_probabilities_from_stats(res_pnb_ignore_half$stats)
+
+hist_pnb_ignore_half_schad <- compute_bootstrapped_histories(bp_pnb_ignore_half, history_length = hist_length_ignore_half, n_histories = 100, step = hist_step_ignore_half,
+                                            compute_schad_history, min_sim_id = 10)
+
+
+hist_pnb_ignore_half_miscalib <- compute_bootstrapped_histories(bp_pnb_ignore_half, history_length = hist_length_ignore_half, n_histories = 100, step = hist_step_ignore_half,
+                                            compute_miscalibration_history)
+
+plot_log_gamma_histories(hist_pnb_ignore_half)
+plot_log_p_histories(hist_pnb_ignore_half_schad, "Schad")
+plot_log_p_histories(hist_pnb_ignore_half_miscalib, "Miscalibration resampling")
+
+save_histories("pnb_ignore_half",
+               log_gamma = hist_pnb_ignore_half,
+               schad = hist_pnb_ignore_half_schad,
+               miscalibration = hist_pnb_ignore_half_miscalib)
+
 ```
 
 
@@ -215,25 +257,29 @@ plot_binary_calibration_diff(res_pnb_vari$stats, method = "round")
 
 
 ```{r}
-hist_vari <- compute_bootstrapped_histories(res_pnb_vari$stats, history_length = 1000, n_histories = 100, step = 10,
+hist_length_vari <- 1000
+hist_step_vari <- 10
+hist_pnb_vari <- compute_bootstrapped_histories(res_pnb_vari$stats, history_length = hist_length_vari, n_histories = 100,
+                                                       step = hist_step_vari,
                                             compute_log_gamma_history)
 
-bp_vari<- binary_probabilities_from_stats(res_pnb_vari$stats)
-hist_vari_schad <- compute_bootstrapped_histories(bp_vari, history_length = 1000, n_histories = 100, step = 10,
-                                            compute_schad_history)
+bp_pnb_vari <- binary_probabilities_from_stats(res_pnb_vari$stats)
 
-# hist_vari_schad_bf <- compute_bootstrapped_histories(bp_vari, history_length = 1000, n_histories = 100, step = 10,
-#                                             compute_schad_bf_history)
+hist_pnb_vari_schad <- compute_bootstrapped_histories(bp_pnb_vari, history_length = hist_length_vari, n_histories = 100, step = hist_step_vari,
+                                            compute_schad_history, min_sim_id = 10)
 
 
-hist_vari_miscalibration <- compute_bootstrapped_histories(bp_vari, history_length = 200, n_histories = 100, step = 10,
-                                                           compute_miscalibration_history, min_sim_id = 1)
+hist_pnb_vari_miscalib <- compute_bootstrapped_histories(bp_pnb_vari, history_length = hist_length_vari, n_histories = 100, step = hist_step_vari,
+                                            compute_miscalibration_history)
 
+plot_log_gamma_histories(hist_pnb_vari)
+plot_log_p_histories(hist_pnb_vari_schad, "Schad")
+plot_log_p_histories(hist_pnb_vari_miscalib, "Miscalibration resampling")
 
-plot_log_gamma_histories(hist_vari)
-plot_log_p_histories(hist_vari_schad, "Schad")
-#plot_log_p_histories(hist_vari_schad_bf, "Schad BF")
-plot_log_p_histories(hist_vari_miscalibration, "Miscalibration resampling") + expand_limits(x = 1000, y = min(hist_vari$log_gamma - hist_vari$log_gamma_threshold))
+save_histories("pnb_vari",
+               log_gamma = hist_pnb_vari,
+               schad = hist_pnb_vari_schad,
+               miscalibration = hist_pnb_vari_miscalib)
 
 ```
 
@@ -249,34 +295,30 @@ res_pnb_bias <-  compute_SBC(ds_pnb[1:1000], SBC_backend_pnb_example(100, bias =
 plot_ecdf_diff(res_pnb_bias)
 plot_binary_calibration_diff(res_pnb_bias$stats, method = "round")
 ```
-
-
 ```{r}
-hist_bias <- compute_bootstrapped_histories(res_pnb_bias$stats, history_length = 100, n_histories = 100, step = 5,
+hist_length_bias <- 200
+hist_step_bias <- 5
+hist_pnb_bias <- compute_bootstrapped_histories(res_pnb_bias$stats, history_length = hist_length_bias, n_histories = 100,
+                                                       step = hist_step_bias,
                                             compute_log_gamma_history)
 
-bp_bias <- binary_probabilities_from_stats(res_pnb_bias$stats)
-hist_bias_schad <- compute_bootstrapped_histories(bp_bias, history_length = 100, n_histories = 100, step = 5,
+bp_pnb_bias <- binary_probabilities_from_stats(res_pnb_bias$stats)
+
+hist_pnb_bias_schad <- compute_bootstrapped_histories(bp_pnb_bias, history_length = hist_length_bias, n_histories = 100, step = hist_step_bias,
                                             compute_schad_history)
 
 
-hist_bias_schad_bf <- compute_bootstrapped_histories(bp_bias, history_length = 100, n_histories = 100, step = 5,
-                                            compute_schad_bf_history)
+hist_pnb_bias_miscalib <- compute_bootstrapped_histories(bp_pnb_bias, history_length = hist_length_bias, n_histories = 100, step = hist_step_bias,
+                                            compute_miscalibration_history)
 
+plot_log_gamma_histories(hist_pnb_bias)
+plot_log_p_histories(hist_pnb_bias_schad, "Schad")
+plot_log_p_histories(hist_pnb_bias_miscalib, "Miscalibration resampling")
 
-hist_bias_brier <- compute_bootstrapped_histories(bp_bias, history_length = 100, n_histories = 100, step = 1,
-                                            compute_brier_history, min_sim_id = 10)
-
-
-hist_bias_miscalibration <- compute_bootstrapped_histories(bp_bias, history_length = 100, n_histories = 100, step = 5,
-                                                           compute_miscalibration_history, min_sim_id = 1)
-
-               
-plot_log_gamma_histories(hist_bias)
-plot_log_p_histories(hist_bias_brier, "Brier resampling")
-plot_log_p_histories(hist_bias_schad, "Schad") + expand_limits(y = log(1e-32))
-plot_log_p_histories(hist_bias_schad_bf, "Schad BG") + expand_limits(y = log(1e-32))
-plot_log_p_histories(hist_bias_miscalibration, "Miscalibration resampling") + expand_limits(y = log(1e-32))
+save_histories("pnb_bias",
+               log_gamma = hist_pnb_bias,
+               schad = hist_pnb_bias_schad,
+               miscalibration = hist_pnb_bias_miscalib)
 
 ```
 
