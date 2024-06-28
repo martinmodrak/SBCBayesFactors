@@ -10,6 +10,7 @@ compute_diff_history_norm <- function(ranks, max_rank, p = 2) {
   history_norm
 }
 
+#' @export
 get_precomputed_gamma_thresholds <- function(K, min_sims = 1, max_sims = 1000) {
   if(!dir.exists("./_SBC_cache")) {
     dir.create("./_SBC_cache")
@@ -61,6 +62,7 @@ rank_counts_from_ranks <- function(ranks, max_rank) {
 }
 
 
+#' @export
 log_gamma_stat <- function(rank_counts, ranks_to_check = NULL) {
   max_rank <- length(rank_counts) - 1
   if(is.null(ranks_to_check)) {
@@ -104,6 +106,7 @@ compute_log_gamma_history_single <- function(ranks, max_rank, step = 1) {
   log_gamma
 }
 
+#' @export
 compute_log_gamma_history <- function(stats, step = step, min_sim_id = 1) {
   unique_max_rank <- unique(stats$max_rank)
   if(length(unique_max_rank) > 1) {
@@ -140,6 +143,7 @@ compute_schad_history_single <- function(probs, true_model, step = 1) {
   return(log_ps)
 }
 
+#' @export
 compute_schad_history <- function(...) {
   compute_calibration_history(compute_schad_history_single, ...)
 }
@@ -152,30 +156,33 @@ compute_schad_bf_history_single <- function(probs, true_model, step = 1) {
   for(i in which(steps_to_include)) {
     # Handling some edge cases typically with few sims where the Bayes factors
     # don't play nicely
+    probs_to_test <- probs[1:i]
+    out_i <- step_id(i,step)
     if(i <= 5) {
-      log_ps[i] <- 0
-    } else if(sd(probs) == 0) {
-      if(abs(mean(probs) - 0.5) < 1e-8) {
-        log_ps[i] <- 0
+      log_ps[out_i] <- 0
+    } else if(sd(probs_to_test) == 0) {
+      if(abs(mean(probs_to_test) - 0.5) < 1e-8) {
+        log_ps[out_i] <- 0
       } else {
-        log_ps[i] <- NA_real_
+        log_ps[out_i] <- NA_real_
       }
-    } else if(sd(probs) < 0.001) {
-      if(abs(mean(probs) - 0.5) < 0.001) {
-        log_ps[i] <- 0
+    } else if(sd(probs_to_test) < 0.0001) {
+      if(abs(mean(probs_to_test) - 0.5) < 0.001) {
+        log_ps[out_i] <- 0
       } else {
-        log_ps[i] <- pnorm(-abs(mean(probs) - 0.05, 0, 0.001), log.p = TRUE) + log(2)
+        log_ps[out_i] <- pnorm(-abs(mean(probs_to_test) - 0.05, 0, 0.001), log.p = TRUE) + log(2)
       }
     } else {
-      bf <- tryCatch(BayesFactor::ttestBF(probs[1:i], mu = 0.5, rscale = uniform_sd),
-                     error = \(e) { message("ttestBF failed for c(",paste0(probs[1:i], collapse = ", "), ")");  NA_real_ })
-      log_ps[i] <-  plogis(-bf@bayesFactor[1, "bf"], log.p = TRUE)
+      bf <- tryCatch(BayesFactor::ttestBF(probs_to_test, mu = 0.5, rscale = uniform_sd),
+                     error = \(e) { message("ttestBF failed for c(",paste0(probs_to_test, collapse = ", "), ")");  NA_real_ })
+      log_ps[out_i] <-  plogis(-bf@bayesFactor[1, "bf"], log.p = TRUE)
     }
   }
 
   return(log_ps)
 }
 
+#' @export
 compute_schad_bf_history <- function(...) {
   compute_calibration_history(compute_schad_bf_history_single, ...)
 }
@@ -205,45 +212,76 @@ compute_giviti_history_single <- function(probs, true_model, step = 1) {
 }
 
 
+#' @export
 compute_giviti_history <- function(...) {
   compute_calibration_history(compute_giviti_history_single, ...)
 }
 
-compute_dimitriadis_history_single <- function(probs, true_model, step = 1, adjust.method = "holm") {
-  steps_to_include <- which(include_step(1:length(probs), step))
-
-  log_ps <- numeric(length(steps_to_include))
-  for(i in 1:length(steps_to_include)) {
-    probs_to_test <- probs[1:steps_to_include[i]]
-    true_to_test <- true_model[1:steps_to_include[i]]
-    log_ps[i] <- log(calibration_p(probs_to_test, true_to_test, adjust.method = adjust.method))
-  }
-  return(log_ps)
-}
-
-compute_dimitriadis_history <- function(...) {
-  compute_calibration_history(compute_dimitriadis_history_single, ...)
-}
-
-compute_reliabilitydiag_history_single <- function(probs, true_model, step = 1) {
+compute_dimitriadis_history_single <- function(probs, true_model, step = 1, saddle = TRUE, adjust.method = "holm") {
   steps_to_include <- which(include_step(1:length(probs), step))
 
   ps <- numeric(length(steps_to_include))
   for(i in 1:length(steps_to_include)) {
     probs_to_test <- probs[1:steps_to_include[i]]
     true_to_test <- true_model[1:steps_to_include[i]]
-    capture.output({
-      mt <- reliabilitydiag::miscalibration_test(probs, y = true_model)
-      ps[i] <- mt$pvalue
-    }, type = "message")
+    if(saddle) {
+      ps[i] <- calibration_p_saddle(probs_to_test, true_to_test, adjust.method = adjust.method)
+    } else {
+      ps[i] <- calibration_p(probs_to_test, true_to_test, adjust.method = adjust.method)
+    }
   }
   return(log(ps))
 }
 
-compute_reliabilitydiag_history <- function(...) {
-  compute_calibration_history(compute_reliabilitydiag_history_single, ...)
+#' @export
+compute_dimitriadis_history <- function(...) {
+  compute_calibration_history(compute_dimitriadis_history_single, ...)
 }
 
+
+#' @export
+compute_miscalibration_history <- function(...) {
+  single_func <- function(...) {
+    compute_indep_history_single(miscalibration_resampling_p, ...)
+  }
+  compute_calibration_history(single_func, ...)
+}
+
+#' @export
+compute_hosmer_lemeshow_history <- function(...) {
+  single_func <- function(...) {
+    compute_indep_history_single(hosmer_lemeshow_p, ...)
+  }
+  compute_calibration_history(single_func, ...)
+}
+
+compute_brier_history_single <- function(probs, true_model, step = 1, B = 2000) {
+  hist_all <- brier_resampling_history(probs, true_model, B = B)
+  hist <- hist_all[include_step(1:length(probs), step)]
+  hist[hist == 0] <- 0.5/B
+  return(log(hist))
+}
+
+#' @export
+compute_brier_history <- function(...) {
+  compute_calibration_history(compute_brier_history_single, ...)
+}
+
+
+#' @export
+compute_indep_history_single <- function(func, probs, true_model, step = 1, ...) {
+  steps_to_include <- which(include_step(1:length(probs), step))
+
+  ps <- numeric(length(steps_to_include))
+  for(i in 1:length(steps_to_include)) {
+    probs_to_test <- probs[1:steps_to_include[i]]
+    true_to_test <- true_model[1:steps_to_include[i]]
+    ps[i] <- func(probs_to_test, true_to_test, ...)
+  }
+  return(log(ps))
+}
+
+#' @export
 compute_calibration_history <- function(history_single_func, stats, step = 1, min_sim_id = 1, ...) {
   if(!("prob" %in% names(stats))) {
     stop("Stats must contain prob - maybe you forgot to call `binary_probabilities_from_stats`?")
@@ -258,18 +296,58 @@ compute_calibration_history <- function(history_single_func, stats, step = 1, mi
 }
 
 
-compute_bootstrapped_histories <- function(stats, history_length, n_histories, history_fun, step = 1, min_sim_id = 1, ...) {
-  res_df <- list()
-  for(h in 1:n_histories) {
-    stats_boot <- stats %>%
-      group_by(variable) %>%
-      sample_n(history_length) %>%
-      mutate(sim_id = 1:n()) %>%
-      ungroup()
-    res_df[[h]] <- history_fun(stats_boot, step = step, min_sim_id = min_sim_id, ...)
-    res_df[[h]]$history_id = h
+
+
+#' @export
+compute_bootstrapped_histories <- function(stats, history_length, n_histories, history_fun, step = 1, min_sim_id = 1, cache = TRUE, ...) {
+  if(cache) {
+    cache_dir <- here::here("cache", "hist_single")
+    if(!dir.exists(cache_dir)) {
+      dir.create(cache_dir)
+    }
+    dotlist <- list(...)
+    if(length(dotlist) == 0) {
+      dotlist_hash <- ""
+    } else {
+      dotlist_hash <- paste0("_", rlang::hash(dotlist))
+    }
+    cache_basename <- paste0(rlang::as_name(enquo(history_fun)), "_len", history_length, "_nhist",
+                             n_histories, "_step", step, "_min", min_sim_id,
+                             rlang::hash(stats), dotlist_hash, ".rds")
+    cache_file <- file.path(cache_dir, cache_basename)
+    if(file.exists(cache_file)) {
+      message("Read from cache '", cache_file, "'")
+      return(readRDS(cache_file))
+    }
   }
-  do.call(rbind, res_df)
+  res_list <- future.apply::future_lapply(1:n_histories, future.seed = TRUE,
+                                          FUN = function(history_id) {
+      stats_boot <- dplyr::group_by(stats, variable) |>
+        dplyr::sample_n(history_length) |>
+        dplyr::mutate(sim_id = 1:dplyr::n()) |>
+        dplyr::ungroup()
+      res_df <- history_fun(stats_boot, step = step, min_sim_id = min_sim_id, ...)
+      res_df$history_id = history_id
+      return(res_df)
+  })
+  res <- do.call(rbind, res_list)
+
+  if(cache) {
+    saveRDS(res, cache_file)
+  }
+
+  return(res)
+  # res_df <- list()
+  # for(h in 1:n_histories) {
+  #   stats_boot <- stats %>%
+  #     group_by(variable) %>%
+  #     sample_n(history_length) %>%
+  #     mutate(sim_id = 1:n()) %>%
+  #     ungroup()
+  #   res_df[[h]] <- history_fun(stats_boot, step = step, min_sim_id = min_sim_id, ...)
+  #   res_df[[h]]$history_id = h
+  # }
+  # do.call(rbind, res_df)
 }
 
 
@@ -292,7 +370,7 @@ log_p_breaks <- function(lim) {
     return(log(c(0.5, 0.05,0.01)))
   }
   n_extra_breaks <- 4
-  step <- ceiling(min_log10 / n_extra_breaks)
+  step <- floor(min_log10 / n_extra_breaks)
   extra_breaks_log10 <- -1 + step * (1:n_extra_breaks)
   return(c(log(0.05), extra_breaks_log10 * log(10)))
 }
@@ -313,3 +391,13 @@ plot_log_p_histories <- function(histories_df, title, min_sim_id = 0, wrap_cols 
     scale_x_continuous("Number of simulations") +
     facet_wrap(~variable, ncol = wrap_cols)
 }
+
+save_histories <- function(name, ...) {
+  saveRDS(list(...), here::here("cache", paste0("hist_", name, ".rds")))
+}
+
+
+load_histories <- function(name) {
+  readRDS(here::here("cache", paste0("hist_", name, ".rds")))
+}
+

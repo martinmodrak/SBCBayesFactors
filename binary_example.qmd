@@ -12,7 +12,7 @@ library(ggplot2)
 library(calibrationband)
 library(dplyr)
 
-future::plan(future::multisession)
+future::plan(future::multisession, workers = parallel::detectCores)
 options(SBC.min_chunk_size = 100)
 
 cache_dir <- here::here("cache")
@@ -70,19 +70,6 @@ SBC_backend_iid_draws.SBC_backend_bin_example <- function(...) {
   TRUE
 }
 
-SBC_fit_to_draws_matrix.SBC_fit_bin_example <- function(fit) {
-  posterior::draws_matrix(model = rbinom(fit$n_draws, size = 1, prob = fit$pm1))
-}
-
-binary_to_cdf <- function(variables, prob1, simulated_value) {
-  data.frame(variable = variables,
-             cdf_low = dplyr::if_else(simulated_value == 0, 0, prob1),
-             cdf_high = dplyr::if_else(simulated_value == 0, prob1, 1))
-}
-
-SBC_posterior_cdf.SBC_fit_bin_example <- function(fit, variables) {
-  binary_to_cdf("model", fit$pm1, variables["model"])
-}
 
 dquants_bin <- derived_quantities(
   log_lik = dplyr::if_else(y == 1,  py1[model + 1], 1 - py1[model + 1])
@@ -113,6 +100,49 @@ true_model <- res_bin_correct$stats %>% filter(variable == "model") %>% pull(sim
 p_M1 <- purrr::map_dbl(res_bin_correct$fits, \(x) x$pm1)
 good_check(true_model, p_M1)
 ```
+```{r}
+hist_length_correct <- 1000
+hist_step_correct <- 10
+hist_correct <- compute_bootstrapped_histories(res_bin_correct$stats, history_length = hist_length_correct, n_histories = n_histories, step = hist_step_correct,
+                                            compute_log_gamma_history)
+
+bp_correct <- binary_probabilities_from_stats(res_bin_correct$stats)
+hist_correct_schad <- compute_bootstrapped_histories(bp_correct, history_length = hist_length_correct, n_histories = n_histories, step = hist_step_correct,
+                                            compute_schad_history)
+
+
+hist_correct_schad_bf <- compute_bootstrapped_histories(bp_correct, history_length = hist_length_correct, n_histories = n_histories, step = hist_step_correct,
+                                            compute_schad_bf_history)
+
+
+hist_correct_brier <- compute_bootstrapped_histories(bp_correct, history_length = hist_length_correct, n_histories = n_histories, step = hist_step_correct,
+                                            compute_brier_history, min_sim_id = 10)
+
+
+hist_correct_miscalibration <- compute_bootstrapped_histories(bp_correct, history_length = hist_length_correct, n_histories = n_histories, step = hist_step_correct,
+                                                           compute_miscalibration_history, min_sim_id = 10)
+
+
+
+
+plot_log_gamma_histories(hist_correct)
+plot_log_p_histories(hist_correct_brier, "Brier resampling")
+plot_log_p_histories(hist_correct_schad, "Schad")
+plot_log_p_histories(hist_correct_schad_bf, "Schad BF")
+plot_log_p_histories(hist_correct_miscalibration, "Miscalibration resampling")
+
+```
+
+```{r}
+compute_bootstrapped_histories(bp_correct, history_length = hist_length_correct, n_histories = 10, step = hist_step_correct,
+                                                           compute_miscalibration_history, min_sim_id = 10, cache = FALSE)
+```
+
+
+```{r}
+save_histories("bin_correct", gamma = hist_correct, schad = hist_correct_schad, miscalibration = hist_correct_miscalibration)
+```
+
 
 
 ```{r}
@@ -190,12 +220,27 @@ plot_binary_calibration_diff(res_bin_bad$stats)
 ```
 
 ```{r}
-K <- 50
-idx <- sample.int(length(res_bin_bad), size = K)
+res_bin_bad2 <- compute_SBC(ds_bin[1:1000], SBC_backend_bin_example(c(0.03,0.5), 100),
+                               dquants = dquants_bin,
+                            globals = binary_globals,
+                            cache_mode = "results", cache_location = file.path(cache_dir, "binary_bad2.rds"))
 
-bp <- binary_probabilities_from_stats(res_bin_bad$stats)
+```
 
-plot_binary_calibration_diff(res_bin_bad$stats %>% filter(sim_id %in% idx)) + ggtitle(calibration_p(bp$prob[idx], bp$simulated_value[idx]))
+
+```{r}
+K <- 200
+idx <- sample.int(length(res_bin_bad2), size = K)
+
+bp <- binary_probabilities_from_stats(res_bin_bad2$stats)
+x <- bp$prob[idx]
+y <- bp$simulated_value[idx]
+
+plot_binary_calibration_diff(res_bin_bad2$stats %>% filter(sim_id %in% idx)) + 
+  ggtitle(paste(
+    calibration_p(x, y), 
+    calibration_p_saddle(x, y)), 
+    brier_resampling_p(x, y, B = 10000))
 
 
 #x <- bp$prob[1:K]
@@ -218,6 +263,30 @@ plot_log_gamma_histories(hist_bad)
 plot_log_p_histories(hist_bad_schad, "Schad")
 
 plot_log_p_histories(hist_bad_schad_bf, "schad_bf")
+```
+
+
+```{r}
+hist_bad <- compute_bootstrapped_histories(res_bin_bad$stats, history_length = 100, n_histories = 100,
+                                            compute_log_gamma_history, min_sim_id = 5)
+
+hist_bad_schad <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
+                                            compute_schad_history, min_sim_id = 5)
+
+hist_bad_schad_bf <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
+
+                                                                                                compute_schad_bf_history, min_sim_id = 10)
+
+hist_bad_dimitriadis <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
+                                            compute_dimitriadis_history, min_sim_id = 10)
+
+
+plot_log_gamma_histories(hist_bad)
+plot_log_p_histories(hist_bad_schad, "Schad")
+
+plot_log_p_histories(hist_bad_schad_bf, "schad_bf")
+plot_log_p_histories(hist_bad_dimitriadis, "Dimitriadis 2023")
+
 ```
 
 ```{r}

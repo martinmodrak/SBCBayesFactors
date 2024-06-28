@@ -1,340 +1,348 @@
 ---
-title: "BF - tests"
+title: "Poisson example"
 format: html
 ---
 
-TODO: Aki suggests using Aldor-Noiman et al. (2013) for continuous CDF checks...
-TODO: For binary variables, we can directly detect the posterior = prior situation
-
 ```{r setup}
-library(tidyverse)
 library(SBC)
-library(future)
-library(patchwork)
+library(ggplot2)
+library(calibrationband)
+library(dplyr)
+
+options(SBC.min_chunk_size = 100)
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir)) {
+  dir.create(cache_dir)
+}
+
 devtools::load_all()
-plan(multisession)
 theme_set(theme_minimal())
 
-py1 <- c(0.1, 0.9)
-pm1_given_y1 <- py1[1] / sum(py1)
-pm1_given_y2 <- (1 - py1[1]) / sum(1 - py1)
-correct_prob <- c(pm1_given_y1, pm1_given_y2)
+n_histories <- 100
+```
 
+```{r}
+future::plan(future::multisession, workers = parallel::detectCores)
 ```
 
 
 ```{r}
+chosen_mean <- 3
+chosen_phi <- 5
 
-
-
-res_correct <- test_SBC_BF(py1, correct_prob, title = "Correct BF", N_sims = 100)
-res_rev <- test_SBC_BF(py1, rev(correct_prob), title = "Reversed BF", N_sims = 100)
-res_small_error <- test_SBC_BF(py1, 0.3 * rev(correct_prob) + 0.7 * correct_prob, title = "0.3 * Reversed + 0.7 * Corect", N_sims = 400)
-#res_prior <- test_SBC_BF(py1, c(0.5, 0.5), title = "Prior = posterior", N_sims = 100)
-
-
-```
-
-```{r}
-(plot_ecdf_diff(res_rev) + ggtitle("Random tie braking for ranks") |
-  plot_q_diff(res_rev) + ggtitle("Piecewise-linear ECDF")) + plot_annotation("One binary parameter, one binary observation")
-
-
-plot_q_bootstrap_diff(res_rev)
-plot_q_bootstrap_diff(res_rev, bayesian = TRUE)
-
-```
-
-
-```{r, fig.width=8, fig.height=8}
-# An example where Dimitriadis works better
-#res_small_error <- test_SBC_BF(py1, 0.3 * rev(correct_prob) + 0.7 * correct_prob, title = "0.3 * Reversed + 0.7 * Corect", N_sims = 40)
-#res_small_error <- test_SBC_BF(py1, 0.6 * rev(correct_prob) + 0.4 * correct_prob, title = "0.3 * Reversed + 0.7 * Corect", N_sims = 40)
-
-((plot_ecdf_diff(res_small_error) + ggtitle("Random tie braking for ranks") | plot_Dimitriadis_res_diff(res_small_error)
-  ) /
-   (plot_q_diff(res_small_error) + ggtitle("Piecewise-linear ECDF", "Standard confidence ellipse around the null") |
-   plot_q_bootstrap_diff(res_small_error, bayesian = TRUE) + ggtitle("Piecewise-linear ECDF", "Bootstrap-derived confidence interval"))) + plot_annotation("One binary parameter, one binary observation")
-
-
-#plot_q_bootstrap_diff(res_small_error)
-
-
-```
-
-```{r}
-plot_q_bootstrap_diff(res_small_error, bayesian = TRUE)
-plot_q_bootstrap_diff(res_small_error, bayesian = TRUE, bbinom = TRUE)
-plot_q_bootstrap_diff(res_small_error, bayesian = FALSE)
-```
-
-
-```{r}
-plot_log_gamma_history(res_rev, max_sim_id = 50)
-plot_log_gamma_q_history(res_rev, max_sim_id = 50)
-```
-
-
-```{r, fig.width=8, fig.height=8}
-((plot_ecdf_diff(res_correct) + ggtitle("Random tie braking for ranks") | plot_Dimitriadis_res_diff(res_correct)
-  ) /
-   (plot_q_diff(res_correct) + ggtitle("Piecewise-linear ECDF", "Standard confidence ellipse around the null") |
-   plot_q_bootstrap_diff(res_correct, bayesian = TRUE, bbinom = TRUE) + ggtitle("Piecewise-linear ECDF", "Bootstrap-derived confidence interval"))) + plot_annotation("One binary parameter, one binary observation", "Correct posterior")
-
-```
-
-
-```{r}
-plot_log_gamma_history(res_correct)
-plot_log_gamma_q_history(res_correct)
-```
-
-```{r, fig.width=8, fig.height=8}
-# ((plot_ecdf_diff(res_prior) + ggtitle("Random tie braking for ranks") | patchwork::plot_spacer()
-#   ) /
-#    (plot_q_diff(res_prior) + ggtitle("Piecewise-linear ECDF", "Standard confidence ellipse around the null") |
-#    plot_q_bootstrap_diff(res_prior, bayesian = TRUE, bbinom = TRUE) + ggtitle("Piecewise-linear ECDF", "Bootstrap-derived confidence interval"))) + plot_annotation("One binary parameter, one binary observation", "Posterior = prior")
-```
-
-
-```{r}
-(plot_ecdf_diff(res_small_error) + ggtitle("Random tie braking for ranks") |
-  plot_q_diff(res_small_error) + ggtitle("Piecewise-linear ECDF")) + plot_annotation("One binary parameter, one binary observation", subtitle = "Slightly incorrect posterior")
-
-plot_q_bootstrap_diff(res_small_error, bbinom = TRUE)
-
-```
-
-
-```{r}
-plot_log_gamma_history(res_small_error)
-plot_log_gamma_q_history(res_small_error)
-```
-
-```{r}
-for(j in 1:10) {
-  ps <- list()
-  for(i in 1:9) {
-    res_correct <- test_SBC_BF(py1, correct_prob, title = "Correct BF", N_sims = 100)
-    ps[[i]] <- plot_q_diff(res_correct)
+sim_poisson_nb <- function(n, mean = chosen_mean, phi = chosen_phi) {
+  model <- rbinom(1, size = 1, prob = 0.5)
+  if(model == 0) {
+    y <- rpois(n = n, lambda = mean)
+  } else {
+    y <- rnbinom(n = n, mu = mean, size = phi)
   }
-  print((ps[[1]] | ps[[2]] | ps[[3]]) /
-        (ps[[4]] | ps[[5]] | ps[[6]]) /
-        (ps[[7]] | ps[[8]] | ps[[9]]))
+  list(
+    variables = list(model = model),
+    generated = list(y = y),
+    var_attributes = var_attributes(
+      model = c(binary_var_attribute(), possibly_constant_var_attribute())
+    )
+  )
 }
+
+set.seed(23225)
+ds_pnb <- generate_datasets(SBC_generator_function(sim_poisson_nb, n = 25), n_sims = 10000)
 ```
 
 
 ```{r}
-res_test <- test_SBC_BF(py1, correct_prob, title = "Correct BF", N_sims = 10)
-#plot_q_bootstrap_diff(res_test, interval_type = "jeffreys", bbinom  = TRUE)
-plot_q_bootstrap_diff(res_test, interval_type = "jeffreys", bbinom  = TRUE, bayesian = TRUE)
+SBC_backend_pnb_example <- function(n_draws, mean = chosen_mean, phi = chosen_phi, ignore_prop = 0,bias = 0, sd = 0) {
+  structure(list(
+    mean = mean,
+    phi = phi,
+    bias = bias,
+    sd = sd,
+    ignore_prop = ignore_prop,
+    n_draws = n_draws
+  ), class = "SBC_backend_pnb_example")
+}
+
+SBC_fit.SBC_backend_pnb_example <- function(backend,generated,cores) {
+  ignore_num <- ceiling(backend$ignore_prop * length(generated$y))
+  if(ignore_num == length(generated$y)) {
+    y <- numeric(0)
+  } else {
+    y <- generated$y[1 : (length(generated$y) - ignore_num)]
+  }
+  log_bf10_correct <- 
+    sum(dnbinom(y, mu = backend$mean, size = backend$phi, log = TRUE)) -
+    sum(dpois(y, lambda = backend$mean, log = TRUE))
+  
+  log_bf10 <- log_bf10_correct + backend$bias + rnorm(1, sd = backend$sd)
+  pm1 <- plogis(log_bf10)
+  
+  SBC_fit_bf_examples(pm1, backend$n_draws)
+}
+
+SBC_backend_iid_draws.SBC_backend_pnb_example <- function(...) {
+  TRUE
+}
+
+
+SBC_fit_bf_examples <- function(pm1, n_draws) {
+  structure(list(pm1 = pm1, n_draws = n_draws), class = "SBC_fit_bf_examples")
+}
+
+SBC_fit_to_draws_matrix.SBC_fit_bf_examples <- function(fit) {
+  posterior::draws_matrix(model = rbinom(fit$n_draws, size = 1, prob = fit$pm1))
+}
+
+binary_to_cdf <- function(variables, prob1, simulated_value) {
+  data.frame(variable = variables,
+             cdf_low = dplyr::if_else(simulated_value == 0, 0, prob1),
+             cdf_high = dplyr::if_else(simulated_value == 0, prob1, 1))
+}
+
+SBC_posterior_cdf.SBC_fit_bf_examples <- function(fit, variables) {
+  binary_to_cdf("model", fit$pm1, variables["model"])
+}
+
+
+poisson_nb_globals <- c(
+  "SBC_backend_iid_draws.SBC_backend_pnb_example",
+  "SBC_fit.SBC_backend_pnb_example",
+  "SBC_fit_bf_examples",
+  "SBC_fit_to_draws_matrix.SBC_fit_bf_examples",
+  "binary_to_cdf",
+  "SBC_posterior_cdf.SBC_fit_bf_examples",
+  "chosen_mean",
+  "chosen_phi"
+)
+
+dquants_pnb <- derived_quantities(
+  var_y = dplyr::if_else(model == 1, var(y), mean(y)), #Poisson implies mean == variance
+  log_lik = dplyr::if_else(model == 1,  
+                           sum(dnbinom(y, mu = chosen_mean, size = chosen_phi, log = TRUE)), 
+                           sum(dpois(y, lambda = chosen_mean, log = TRUE)))
+)
+
 
 ```
 
+The specific parameters were chosen so that they provide a broad range of posterior probabilities.
+
+
+## Correct
+
 ```{r}
-restest10 <- test_SBC_BF(py1, correct_prob, title = "Correct BF", N_sims = 10)
-interval_type <- "cp"
-gamma <- adjust_q_gamma_bootstrap(restest10$rank_low, restest10$rank_high, bbinom = TRUE, interval_type = interval_type)
+res_pnb_correct <- compute_SBC(ds_pnb, SBC_backend_pnb_example(100),
+                               dquants = dquants_pnb,
+                               globals = poisson_nb_globals,
+                               keep_fits = FALSE,
+                               cache_mode = "results", cache_location = file.path(cache_dir, "poisson_nb_correct.rds"))
+
+```
 
 
-K <- 100
-q_x <- (1:(K-1)) / K
-q_obs <- compute_q_base(restest10$rank_low, restest10$rank_high, q_x = q_x)
-actual <- q_gamma(q_obs, q_x, nrow(restest10), interval_type = interval_type, bbinom = TRUE)
+```{r}
+binary_probabilities_from_stats(res_pnb_correct$stats) %>% pull(prob) %>% hist()
+```
+
+```{r}
+plot_ecdf_diff(res_pnb_correct)
+plot_binary_calibration_diff(res_pnb_correct$stats, method = "round")
+```
+
+```{r}
+hist_correct <- compute_bootstrapped_histories(res_pnb_correct$stats, history_length = 100, n_histories = 100,
+                                            compute_log_gamma_history)
+plot_log_gamma_histories(hist_correct)
+```
 
 
-plot_q_bootstrap_diff(restest10,bayesian = TRUE, bbinom = TRUE, gamma = gamma, interval_type = interval_type) + ggtitle(paste0("Gamma: ", round(gamma, 3), ", q: ", round(actual, 3), ", reject: ", actual < gamma))
+## Ignore all
+
+
+```{r}
+res_pnb_ignore_all <-  compute_SBC(ds_pnb[1:1000], SBC_backend_pnb_example(100, ignore_prop = 1),
+                               dquants = dquants_pnb,
+                               keep_fits = FALSE,
+                               globals = poisson_nb_globals,
+                               cache_mode = "results", cache_location = file.path(cache_dir, "poisson_nb_ignore_all.rds"))
+
+plot_ecdf_diff(res_pnb_ignore_all)
+plot_binary_calibration_diff(res_pnb_ignore_all$stats, method = "round")
+
 ```
 
 
 
 ```{r}
-size <- 1000
-microbenchmark::microbenchmark(
-  my_pbbinom(-1:(size-1), size = size, 1.3, 0.5)[size + 1],
-  my_pbbinom(size - 1, size = size, 1.3, 0.5),
-  extraDistr::pbbinom(-1:(size-1), size = size, 1.3,0.5)[1001],
-  extraDistr::pbbinom(size - 1, size = size, 1.3, 0.5),
-  check = "equal"
+hist_ignore_all <- compute_bootstrapped_histories(res_pnb_ignore_all$stats, history_length = 100, n_histories = 100,
+                                            compute_log_gamma_history)
+plot_log_gamma_histories(hist_ignore_all)
+```
+
+## Ignore half
+
+```{r}
+res_pnb_ignore_half <-  compute_SBC(ds_pnb, SBC_backend_pnb_example(100, ignore_prop = 0.5),
+                               dquants = dquants_pnb,
+                               globals = poisson_nb_globals,
+                               cache_mode = "results", cache_location = file.path(cache_dir, "poisson_nb_ignore_half.rds"))
+
+plot_ecdf_diff(res_pnb_ignore_half)
+plot_binary_calibration_diff(res_pnb_ignore_half$stats, method = "round")
+```
+
+
+```{r}
+hist_ignore_half <- compute_bootstrapped_histories(res_pnb_ignore_half$stats, history_length = 1000, n_histories = 100,
+                                            compute_log_gamma_history)
+plot_log_gamma_histories(hist_ignore_half)
+```
+
+
+
+## Add variance
+
+```{r}
+res_pnb_vari <-  compute_SBC(ds_pnb, SBC_backend_pnb_example(100, sd = 2),
+                               dquants = dquants_pnb,
+                               globals = poisson_nb_globals,
+                               cache_mode = "results", cache_location = file.path(cache_dir, "poisson_nb_vari.rds"))
+
+plot_ecdf_diff(res_pnb_vari)
+plot_binary_calibration_diff(res_pnb_vari$stats, method = "round")
+```
+
+
+```{r}
+hist_vari <- compute_bootstrapped_histories(res_pnb_vari$stats, history_length = 1000, n_histories = 100, step = 10,
+                                            compute_log_gamma_history)
+
+bp_vari<- binary_probabilities_from_stats(res_pnb_vari$stats)
+hist_vari_schad <- compute_bootstrapped_histories(bp_vari, history_length = 1000, n_histories = 100, step = 10,
+                                            compute_schad_history)
+
+# hist_vari_schad_bf <- compute_bootstrapped_histories(bp_vari, history_length = 1000, n_histories = 100, step = 10,
+#                                             compute_schad_bf_history)
+
+
+hist_vari_miscalibration <- compute_bootstrapped_histories(bp_vari, history_length = 200, n_histories = 100, step = 10,
+                                                           compute_miscalibration_history, min_sim_id = 1)
+
+
+plot_log_gamma_histories(hist_vari)
+plot_log_p_histories(hist_vari_schad, "Schad")
+#plot_log_p_histories(hist_vari_schad_bf, "Schad BF")
+plot_log_p_histories(hist_vari_miscalibration, "Miscalibration resampling") + expand_limits(x = 1000, y = min(hist_vari$log_gamma - hist_vari$log_gamma_threshold))
+
+```
+
+
+## Add bias
+
+```{r}
+res_pnb_bias <-  compute_SBC(ds_pnb[1:1000], SBC_backend_pnb_example(100, bias = 2),
+                               dquants = dquants_pnb,
+                               globals = poisson_nb_globals,
+                               cache_mode = "results", cache_location = file.path(cache_dir, "poisson_nb_bias.rds"))
+
+plot_ecdf_diff(res_pnb_bias)
+plot_binary_calibration_diff(res_pnb_bias$stats, method = "round")
+```
+
+
+```{r}
+hist_bias <- compute_bootstrapped_histories(res_pnb_bias$stats, history_length = 100, n_histories = 100, step = 5,
+                                            compute_log_gamma_history)
+
+bp_bias <- binary_probabilities_from_stats(res_pnb_bias$stats)
+hist_bias_schad <- compute_bootstrapped_histories(bp_bias, history_length = 100, n_histories = 100, step = 5,
+                                            compute_schad_history)
+
+
+hist_bias_schad_bf <- compute_bootstrapped_histories(bp_bias, history_length = 100, n_histories = 100, step = 5,
+                                            compute_schad_bf_history)
+
+
+hist_bias_brier <- compute_bootstrapped_histories(bp_bias, history_length = 100, n_histories = 100, step = 1,
+                                            compute_brier_history, min_sim_id = 10)
+
+
+hist_bias_miscalibration <- compute_bootstrapped_histories(bp_bias, history_length = 100, n_histories = 100, step = 5,
+                                                           compute_miscalibration_history, min_sim_id = 1)
+
+               
+plot_log_gamma_histories(hist_bias)
+plot_log_p_histories(hist_bias_brier, "Brier resampling")
+plot_log_p_histories(hist_bias_schad, "Schad") + expand_limits(y = log(1e-32))
+plot_log_p_histories(hist_bias_schad_bf, "Schad BG") + expand_limits(y = log(1e-32))
+plot_log_p_histories(hist_bias_miscalibration, "Miscalibration resampling") + expand_limits(y = log(1e-32))
+
+```
+
+
+## Add bias and variance
+
+```{r}
+res_pnb_bias_vari <-  compute_SBC(ds_pnb, SBC_backend_pnb_example(100, bias = 1, sd = 1),
+                               dquants = dquants_pnb,
+                               globals = poisson_nb_globals,
+                               cache_mode = "results", cache_location = file.path(cache_dir, "poisson_nb_bias_vari.rds"))
+
+plot_ecdf_diff(res_pnb_bias_vari)
+plot_binary_calibration_diff(res_pnb_bias_vari$stats, method = "round")
+```
+
+```{r}
+N <- 1000
+microbenchmark::microbenchmark(setup = quote({
+  x <- runif(N)
+  y <- rbinom(N, size = 1, prob = x)
+  ord <- order(x, -y)
+  x <- x[ord]
+  y <- y[ord]
+  }),
+  times = 10000,
+  monotone::monotone(y),
+  stats::isoreg(y)$yf
 )
 ```
 
 
-## Pois vs. nbinom no par
-
 
 ```{r}
-for(j in 1:10) {
-  ps <- list()
-  for(i in 1:9) {
-    res_correct <- test_poisson_nb_no_par(N_sims = 1000, mu = 3, phi = 5, N_obs = 25)
-    ps[[i]] <- plot_q_diff(res_correct)
-  }
-  print((ps[[1]] | ps[[2]] | ps[[3]]) /
-        (ps[[4]] | ps[[5]] | ps[[6]]) /
-        (ps[[7]] | ps[[8]] | ps[[9]]))
-}
-```
+hist_length_vari <- 500
+hist_step_vari <- 10
+hist_bias_vari <- compute_bootstrapped_histories(res_pnb_bias_vari$stats, history_length = hist_length_vari, n_histories = n_histories, step = hist_step_vari,
+                                            compute_log_gamma_history)
+
+bp_bias_vari <- binary_probabilities_from_stats(res_pnb_bias_vari$stats)
+hist_bias_vari_schad <- compute_bootstrapped_histories(bp_bias_vari, history_length = hist_length_vari, n_histories = n_histories, step = hist_step_vari,
+                                            compute_schad_history)
 
 
-```{r}
-res_pnb <- test_poisson_nb_no_par(N_sims = 1000, mu = 3, phi = 5, N_obs = 25)
-#test_SBC_BF(py1, c(0.5, 0.5), title = "Prior = posterior")
-
-res_pnb %>% ggplot(aes(x = pm1)) + facet_wrap(~true_model, ncol = 1) + geom_histogram(binwidth = 0.01)
-```
+hist_bias_vari_schad_bf <- compute_bootstrapped_histories(bp_bias_vari, history_length = hist_length_vari, n_histories = n_histories, step = hist_step_vari,
+                                            compute_schad_bf_history)
 
 
-
-```{r}
-microbenchmark::microbenchmark( 
-  compute_q_base(res_pnb$rank_low, res_pnb$rank_high, (1:99) / 100),
-  compute_q_base_eigen(res_pnb$rank_low, res_pnb$rank_high, (1:99) / 100),
-  compute_q_base(res_pnb$rank_low, res_pnb$rank_high, (1:99) / 100, compute_q_base_single_old),
-  times = 100,
-  check = "equal")
-```
-
-```{r}
-plot_q_bootstrap_diff(res_pnb)
-plot_q_diff(res_pnb)
-```
+hist_bias_vari_brier <- compute_bootstrapped_histories(bp_bias_vari, history_length = hist_length_vari, n_histories = n_histories, step = hist_step_vari,
+                                            compute_brier_history, min_sim_id = 10)
 
 
-```{r}
-(plot_ecdf_diff(res_pnb) + ggtitle("Random tie braking for ranks") |
-  plot_q_diff(res_pnb) + ggtitle("Piecewise-linear ECDF")) + plot_annotation("One binary parameter, infinite observations", subtitle = "Correct posterior")
-```
-
-```{r}
-((plot_ecdf_diff(res_pnb) + ggtitle("Random tie braking for ranks") | plot_Dimitriadis_res_diff(res_pnb)
-  ) /
-   (plot_q_diff(res_pnb) + ggtitle("Piecewise-linear ECDF", "Standard confidence ellipse around the null") |
-   plot_q_bootstrap_diff(res_pnb, bayesian = TRUE) + ggtitle("Piecewise-linear ECDF", "Bootstrap-derived confidence interval")))  + plot_annotation("One binary parameter, infinite observations", subtitle = "Correct posterior")
-```
+hist_bias_vari_miscalibration <- compute_bootstrapped_histories(bp_bias_vari, history_length = hist_length_vari, n_histories = n_histories, step = hist_step_vari,
+                                                           compute_miscalibration_history, min_sim_id = 1)
 
 
+hist_bias_vari_hl <- compute_bootstrapped_histories(bp_bias_vari, history_length = hist_length_vari, n_histories = n_histories, step = hist_step_vari,
+                                                           compute_hosmer_lemeshow_history, min_sim_id = 10)
 
-
-```{r}
-plot_q_bootstrap_diff(res_pnb, bayesian = TRUE)
-plot_q_bootstrap_diff(res_pnb, bayesian = TRUE, bbinom = TRUE)
-```
-
-
-
-```{r}
-plot_log_gamma_history(res_pnb)
-plot_log_gamma_q_history(res_pnb)
-```
-
-
-```{r}
-res_pnb_noise <- test_poisson_nb_no_par(N_sims = 1000, mu = 3, phi = 1, N_obs = 5, noise_sigma = 1.5)
-#test_SBC_BF(py1, c(0.5, 0.5), title = "Prior = posterior")
-
-res_pnb_noise %>% ggplot(aes(x = pm1)) + facet_wrap(~true_model, ncol = 1) + geom_histogram(binwidth = 0.01)
-```
-
-
-```{r}
-((plot_ecdf_diff(res_pnb_noise) + ggtitle("Random tie braking for ranks") | plot_Dimitriadis_res_diff(res_pnb_noise)
-  ) /
-   (plot_q_diff(res_pnb_noise) + ggtitle("Piecewise-linear ECDF", "Standard confidence ellipse around the null") |
-   plot_q_bootstrap_diff(res_pnb_noise, bayesian = TRUE) + ggtitle("Piecewise-linear ECDF", "Bootstrap-derived confidence interval")))  + plot_annotation("One binary parameter, infinite observations", subtitle = "Incorrect posterior")
-```
-
-```{r}
-calibrationband::calibration_bands(res_pnb_noise$pm1, res_pnb_noise$true_model == 1)
-givitBelt <- givitiR::givitiCalibrationBelt(as.numeric(res_pnb_noise$true_model == 1), res_pnb_noise$pm1, devel = "external")
-plot(givitBelt)
-```
-
-```{r}
-plot_q_bootstrap_diff(res_pnb_noise, bayesian = TRUE)
-plot_q_bootstrap_diff(res_pnb_noise, bayesian = TRUE, bbinom = TRUE)
-```
-
-
-```{r}
-plot_log_gamma_history(res_pnb_noise)
-plot_log_gamma_q_history(res_pnb_noise)
-```
-
-
-## Fully uniform ranks
-
-```{r}
-res_unif <- test_SBC_unif(10)
-plot_ecdf_diff(res_unif)
-plot_q_bootstrap_diff(res_unif, bbinom = TRUE)
-plot_q_bootstrap_diff(res_unif, bayesian = TRUE, bbinom = TRUE)
-
-res_unif_100 <- test_SBC_unif(100)
-plot_ecdf_diff(res_unif_100)
-plot_q_bootstrap_diff(res_unif_100, bbinom = TRUE)
-plot_q_bootstrap_diff(res_unif_100, bayesian = TRUE, bbinom = TRUE)
+               
+plot_log_gamma_histories(hist_bias_vari)
+plot_log_p_histories(hist_bias_vari_brier, "Brier resampling")
+plot_log_p_histories(hist_bias_vari_schad, "Schad")
+plot_log_p_histories(hist_bias_vari_schad_bf, "Schad BF")
+plot_log_p_histories(hist_bias_vari_miscalibration, "Miscalibration resampling")
+plot_log_p_histories(hist_bias_vari_hl, "Hosmer-Lemeshow", min_sim_id = 50)
 
 ```
-
-
-## AOV (Faulknerry)
-
-```{r}
-res_aov <- test_faulknerry(N_sims = 1000, alpha = 5)
-#test_SBC_BF(py1, c(0.5, 0.5), title = "Prior = posterior")
-
-res_aov %>% ggplot(aes(x = pm1)) + facet_wrap(~true_model, ncol = 1) + geom_histogram(binwidth = 0.01)
-
-```
-
-```{r}
-plot_ecdf_diff(res_aov)
-plot_q_diff(res_aov)
-
-```
-
-```{r}
-res_aov_01 <- test_faulknerry(N_sims = 1000, alpha = 10, noise_sigma = 5)
-#test_SBC_BF(py1, c(0.5, 0.5), title = "Prior = posterior")
-
-
-```
-
-```{r}
-plot_ecdf_diff(res_aov_01)
-plot_q_diff(res_aov_01)
-
-```
-
-```{r}
-plot_log_gamma_history(res_aov_01)
-plot_log_gamma_q_history(res_aov_01)
-```
-
-
-
-```{r}
-max_rank <- 20
-discrete <- crossing(type = c("no-ties", "ties"), form = "discrete", x = c(seq(0, 1, by = 0.001)-1e-8,seq(0, 1, by = 0.001) + 1e-8)) %>%
-  mutate(rank = if_else(type == "ties", 
-                     case_when(x < 0.2 ~ 0,
-                               x <= 0.6 ~ floor(max_rank * (x - 0.2) / 0.4),
-                               x > 0.6 ~ max_rank),
-                     as.numeric(x >= 0.4) * max_rank))
-
-continuous <- crossing(type = c("no-ties", "ties"), form = "continous", x = c(c(0, 0.2, 0.4,0.6, 1)-1e-8,c(0, 0.2,0.4, 0.6, 1) + 1e-8)) %>%
-  mutate(rank = if_else(type == "ties", 
-                     case_when(x < 0.2 ~ 0,
-                               x <= 0.6 ~ max_rank * (x - 0.2) / 0.4,
-                               x > 0.6 ~ max_rank),
-                     as.numeric(x >= 0.4) * max_rank))
-
-rbind(discrete, continuous) %>%  
-  ggplot(aes(x, rank/max_rank)) + geom_line() + facet_wrap(form~type) + 
-  labs(y = "ECDF contribution", x = "") +
-  ggtitle("Contribution of a single simulation to the observed rank CDF")
-```
-
 
