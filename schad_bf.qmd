@@ -110,8 +110,9 @@ backend_issue_2_H0 <- SBC_backend_brms(simrt ~ 1 + (1+x|subj),
             save_pars = save_pars(all = TRUE),
             warmup=2000, iter=10000,
             control=list(adapt_delta=0.99, max_treedepth=15),
-            template_data = simdata,
-            out_stan_file = file.path("cache/issue_2_H0.stan"))
+            template_data = simdata
+            #, out_stan_file = file.path("cache/issue_2_H0.stan")
+            )
 
 res_issue_2_H0 <- compute_SBC(ds_issue_2_H0[1:10], backend_issue_2_H0,
             cache_mode = "results",
@@ -130,8 +131,9 @@ backend_issue_2_H1 <- SBC_backend_brms(simrt ~ x + (1+x|subj),
             save_pars = save_pars(all = TRUE),
             warmup=2000, iter=10000,
             control=list(adapt_delta=0.99, max_treedepth=15),
-            template_data = simdata,
-            out_stan_file = file.path("cache/issue_2_H1.stan"))
+            template_data = simdata
+            #, out_stan_file = file.path("cache/issue_2_H1.stan")
+            )
 
 res_issue_2_H1 <- compute_SBC(ds_issue_2_H1[1:10], backend_issue_2_H1,
             cache_mode = "results",
@@ -152,6 +154,7 @@ gc()
 ```
 
 ```{r}
+set.seed(4322125)
 ds_issue_2 <- SBC_datasets_for_bf(ds_issue_2_H0, ds_issue_2_H1)
 backend_issue_2 <- SBC_backend_bridgesampling(backend_issue_2_H0, backend_issue_2_H1)
 
@@ -179,15 +182,17 @@ backend_issue_2_H1_noslope <- SBC_backend_brms(simrt ~ x + (1|subj),
             save_pars = save_pars(all = TRUE),
             warmup=2000, iter=10000,
             control=list(adapt_delta=0.99, max_treedepth=15),
-            template_data = simdata,
-            out_stan_file = file.path("cache/issue_2_H1_noslope.stan"))
+            template_data = simdata
+            #, out_stan_file = file.path("cache/issue_2_H1_noslope.stan")
+            )
 backend_issue_2_H0_noslope <- SBC_backend_brms(simrt ~ 1 + (1|subj), 
             family=lognormal(), prior=priors_iss2[-c(2,5),], 
             save_pars = save_pars(all = TRUE),
             warmup=2000, iter=10000,
             control=list(adapt_delta=0.99, max_treedepth=15),
-            template_data = simdata,
-            out_stan_file = file.path("cache/issue_2_H0_noslope.stan"))
+            template_data = simdata
+            #, out_stan_file = file.path("cache/issue_2_H0_noslope.stan")
+            )
 
 backend_issue_2_noslope <- SBC_backend_bridgesampling(backend_issue_2_H0_noslope, backend_issue_2_H1_noslope)
 
@@ -196,6 +201,7 @@ ds_issue_2_H0_noslope$variables <- posterior::subset_draws(ds_issue_2_H0$variabl
 ds_issue_2_H1_noslope <- ds_issue_2_H1
 ds_issue_2_H1_noslope$variables <- posterior::subset_draws(ds_issue_2_H1$variables, variable = c("sd_subj__x", "cor_subj__Intercept__x"), exclude = TRUE)
 
+set.seed(6985244)
 ds_issue_2_noslope <- SBC_datasets_for_bf(ds_issue_2_H0_noslope, ds_issue_2_H1_noslope)
 
 res_issue_2_noslope <- compute_SBC(
@@ -208,4 +214,7 @@ res_issue_2_noslope <- compute_SBC(
 ```
 
 
+```{r}
+plot_ecdf_diff(res_issue_2_noslope)
+```
 

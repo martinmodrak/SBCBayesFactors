@@ -33,7 +33,7 @@ theme_set(theme_minimal())
 
 
 
-There's a weird $(1 + \sigma)^{-2}$ prior on sigma, sampling with an inverse CDF rejection scheme:
+There's a weird $(1 + \sigma)^{-2}$ prior on sigma, sampling with an inverse CDF scheme:
 
 ```{r}
 

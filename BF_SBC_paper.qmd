@@ -159,6 +159,29 @@ A fundamental limitation is that data-averaged posterior ignores the mapping bet
 
 Data-averaged posterior is repeatedly confused with SBC in the literature on model validation, but it is a fundamentally different check (e.g. because it is insensitive to some types of problems SBC is sensitive to as can be seen in the theoretical analysis above as well as practical examples below)
 
+
+#### Posterior SBC
+
+Many packages use improper priors. Many priors are unrealistic -> we want to check only relevant parts of the model configuration space.  Both can be overcome with _posterior SBC_ (https://users.aalto.fi/~ave/casestudies/postsbc/postsbc.html).
+
+Assuming the data space partitions as $Y = Y_1 \times Y_2$, then given a fixed $y_1 \in Y_1$ we can construct a model $\bar\pi$ such that:
+
+$$
+\begin{aligned}
+\bar\pi_\text{prior}(\theta) &= \pi_\text{post}(\theta | y_1) \\
+\bar\pi_\text{post}(\theta | y_2) &= \pi_\text{post}(\theta | (y_1, y_2)) \\
+\end{aligned}
+$$
+
+We can then apply SBC (or DAP) to $\bar\pi$ by fitting $\pi$ to $y_1$, taking those draws as prior draws, simulating $y^s_2$ using those prior draws and fitting $\pi$ to the whole datasets $(y_1,y^s_2)$. 
+
+We can slightly extend this even draw $y_1$ from an arbitrary distribution (but then need to obtain the samples from $\pi_\text{post}(\theta | y_1)$ for each value of $y_1$) 
+
+To check computation for models with improper priors, we need to choose $y_1$ as the smallest dataset size such that $\pi_\text{post}(\theta | y_1)$ is proper. To target check to a specific dataset, we may take a suitable portion of the dataset as $y_1$.
+
+To use posterior SBC with Bayes factors, we need to compute the implied prior for both models, but also the new prior probability of models.
+Alternatively, we can tweak the prior probability, to get 0.5 with the newly computed Bayes factor --- this potentially makes better use of computation, but requires to use a fixed $y_1$.
+
 ### Other approaches
 
 The [good check](https://osf.io/preprints/psyarxiv/59gj8) (cite). This shares some of the big problems with data-averaged posterior --- ignores the mapping between BFs and data. Additionally, both the variance and second raw moment of the Bayes factor in favor of the false hypothesis can have very large or even undefined variance, which explains the slow convergence. Even though large variance of BFs is not a problem for either SBC or data-averaged posterior (see appendix)
@@ -297,6 +320,18 @@ In more general models, SBC with any realistic number and choice of test quantit
 
 TODO 
 
+### Posterior SBC and the importance of using correct priors
+
+ttestBF in BayesFactor package, JZS test.
+
+Uses an improper Jeffrey's prior on variance $\pi_\text{prior}\left(\sigma^2\right) = \frac{1}{\sigma^2}$.
+
+It may be tempting to use a fixed value of $\sigma^2$ or draw $\sigma^2$ from some surrogate distribution. In this case however, the assumptions of all of the consistency criterions except the good check hold. And indeed, we see non-trivial violations of all checks.
+
+However, when we do posterior SBC, the computed Bayes factors pass all checks to high precision.
+
+
+
 ### Schad et al.
 
 Are BMA quantities useful?
@@ -312,4 +347,8 @@ https://link.springer.com/article/10.1007/s41237-024-00232-7
 
 While there are cases where DAP performs somewhat better than SBC/prediction calibration, it also fails catastrophically in many examples. Using DAP for validation of Bayes factor computation should thus be considered only as a supplement to SBC.
 
-Our results also show that to rule out problems in BF computation, simulation studies need to use a lot of simulations --- even quite strong miscalibration can require several hundred simulations to reliably uncover. 
+Our results also show that to rule out problems in BF computation, simulation studies need to use a lot of simulations --- even quite strong miscalibration can require several hundred simulations to be reliably uncovered. 
+
+Another advantage of running SBC for the full BMA model is that we can use the same simulations to check that the individual models are well implemented/calibrated --- if the individual models are wrong, we cannot make any strong inferences about the method for computing Bayes factors (though the specific combination is invalidated).
+
+Using multiple test quantities or even multiple methods for checking the calibration of the model yields to multiple testing issues. However, here Type II error is the biggest problem. We can usually run more simulations to sort flukes from real problems with little expense. Additionally, in a perfect world a failed calibration check is followed by investigation to get understanding why the computation failed.

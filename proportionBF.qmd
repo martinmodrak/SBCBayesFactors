@@ -1,0 +1,73 @@
+---
+title: "SBC for Bayes_T-test"
+format: html
+---
+
+```{r setup}
+library(SBC)
+library(BayesFactor)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+sim_proportionBF <- function(N, p0 = 0.5, rscale = 0.5) {
+  model <- rbinom(1, size = 1, prob = 0.5)
+  if(model == 0) {
+    p <- p0
+  } else {
+    lambda <- rlogis(1, qlogis(p0), rscale)
+    p <- plogis(lambda)
+  }
+  list(
+    generated = list(N = N, y = rbinom(1, size = N, prob = p)),
+    variables = list(model = model)
+  )
+}
+
+```
+
+
+```{r}
+SBC_backend_proportionBF <- function(p0 = 0.5, rscale = 0.5) {
+  structure(list(p0 = p0, rscale = rscale), class = "SBC_backend_proportionBF")
+}
+
+SBC_fit.SBC_backend_proportionBF <- function(backend, generated, cores) {
+  BayesFactor::proportionBF(
+    y = generated$y,
+    N = generated$N,
+    p = backend$p0,
+    rscale = backend$rscale
+  )
+}
+
+SBC_fit_to_draws_matrix.BFBayesFactor <- function(fit) {
+  pm1 <- plogis(fit@bayesFactor$bf)
+  posterior::draws_matrix(model = rbinom(100, size = 1, prob = pm1))
+}
+
+SBC_backend_iid_draws.SBC_backend_proportionBF <- function(backend) {
+  TRUE
+}
+
+```
+
+
+```{r}
+rscale_to_use <- 0.5
+
+data_test <- generate_datasets(SBC_generator_function(sim_proportionBF, N = 15, rscale = rscale_to_use), n_sims = 10000)
+
+res_test <- compute_SBC(data_test, SBC_backend_proportionBF(rscale = rscale_to_use))
+
+```
+
+
+```{r}
+plot_ecdf_diff(res_test)
+```
+```{r}
+res_test$stats %>% ggplot(aes(x = rank))  + geom_histogram() + facet_wrap(~simulated_value, ncol = 1)
+```
+

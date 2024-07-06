@@ -1,0 +1,399 @@
+---
+title: "SBC for Bayes_T-test"
+format: html
+---
+
+Using posterior SBC to obtain a proper prior
+
+
+```{r setup}
+library(SBC)
+library(BayesFactor)
+library(ggplot2)
+library(dplyr)
+library(rstan)
+
+options(mc.cores = 12 , SBC.min_chunk_size = 50)
+rstan_options(auto_write = TRUE)
+
+
+devtools::load_all()
+theme_set(theme_minimal())
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir))  {
+  dir.create(cache_dir)
+}
+
+include_bs <- FALSE
+include_individual <- FALSE
+
+```
+
+```{r cluster}
+future::plan(future::multisession, workers = 12)
+```
+
+
+The 'squared' variant based on https://github.com/richarddmorey/BayesFactor/issues/156
+it appears it is the only one which results in correct calibration :-O
+
+```{r}
+variant <- "_squared"
+#variant <- ""
+#variant <- "_nojacob"
+prior_model_H0 <- stan_model(paste0("stan/JZS_ttest_H0", variant, ".stan"))
+prior_model_H1 <- stan_model(paste0("stan/JZS_ttest_H1", variant, ".stan"))
+```
+
+```{r}
+set.seed(2556652)
+prior_data <- c(-1, 1)
+r_scale <- sqrt(2) / 2
+#r_scale <- 0.1
+prior_data_stan <- list(N = length(prior_data), y = prior_data, r = r_scale)
+res_prior_H1 <- sampling(prior_model_H1, data = prior_data_stan, iter = 41000, warmup = 1000, thin = 5, cores = 1)
+res_prior_H0 <- sampling(prior_model_H0, data = prior_data_stan, iter = 41000, warmup = 1000, thin = 5, cores = 1)
+
+draws_prior_H1 <- posterior::as_draws_matrix(res_prior_H1)
+draws_prior_H0 <- posterior::as_draws_matrix(res_prior_H0)
+
+bf_prior <- ttestBF(x = prior_data, rscale = r_scale)
+prob1_prior <- exp(bf_prior@bayesFactor$bf) / (1 + exp(bf_prior@bayesFactor$bf))
+
+bs_prior_H0 <- bridgesampling::bridge_sampler(res_prior_H0)
+bs_prior_H1 <- bridgesampling::bridge_sampler(res_prior_H1)
+bf_prior_bs <- bridgesampling::bayes_factor(bs_prior_H1, bs_prior_H0)
+```
+
+
+
+```{r}
+sim_jzs_from_prior <- function(N_new, model = "random", H1_prob = 0.5) {
+  if(model == "random") {
+    model <- rbinom(1, size = 1, prob = H1_prob)
+  }
+  if(model == 0) {
+    mu <- 0
+    draw_id <- sample.int(posterior::ndraws(draws_prior_H0), size = 1)
+    sigma <- as.numeric(draws_prior_H0[draw_id, "sigma"])
+  } else {
+    draw_id <- sample.int(posterior::ndraws(draws_prior_H1), size = 1)
+    delta <- as.numeric(draws_prior_H1[draw_id, "delta"])
+    sigma <- as.numeric(draws_prior_H1[draw_id, "sigma"])
+    mu <- delta * sigma
+  }
+  
+  y <- c(prior_data, rnorm(N_new, mu, sigma))
+  
+  list(
+    generated = list(y = y, N = length(y), r = r_scale),
+    variables = list(
+    model = model,
+    mu = mu,
+    sigma = sigma
+    ),
+    var_attributes = var_attributes(model = c(binary_var_attribute(), possibly_constant_var_attribute()),
+                                    mu = possibly_constant_var_attribute())
+  )
+}
+
+```
+
+```{r}
+if(variant == "_squared") {
+  n_sims <- 20000
+} else {
+  n_sims <- 5000
+}
+set.seed(512233554)
+ds_ttest <- generate_datasets(SBC_generator_function(sim_jzs_from_prior, N_new = 5, H1_prob = prob1_prior), n_sims = n_sims)
+```
+
+
+
+```{r}
+SBC_backend_ttestBF <- function(rscale = sqrt(2)/2, iterations = 2000) {
+  structure(list(rscale = rscale, iterations = iterations), class = "SBC_backend_ttestBF")
+}
+
+SBC_fit.SBC_backend_ttestBF <- function(backend, generated, cores) {
+  post <- BayesFactor::ttestBF(
+    x = generated$y,
+    rscale = backend$rscale,
+    posterior = TRUE,
+    iterations = backend$iterations
+  )
+  bf <- BayesFactor::ttestBF(
+    x = generated$y,
+    rscale = backend$rscale
+  )
+  structure(list(posterior = post, bf = bf), class = "SBC_fit_ttestBF")
+}
+
+SBC_fit_to_draws_matrix.SBC_fit_ttestBF <- function(fit) {
+  fit_bf <- fit$bf@bayesFactor$bf
+  pm1 <- plogis(fit_bf)
+  ndraws <- dim(fit$posterior)[1]
+  model_draws <- rbinom(ndraws, size = 1, prob = pm1)
+  posterior::draws_matrix(model = model_draws,
+                          mu = dplyr::if_else(model_draws == 1, fit$posterior[ ,"mu"], 0)
+                          #,sigma = sqrt(fit$posterior[,"sig2"]) #Ignoring sigma - don't have draws from the null model
+                          )
+}
+
+SBC_posterior_cdf.SBC_fit_ttestBF <- function(fit, variables) {
+  if("model" %in% names(variables)) {
+    fit_bf <- fit$bf@bayesFactor$bf
+    pm1 <- plogis(fit_bf)
+    return(SBC:::binary_to_cdf("model", pm1, variables["model"]))
+  } else {
+    return(NULL)
+  }
+}
+
+ttest_globals <- c("SBC_fit.SBC_backend_ttestBF", "SBC_fit_to_draws_matrix.SBC_fit_ttestBF", "SBC_posterior_cdf.SBC_fit_ttestBF")
+```
+
+
+```{r}
+dquants_ttest <- derived_quantities(pseudo_log_lik = sum(dnorm(y, mean = ifelse(model == 0, 0, mu), sd = sd(y), log = TRUE)))
+```
+
+
+```{r}
+backend <- SBC_backend_ttestBF(rscale = r_scale)
+ds_ttest_no_sigma <- ds_ttest
+ds_ttest_no_sigma$variables <- posterior::subset_draws(ds_ttest$variables, variable = "sigma", exclude = TRUE) 
+
+res <- compute_SBC(ds_ttest_no_sigma, backend, keep_fits = FALSE, globals = ttest_globals,
+                   dquants = dquants_ttest,
+                   cache_mode = "results",
+                   cache_location = file.path(cache_dir, paste0("ttest", variant, ".rds")))
+```
+
+```{r}
+ddd <- SBC_fit(backend, ds_ttest$generated[[1]], 1)
+
+ddd$bf
+attributes(ddd$bf@bayesFactor)
+```
+
+
+```{r}
+plot_ecdf_diff(res)
+```
+```{r}
+bp <- binary_probabilities_from_stats(res$stats)
+miscalibration_resampling_p(bp$prob, bp$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp$prob, y = bp$simulated_value)
+```
+
+```{r}
+t.test(bp$prob, mu = prob1_prior)
+```
+
+
+```{r}
+plot_binary_calibration(res$stats)
+```
+
+
+## Fixed sigma
+
+```{r}
+sim_jzs_sigma <- function(N, sigma_generator, r_scale = sqrt(2) / 2, model = "random", H1_prob = 0.5) {
+  if(model == "random") {
+    model <- rbinom(1, size = 1, prob = H1_prob)
+  }
+  
+  if(is.numeric(sigma_generator)) {
+    sigma <- sigma_generator
+  } else {
+    sigma <- sigma_generator()
+  }
+  
+  if(model == 0) {
+    mu <- 0
+  } else {
+    delta <- rcauchy(1, 0, scale = r_scale)
+    mu <- delta * sigma
+  }
+  
+  y <- rnorm(N, mu, sigma)
+  
+  list(
+    generated = list(y = y, N = length(y), r = r_scale),
+    variables = list(
+    model = model,
+    mu = mu
+    ),
+    var_attributes = var_attributes(model = c(binary_var_attribute(), possibly_constant_var_attribute()),
+                                    mu = possibly_constant_var_attribute())
+  )
+}
+
+```
+
+```{r}
+set.seed(265452)
+ds_fixed <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = 1, r_scale = r_scale), n_sims = 1000)
+```
+
+```{r}
+res_fixed <- compute_SBC(ds_fixed, backend, keep_fits = FALSE, globals = ttest_globals,
+                         dquants = dquants_ttest,
+                   cache_mode = "results",
+                   cache_location = file.path(cache_dir, paste0("ttest_fixed.rds")))
+
+```
+
+
+```{r}
+plot_ecdf_diff(res_fixed)
+
+bp_fixed <- binary_probabilities_from_stats(res_fixed$stats)
+miscalibration_resampling_p(bp_fixed$prob, bp_fixed$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp_fixed$prob, y = bp_fixed$simulated_value)
+
+t.test(bp_fixed$prob, mu = 0.5)
+```
+
+
+## Similar distribution
+
+Using
+
+$$
+\pi(\sigma) = \frac{1}{1 + \sigma^2}
+$$
+
+```{r}
+r_inv1psquared <- function() {
+  p <- runif(1)
+  return( tan(p * pi * 0.5))
+}
+
+set.seed(5422223)
+ds_inv1psquared <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = r_inv1psquared, r_scale = r_scale), n_sims = 1000)
+```
+
+```{r}
+res_inv1psquared <- compute_SBC(ds_inv1psquared, backend, keep_fits = FALSE, globals = ttest_globals,
+                   dquants = dquants_ttest,
+                   cache_mode = "results",
+                   cache_location = file.path(cache_dir, paste0("ttest_inv1psquared.rds")))
+
+```
+
+
+```{r}
+plot_ecdf_diff(res_inv1psquared)
+
+bp_inv1psquared <- binary_probabilities_from_stats(res_inv1psquared$stats)
+miscalibration_resampling_p(bp_inv1psquared$prob, bp_inv1psquared$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp_inv1psquared$prob, y = bp_inv1psquared$simulated_value)
+
+t.test(bp_inv1psquared$prob, mu = 0.5)
+```
+
+
+## Half-cauchy
+
+Using
+
+$$
+\sigma \sim \text{HalfCauchy}(0,1)
+$$
+
+```{r}
+set.seed(235485)
+ds_cauchy <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = \() abs(rcauchy(1)), r_scale = r_scale), n_sims = 1000)
+```
+
+```{r}
+res_cauchy <- compute_SBC(ds_cauchy, backend, keep_fits = FALSE, globals = ttest_globals,
+                   dquants = dquants_ttest,
+                   cache_mode = "results",
+                   cache_location = file.path(cache_dir, paste0("ttest_cauchy.rds")))
+
+```
+
+
+```{r}
+plot_ecdf_diff(res_cauchy)
+
+bp_cauchy <- binary_probabilities_from_stats(res_cauchy$stats)
+miscalibration_resampling_p(bp_cauchy$prob, bp_cauchy$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp_cauchy$prob, y = bp_cauchy$simulated_value)
+
+t.test(bp_cauchy$prob, mu = 0.5)
+```
+
+
+
+## Via bridgesampling
+
+```{r}
+if(include_bs) {
+  backend_H0 <- SBC_backend_rstan_sample(prior_model_H0, iter = 7000, warmup = 1000)
+  backend_H1 <- SBC_backend_rstan_sample(prior_model_H1, iter = 7000, warmup = 1000)
+  
+  backend_bs <- SBC_backend_bridgesampling(backend_H0, backend_H1)
+  
+  
+  dquants_ttest_bs <- derived_quantities(log_lik = sum(dnorm(y, mean = ifelse(model == 0, 0, mu), sd = sigma, log = TRUE)))
+
+  res_bs <- compute_SBC(ds_ttest[1:100], backend_bs, keep_fits = FALSE,
+                     dquants = dquants_ttest_bs,
+                     cache_mode = "results",
+                     cache_location = file.path(cache_dir, paste0("ttest_bs", variant, ".rds")))
+}
+```
+
+```{r}
+if(include_bs) {
+  plot_ecdf_diff(res_bs)
+  
+  bp_bs <- binary_probabilities_from_stats(res_bs$stats)
+  miscalibration_resampling_p(bp_bs$prob, bp_bs$simulated_value)
+  reliabilitydiag::reliabilitydiag(x = bp_bs$prob, y = bp_bs$simulated_value)
+  
+  plot(bp$prob[1:nrow(bp_bs)], bp_bs$prob) + abline(0,1)
+}
+```
+
+```{r}
+if(include_bs) {
+  t.test(bp_bs$prob, mu = prob1_prior)
+  plot_binary_calibration_diff(res_bs$stats)
+}
+```
+
+
+
+## Individual models
+
+```{r}
+if(include_individual) {
+  set.seed(221445)
+  ds_h0 <- generate_datasets(SBC_generator_function(sim_jzs_from_prior, N_new = 5, model = 0), n_sims = 10000)
+  ds_h1 <- generate_datasets(SBC_generator_function(sim_jzs_from_prior, N_new = 5, model = 1), n_sims = 10000)
+}
+```
+
+```{r}
+if(include_individual) {
+  res_h0 <- compute_SBC(ds_h0, backend_H0, keep_fits = FALSE)
+  res_h1 <- compute_SBC(ds_h1, backend_H1, keep_fits = FALSE)
+}
+```
+
+
+```{r}
+if(include_individual) {
+  plot_ecdf_diff(res_h0)
+  plot_ecdf_diff(res_h1)
+}
+```
+

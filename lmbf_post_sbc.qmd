@@ -1,0 +1,99 @@
+---
+title: "lmBF 2x2 from Schad & Vasishth"
+format: html
+---
+
+This requires the most recent `bayes_factors` branch in the SBC package repo: `remotes::install_github("hyunjimoon/SBC@bayes_factors")`
+
+```{r setup}
+library(SBC)
+library(ggplot2)
+library(dplyr)
+
+library(designr)
+library(LaplacesDemon)
+library(MASS)
+
+
+options(mc.cores = 12 , SBC.min_chunk_size = 50)
+rstan_options(auto_write = TRUE)
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir)) {
+  dir.create(cache_dir)
+}
+
+cache_fits_dir <- file.path(cache_dir, "fits_lmbf")
+if(!dir.exists(cache_fits_dir)) {
+  dir.create(cache_fits_dir)
+}
+
+theme_set(theme_minimal())
+```
+
+```{r cluster}
+future::plan(future::multisession, workers = parallel::detectCores)
+```
+
+
+First, we wrap the simulation code in a function for better usage. We also keep track
+of the simulated values for some variables, but other than that there are no changes.
+
+```{r}
+prior_model <- stan_model("stan/lmbf_linreg.stan")
+```
+
+```{r}
+f_H1 <- y ~ 1 + x1
+f_H0 <- y ~ 1 
+
+r_scale <- sqrt(2) / 4
+
+#set.seed(322155)
+# N_prior_data <- 400
+# prior_df <- data.frame(id = 1:N_prior_data, x1 = rnorm(N_prior_data)) %>%
+#   mutate(y = rnorm(N_prior_data))
+
+N_prior_data <- 10
+prior_df <- data.frame(id = 1:N_prior_data, x1 = rnorm(N_prior_data)) %>%
+  mutate(y = rnorm(N_prior_data) + if_else(id < N_prior_data/2, 0, x1))
+
+
+prior_data_stan_base <- list(N = N_prior_data, r = r_scale, y = prior_df$y)
+
+prior_data_stan_H0 <- prior_data_stan_base
+mm_H0 <- model.matrix(f_H0, prior_df)[, -1, drop = FALSE]
+prior_data_stan_H0$X <- mm_H0
+prior_data_stan_H0$K <- ncol(mm_H0)
+
+prior_data_stan_H1 <- prior_data_stan_base
+mm_H1 <- model.matrix(f_H1, prior_df)[, -1, drop = FALSE]
+prior_data_stan_H1$X <- mm_H1
+prior_data_stan_H1$K <- ncol(mm_H1)
+
+
+res_prior_H0 <- sampling(prior_model, data = prior_data_stan_H0, cores = 1, iter = 16000, warmup = 1000, thin = 10)
+res_prior_H1 <- sampling(prior_model, data = prior_data_stan_H1, cores = 1, iter = 16000, warmup = 1000, thin = 10)
+
+draws_prior_H1 <- posterior::as_draws_matrix(res_prior_H1)
+draws_prior_H0 <- posterior::as_draws_matrix(res_prior_H0)
+
+bf_H1 <- lmBF(f_H1, data = prior_df, rscaleFixed = r_scale, rscaleCont = r_scale, rscaleRandom = r_scale)
+if(all(as.character(f_H0) == as.character(y ~ 1))) {
+  bf_prior <- bf_H1
+} else {
+  bf_H0 <- lmBF(f_H0, data = prior_df, rscaleFixed = r_scale, rscaleCont = r_scale, rscaleRandom = r_scale)
+  bf_prior <- extractBF(bf_H1 / bf_H0, logbf = TRUE)
+}
+prob1_prior <- exp(bf_prior@bayesFactor$bf) / (1 + exp(bf_prior@bayesFactor$bf))
+
+
+bs_prior_H0 <- bridgesampling::bridge_sampler(res_prior_H0)
+bs_prior_H1 <- bridgesampling::bridge_sampler(res_prior_H1)
+bf_prior_bs <- bridgesampling::bayes_factor(bs_prior_H1, bs_prior_H0)
+
+exp(bf_prior@bayesFactor$bf)
+bf_prior_bs
+```
+
+
