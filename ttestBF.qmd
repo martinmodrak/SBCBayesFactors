@@ -102,9 +102,9 @@ sim_jzs_from_prior <- function(N_new, model = "random", H1_prob = 0.5) {
 
 ```{r}
 if(variant == "_squared") {
-  n_sims <- 20000
+  n_sims <- 40000
 } else {
-  n_sims <- 5000
+  n_sims <- 10000
 }
 set.seed(512233554)
 ds_ttest <- generate_datasets(SBC_generator_function(sim_jzs_from_prior, N_new = 5, H1_prob = prob1_prior), n_sims = n_sims)
@@ -157,7 +157,10 @@ ttest_globals <- c("SBC_fit.SBC_backend_ttestBF", "SBC_fit_to_draws_matrix.SBC_f
 
 
 ```{r}
-dquants_ttest <- derived_quantities(pseudo_log_lik = sum(dnorm(y, mean = ifelse(model == 0, 0, mu), sd = sd(y), log = TRUE)))
+dquants_ttest <- derived_quantities(
+  pseudo_log_lik = sum(dnorm(y, mean = ifelse(model == 0, 0, mu), sd = sd(y), log = TRUE)),
+  model_sd_m1 = (model - 0.5) * (sd(y) - 1)
+)
 ```
 
 
@@ -172,13 +175,6 @@ res <- compute_SBC(ds_ttest_no_sigma, backend, keep_fits = FALSE, globals = ttes
                    cache_location = file.path(cache_dir, paste0("ttest", variant, ".rds")))
 ```
 
-```{r}
-ddd <- SBC_fit(backend, ds_ttest$generated[[1]], 1)
-
-ddd$bf
-attributes(ddd$bf@bayesFactor)
-```
-
 
 ```{r}
 plot_ecdf_diff(res)
@@ -190,14 +186,33 @@ reliabilitydiag::reliabilitydiag(x = bp$prob, y = bp$simulated_value)
 ```
 
 ```{r}
+reliabilitydiag::reliabilitydiag(x = bp$prob[bp$prob > 0.85], y = bp$simulated_value[bp$prob > 0.85])
+bp %>% filter(prob > 0.85) %>% select(prob, simulated_value) %>% summarise(mean(simulated_value))
+```
+
+
+```{r}
 t.test(bp$prob, mu = prob1_prior)
 ```
 
 
 ```{r}
-plot_binary_calibration(res$stats)
+#plot_binary_calibration(res$stats)
 ```
 
+
+```{r}
+high_sd <- ds_ttest$generated %>% purrr::map_lgl(\(x) sd(x$y) >= 1)
+
+bp_high <- bp[high_sd,]
+bp_low <- bp[!high_sd,]
+
+miscalibration_resampling_p(bp_high$prob, bp_high$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp_high$prob, y = bp_high$simulated_value)
+miscalibration_resampling_p(bp_low$prob, bp_low$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp_low$prob, y = bp_low$simulated_value)
+
+```
 
 ## Fixed sigma
 
@@ -237,7 +252,7 @@ sim_jzs_sigma <- function(N, sigma_generator, r_scale = sqrt(2) / 2, model = "ra
 
 ```{r}
 set.seed(265452)
-ds_fixed <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = 1, r_scale = r_scale), n_sims = 1000)
+ds_fixed <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = 1, r_scale = r_scale), n_sims = 10000)
 ```
 
 ```{r}
@@ -249,6 +264,24 @@ res_fixed <- compute_SBC(ds_fixed, backend, keep_fits = FALSE, globals = ttest_g
 ```
 
 
+
+```{r}
+# set.seed(8554522)
+# ds_fixed <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = 1, r_scale = r_scale), n_sims = 10000)
+# 
+# dquants_var <- derived_quantities(
+#   model_sd_08 =  (model - 0.5) * (sd(y) > 0.8),
+#   model_sd = (model - 0.5) * sd(y),
+#   model_sd_m1 = (model - 0.5) * (sd(y) - 1),
+#   model_sd_absm1 = (model - 0.5) * abs(sd(y) - 1),
+#   model_sd_xxx = (model - 0.5) * exp(-sd(y)),
+# )
+# 
+# res_fixed <- compute_SBC(ds_fixed, backend, keep_fits = FALSE, globals = ttest_globals,
+#                          dquants = dquants_var)
+
+```
+
 ```{r}
 plot_ecdf_diff(res_fixed)
 
@@ -257,6 +290,19 @@ miscalibration_resampling_p(bp_fixed$prob, bp_fixed$simulated_value)
 reliabilitydiag::reliabilitydiag(x = bp_fixed$prob, y = bp_fixed$simulated_value)
 
 t.test(bp_fixed$prob, mu = 0.5)
+```
+
+```{r}
+high_sd_fixed <- ds_fixed$generated %>% purrr::map_lgl(\(x) sd(x$y) >= 1)
+
+bp_fixed_high <- bp_fixed[high_sd_fixed,]
+bp_fixed_low <- bp_fixed[!high_sd_fixed,]
+
+miscalibration_resampling_p(bp_fixed_high$prob, bp_fixed_high$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp_fixed_high$prob, y = bp_fixed_high$simulated_value)
+miscalibration_resampling_p(bp_fixed_low$prob, bp_fixed_low$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp_fixed_low$prob, y = bp_fixed_low$simulated_value)
+
 ```
 
 
@@ -275,7 +321,7 @@ r_inv1psquared <- function() {
 }
 
 set.seed(5422223)
-ds_inv1psquared <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = r_inv1psquared, r_scale = r_scale), n_sims = 1000)
+ds_inv1psquared <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = r_inv1psquared, r_scale = r_scale), n_sims = 20000)
 ```
 
 ```{r}
@@ -308,7 +354,7 @@ $$
 
 ```{r}
 set.seed(235485)
-ds_cauchy <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = \() abs(rcauchy(1)), r_scale = r_scale), n_sims = 1000)
+ds_cauchy <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = \() abs(rcauchy(1)), r_scale = r_scale), n_sims = 20000)
 ```
 
 ```{r}
@@ -366,7 +412,7 @@ if(include_bs) {
 ```{r}
 if(include_bs) {
   t.test(bp_bs$prob, mu = prob1_prior)
-  plot_binary_calibration_diff(res_bs$stats)
+  #plot_binary_calibration_diff(res_bs$stats)
 }
 ```
 

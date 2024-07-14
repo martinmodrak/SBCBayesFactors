@@ -137,6 +137,8 @@ $$
 
 -   see Appendix for proof.
 
+Even more generally, SBC has to pass (and calibraiton has to hold) also for any subset of of $Y$.
+
 But when using SBC instead of just binary calibration, we can extend the check --- we can test the correctness of the full BMA model.
 
 An important property of SBC is that by allowing test quantity $f$ to depend on $y$, we can in principle detect any mismatch between $\phi_\text{post}$ and $\pi_\text{post}$ --- we only need a suitable test quantity that is sensitive to the problem at hand. Modrák et al. provide theoretical and empirical evidence that the likelihood $f(\theta, y) = \pi_\text{obs}(y | \theta)$ is often highly sensitive in that regard.

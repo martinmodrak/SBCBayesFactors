@@ -157,3 +157,10 @@ hosmer_lemeshow_p <- function(x,y, breaks = CEP_bins(x,y), log.p = FALSE) {
   G <- length(unique(x_cut))
   return(pchisq(chisq, G - 2, lower.tail = FALSE, log.p = log.p))
 }
+
+hoeffding_p <- function(probs, mu = 0.5) {
+  n <- length(probs)
+  diff <- sum(probs) - mu * n
+  p_bound <- 2 * exp(- 2 * diff^2 / n)
+  return(min(p_bound, 1))
+}

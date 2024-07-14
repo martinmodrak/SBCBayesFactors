@@ -9,10 +9,10 @@ This requires the most recent `bayes_factors` branch in the SBC package repo: `r
 library(SBC)
 library(ggplot2)
 library(dplyr)
+library(rstan)
 
-library(designr)
-library(LaplacesDemon)
-library(MASS)
+library(BayesFactor)
+
 
 
 options(mc.cores = 12 , SBC.min_chunk_size = 50)
@@ -40,26 +40,35 @@ First, we wrap the simulation code in a function for better usage. We also keep 
 of the simulated values for some variables, but other than that there are no changes.
 
 ```{r}
-prior_model <- stan_model("stan/lmbf_linreg.stan")
+prior_model <- stan_model("stan/lmbf_linreg_bin.stan")
 ```
 
 ```{r}
-f_H1 <- y ~ 1 + x1
-f_H0 <- y ~ 1 
+f_H1 <- y ~ 1 + x1 + x2
+f_H0 <- y ~ 1 + x1
 
 r_scale <- sqrt(2) / 4
 
 #set.seed(322155)
 # N_prior_data <- 400
-# prior_df <- data.frame(id = 1:N_prior_data, x1 = rnorm(N_prior_data)) %>%
+# prior_df <- data.frame(id = 1:N_prior_data, x1 = sample(c("A", "B"), size = N_prior_data, replace = TRUE)) %>%
 #   mutate(y = rnorm(N_prior_data))
 
-N_prior_data <- 10
-prior_df <- data.frame(id = 1:N_prior_data, x1 = rnorm(N_prior_data)) %>%
-  mutate(y = rnorm(N_prior_data) + if_else(id < N_prior_data/2, 0, x1))
+set.seed(322155)
+N_prior_data <- 4
+
+sim_lmbf_fixed_data <- function(N) {
+  data.frame(id = 1:N,
+             # Ensure that all combinations exist
+             x1 = c("A","A","B","B", sample(c("A", "B"), size = N_prior_data - 4, replace = TRUE)),
+             x2 = c("I","J","I","J", sample(c("I", "J"), size = N_prior_data - 4, replace = TRUE)))
+}
+
+prior_df <- sim_lmbf_fixed_data(N_prior_data) %>%
+  mutate(y = rnorm(N_prior_data) + (x1 == "B") + if_else(id < N_prior_data * 0.9, 0, (x2 == "J")))
 
 
-prior_data_stan_base <- list(N = N_prior_data, r = r_scale, y = prior_df$y)
+prior_data_stan_base <- list(N = N_prior_data, r_fixed = r_scale, y = prior_df$y)
 
 prior_data_stan_H0 <- prior_data_stan_base
 mm_H0 <- model.matrix(f_H0, prior_df)[, -1, drop = FALSE]
@@ -80,20 +89,155 @@ draws_prior_H0 <- posterior::as_draws_matrix(res_prior_H0)
 
 bf_H1 <- lmBF(f_H1, data = prior_df, rscaleFixed = r_scale, rscaleCont = r_scale, rscaleRandom = r_scale)
 if(all(as.character(f_H0) == as.character(y ~ 1))) {
-  bf_prior <- bf_H1
+  bf_prior <- extractBF(bf_H1)
 } else {
   bf_H0 <- lmBF(f_H0, data = prior_df, rscaleFixed = r_scale, rscaleCont = r_scale, rscaleRandom = r_scale)
   bf_prior <- extractBF(bf_H1 / bf_H0, logbf = TRUE)
 }
-prob1_prior <- exp(bf_prior@bayesFactor$bf) / (1 + exp(bf_prior@bayesFactor$bf))
+prob1_prior <- exp(bf_prior$bf) / (1 + exp(bf_prior$bf))
 
 
 bs_prior_H0 <- bridgesampling::bridge_sampler(res_prior_H0)
 bs_prior_H1 <- bridgesampling::bridge_sampler(res_prior_H1)
 bf_prior_bs <- bridgesampling::bayes_factor(bs_prior_H1, bs_prior_H0)
 
-exp(bf_prior@bayesFactor$bf)
+bridgesampling::error_measures(bs_prior_H0)
+bridgesampling::error_measures(bs_prior_H1)
+
+cat(exp(bf_prior$bf), " err: ", bf_prior$error, "\n")
 bf_prior_bs
 ```
+
+
+```{r}
+sim_lmbf_fixed <- function(N, formula, alpha_sigma_prior, r_scale_fixed = r_scale) {
+  if(is.function(alpha_sigma_prior)) {
+    alpha_sigma <- alpha_sigma_prior()
+  } else {
+    alpha_sigma <- alpha_sigma_prior
+  }
+  alpha <- alpha_sigma$alpha
+  sigma <- alpha_sigma$sigma
+  
+  df <- sim_lmbf_fixed_data(N)
+  df$y <- 0 #dummy
+  X <- model.matrix(formula, df)[, -1, drop = FALSE]
+  K <- ncol(X)
+  # Transform 0/1 to the contrasts used by lmBF
+  X_prime <- -(X - 0.5) * sqrt(2)
+  
+  beta_std <- rcauchy(K, scale = r_scale_fixed)
+  beta <- beta_std * sigma
+  mu <- alpha + X_prime %*% beta
+  df$y <- rnorm(N, mean = mu, sd = sigma)
+  
+  variables <- list(
+      mu = alpha,
+      sig2 = sigma^2,
+      `x1-A` = beta[1] / sqrt(2)
+    )
+  if(length(beta) == 2) {
+    variables[["x2-I"]] <- beta[2] / sqrt(2)
+  }
+  
+  return(list(
+    generated = df,
+    variables = variables))
+}
+
+```
+
+
+# Post SBC
+
+```{r}
+set.seed(1223345)
+N <- 10
+n_sims <- 4000
+alpha_sigma_from_draws <- function(draws) {
+  function() {
+    draw_id <- sample.int(posterior::ndraws(draws), size = 1)
+    list(
+      alpha = as.numeric(draws[draw_id, "alpha"]),
+      sigma = as.numeric(draws[draw_id, "sigma"])
+    )
+  }
+}
+
+ds_lmbf_post_H0 <- generate_datasets(SBC_generator_function(sim_lmbf_fixed, N = 100, formula = y ~ x1, alpha_sigma_prior = alpha_sigma_from_draws(draws_prior_H0)), n_sims = n_sims)
+ds_lmbf_post_H1 <- generate_datasets(SBC_generator_function(sim_lmbf_fixed, N = 100, formula = y ~ x1 + x2, alpha_sigma_prior = alpha_sigma_from_draws(draws_prior_H1)), n_sims = n_sims)
+```
+
+
+
+```{r}
+ds_post <- SBC_datasets_for_bf(ds_lmbf_post_H0, ds_lmbf_post_H1, prob_H1 = prob1_prior)
+backend_post <- SBC_backend_extractBF_comparison(backend_H0, backend_H1)
+N_for_filename <- nrow(ds_post$generated[[1]])
+res_post <- compute_SBC(ds_post, backend_post, keep_fits = FALSE,
+                            cache_mode = "results",
+                            cache_location = file.path(cache_dir, paste0("lmbf_post_", N_for_filename, ".rds")))
+
+plot_ecdf_diff(res_post)
+bp_post <- binary_probabilities_from_stats(res_post$stats)
+t.test(bp_post$prob, mu = 0.5)
+miscalibration_resampling_p(bp_post$prob, bp_post$simulated_value)
+```
+
+
+
+
+
+
+# Constant prior
+
+```{r}
+set.seed(2145855)
+N <- 10
+n_sims <- 4000
+constant_alpha_sigma <- list(alpha = 200, sigma = 50)
+ds_lmbf_constant_H0 <- generate_datasets(SBC_generator_function(sim_lmbf_fixed, N = 100, formula = y ~ x1, alpha_sigma_prior = constant_alpha_sigma), n_sims = n_sims)
+ds_lmbf_constant_H1 <- generate_datasets(SBC_generator_function(sim_lmbf_fixed, N = 100, formula = y ~ x1 + x2, alpha_sigma_prior = constant_alpha_sigma), n_sims = n_sims)
+```
+
+
+```{r}
+backend_H0 <- SBC_backend_lmBF(y ~ x1, rscaleFixed = r_scale)
+res_H0 <- compute_SBC(ds_lmbf_constant_H0[1:50], backend_H0)
+
+plot_ecdf_diff(res_H0)
+plot_sim_estimated(res_H0$stats)
+```
+
+```{r}
+lm(mean ~ simulated_value, res_H0$stats %>% filter(variable == "x1-A", simulated_value < 1000))
+1/sqrt(2)
+```
+
+
+
+```{r}
+backend_H1 <- SBC_backend_lmBF(y ~ x1 + x2, rscaleFixed = r_scale)
+res_H1 <- compute_SBC(ds_lmbf_constant_H1[1:50], backend_H1)
+
+plot_ecdf_diff(res_H1)
+plot_sim_estimated(res_H1)
+```
+
+```{r}
+ds_constant <- SBC_datasets_for_bf(ds_lmbf_constant_H0, ds_lmbf_constant_H1)
+backend_constant <- SBC_backend_extractBF_comparison(backend_H0, backend_H1)
+N_for_filename <- nrow(ds_constant$generated[[1]])
+res_constant <- compute_SBC(ds_constant, backend_constant, keep_fits = FALSE,
+                            cache_mode = "results",
+                            cache_location = file.path(cache_dir, paste0("lmbf_post_constant_", N_for_filename, ".rds")))
+
+plot_ecdf_diff(res_constant)
+bp_constant <- binary_probabilities_from_stats(res_constant$stats)
+t.test(bp_constant$prob, mu = 0.5)
+miscalibration_resampling_p(bp_constant$prob, bp_constant$simulated_value)
+```
+
+
 
 
