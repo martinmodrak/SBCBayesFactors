@@ -70,13 +70,74 @@ test_DAP_single <- function(probs_generator, bias = 0, sd = 0, func = calibratio
 }
 
 
+func <- bentkus_p
+
+t_test_p <- function(probs) {
+  t <- t.test(probs, mu = 0.5)
+  return(t$p.value)
+}
+
+ps <- test_DAP_single(rbeta, shape1 = 2, shape2 = 1, n = 20, func = bentkus_p)
+#hist(ps)
+mean(ps < 0.05)
+ps <- test_DAP_single(rbeta, shape1 = 2, shape2 = 1, n = 20, func = hoeffding_p)
+#hist(ps)
+mean(ps < 0.05)
+ps <- test_DAP_single(rbeta, shape1 = 2, shape2 = 1, n = 20, func = t_test_p)
+#hist(ps)
+mean(ps < 0.05)
+
+ps <- test_DAP_single(runif, n = 10, func = ml_dap_p)
+hist(ps)
+
+ps <- test_DAP_single(runif, n = 100, func = ml_dap_p)
+hist(ps)
+
+ps <- test_DAP_single(runif, n = 1000, func = ml_dap_p)
+hist(ps)
+
+
+ps <- test_DAP_single(\() rbinom(n = 100000, size = 1, prob = 0.5) * 0.5 + 0.25, func = t_test_p)
+hist(ps)
+
+ps <- test_DAP_single(\() rbinom(n = 100, size = 1, prob = 0.5) * 0.5 + 0.25, func = ml_dap_p)
+hist(ps)
+
+
+```
+
+```{r}
+n <- 1000
+#gen <- \() ifelse(runif(n = n) <= 0.5, 0.495, 0.505)
+mu_beta <- 0.51
+prec_beta <- 4
+gen <- \() rbeta(n = n, shape1 = mu_beta * prec_beta, shape2 = (1 - mu_beta)*prec_beta)
+ps <- test_DAP_single(gen, func = hoeffding_p)
+mean(ps < 0.05)
+ps <- test_DAP_single(gen, func = bentkus_p)
+mean(ps < 0.05)
+ps <- test_DAP_single(gen, func = ml_dap_p)
+mean(ps < 0.05)
+ps <- test_DAP_single(gen, func = t_test_p)
+mean(ps < 0.05)
+```
+
+
+```{r}
 func <- hoeffding_p
 
-ps <- test_DAP_single(runif, n = 100000, func = func)
+ps <- test_DAP_single(runif, n = 100000, func = hoeffding_p)
 hist(ps)
 
-ps <- test_DAP_single(\() rbinom(n = 100000, size = 1, prob = 0.5) * 0.5 + 0.25, func = func)
+ps <- test_DAP_single(\() rbinom(n = 100000, size = 1, prob = 0.5) * 0.5 + 0.25, func = hoeffding_p)
 hist(ps)
 
+```
+
+```{r}
+ps <- numeric(10)
+ps[1] <- 1/10
+single_samp <- function(){
+}
 ```
 

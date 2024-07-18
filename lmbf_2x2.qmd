@@ -181,20 +181,6 @@ ds_0 <- generate_datasets(SBC_generator_function(sim_lmbf2x2, hypothesis = 0), n
 
 
 
-A helper function that collapses variables corresponding to arrays in the `lmBF` output for neater visuals.
-
-```{r}
-combine_lmBF_arrays <- function(x) {
-  indices_removed <- gsub("-[^-]*$", "", x)
-  unique_arrays <- sort(unique(indices_removed))
-  res <- list()
-  for(i in 1:length(unique_arrays)) {
-    res[[unique_arrays[i]]] <- x[indices_removed == unique_arrays[i]]
-  }
-  res
-}
-```
-
 
 We wrap the lmBF backend in `SBC_backend_cached` to reuse the same fits for multiple BF comparisons (this will store the fits on disk)
 
