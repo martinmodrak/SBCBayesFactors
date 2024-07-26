@@ -1,0 +1,273 @@
+---
+title: "lmBF 2x2 crossed from Schad & Vasishth"
+format: html
+---
+
+
+```{r setup}
+library(SBC)
+library(ggplot2)
+library(dplyr)
+library(rstan)
+
+library(BayesFactor)
+
+library(designr)
+
+options(mc.cores = 12 , SBC.min_chunk_size = 2)
+rstan_options(auto_write = TRUE)
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir)) {
+  dir.create(cache_dir)
+}
+
+cache_fits_dir <- file.path(cache_dir, "fits_lmbf")
+if(!dir.exists(cache_fits_dir)) {
+  dir.create(cache_fits_dir)
+}
+
+devtools::load_all()
+theme_set(theme_minimal())
+```
+
+```{r cluster}
+future::plan(future::multisession, workers = parallel::detectCores)
+```
+
+
+
+```{r}
+design <-
+  fixed.factor("reward", levels=c("rew", "pun")) +
+  fixed.factor("transition", levels=c("comm", "rare")) +
+  random.factor("subj", instances= 4) + #10
+  random.factor("item", instances= 2) + # 5
+  random.factor(c("subj", "item"), groups=c("reward","transition"))
+base_data_small <- design.codes(design)  
+
+base_data_big <- rbind(base_data_small, 
+                       base_data_small,
+                       base_data_small,
+                       base_data_small,
+                       base_data_small,
+                       base_data_small,
+                       base_data_small,
+                       base_data_small)
+table(crossed_base_data$subj)
+
+#crossed_base_data[,c("rew","trans","rew_trans")] <- model.matrix(~reward*transition, crossed_base_data)[,2:4]
+```
+
+
+```{r}
+base_pred <- "reward * transition"
+#base_pred <- "reward"
+f_H1 <- as.formula(paste0("y ~ 1 + ", base_pred, " +(1 + ",base_pred,")* subj + (1 + ",base_pred,")* item"))
+f_H0 <- as.formula(paste0("y ~ 1 + ", base_pred, " - reward +(1 + ",base_pred,")* subj + (1 + ",base_pred,")* item"))
+
+
+backend_H0 <- SBC_backend_lmBF(f_H0, whichRandom = c("subj", "item"), rscaleFixed = 0.5, rscaleRandom = 1)
+backend_H1 <- SBC_backend_lmBF(f_H1, whichRandom = c("subj", "item"), rscaleFixed = 0.5, rscaleRandom = 1)
+
+backend_bf <- SBC_backend_extractBF_comparison(backend_H0, backend_H1)
+```
+
+
+# Constant prior
+
+```{r}
+# TODO: figure out the sqrt(2) multipliers
+sim_lmbf_2x2_crossed <- function(hypothesis, alpha_sigma_prior, base_data, r_scale_fixed = 0.5, r_scale_random = 1) {
+
+  
+  if(is.function(alpha_sigma_prior)) {
+    alpha_sigma <- alpha_sigma_prior()
+  } else {
+    alpha_sigma <- alpha_sigma_prior
+  }
+  alpha <- alpha_sigma$alpha
+  sigma <- alpha_sigma$sigma
+  
+  df <- base_data
+  #f_mm <- ~ 1 + reward*transition
+  #X <- model.matrix(f_mm, df)[, -1, drop = FALSE]
+  if(base_pred == "reward") {
+    X <- matrix(NA_real_, ncol = 1, nrow = nrow(df))
+    X[,1] <- df$reward == "pun"
+  } else if(base_pred == "reward + transition") {
+    X <- matrix(NA_real_, ncol = 2, nrow = nrow(df))
+    X[,1] <- df$reward == "pun"
+    X[,2] <- df$transition == "rare"
+  } else if(base_pred == "reward * transition") {
+    X <- matrix(NA_real_, ncol = 3, nrow = nrow(df))
+    X[,1] <- df$reward == "pun"
+    X[,2] <- df$transition == "rare"
+    X[,3] <- !((df$reward == "pun") != (df$transition == "comm"))
+  } else {
+    stop("Bad base_pred")
+  }
+  K <- ncol(X)
+  stopifnot(all(X %in% c(0,1)))
+  # Transform 0/1 to the contrasts used by lmBF, add intercept
+  X_prime <- cbind(matrix(1, ncol = 1, nrow = nrow(df)), -(X - 0.5)) * sqrt(2)
+
+  beta_std <- rcauchy(K, scale = r_scale_fixed)
+  beta <- beta_std * sigma
+  
+  if(hypothesis == 0) {
+    beta[1] <- 0
+  }
+  
+  mu <- as.numeric(X_prime %*% c(alpha, beta))
+  
+  variables <- list(
+    mu = alpha,
+    sig2 = sigma^2
+  )
+  
+  if(base_pred == "reward + transition") {
+     variables$`transition-comm` <-  beta[2] / sqrt(2)
+  }
+  if(base_pred == "reward * transition") {
+     variables$`transition-comm` <-  beta[2] / sqrt(2)
+     variables$`reward:transition-rew.&.comm` <- beta[3] / sqrt(2)
+  }
+  
+  if(hypothesis == 1){
+    variables[["reward-rew"]] <- beta[1] / sqrt(2)
+  }
+  
+  col_ranef_labels <- c("", "reward:", "transition:", "reward:transition:")
+  col_ranef_val_labels <- c("", "rew.&.", "comm.&.", "rew.&.comm.&.")
+  
+  for(group in c("subj", "item")) {
+    n_ranef <- length(levels(df[[group]]))
+    ranef_index <- as.integer(df[[group]])
+    
+    for(col in 1:ncol(X_prime)) {
+      ranef_g <- r_scale_random^2 / rgamma(1, 0.5, scale = 0.5)
+      ranef <- rnorm(n_ranef) * sqrt(ranef_g) * sigma
+      mu <- mu + ranef[ranef_index] * X_prime[,col]
+      
+      ranef_label <- paste0(col_ranef_labels[col], group)
+      variables[[paste0("g_", ranef_label)]] <- ranef_g
+      for(i in 1:n_ranef) {
+        ranef_var_label <- paste0(ranef_label, "-", col_ranef_val_labels[col], levels(df[[group]])[i])
+        if(col == 1) {
+          ranef_mult <- 1
+        } else {
+          ranef_mult <- 1/sqrt(2)
+        }
+        variables[[ranef_var_label]] <- ranef[i]  * ranef_mult
+      }
+
+    }
+  }
+  
+  df$y <- rnorm(nrow(df), mean = mu, sd = sigma)
+  
+
+  return(list(
+    generated = as.data.frame(df),
+    variables = variables))
+}
+
+```
+
+
+
+```{r}
+set.seed(2145855)
+n_sims <- 50
+constant_alpha_sigma <- list(alpha = 200, sigma = 50)
+ds_lmbf_constant_H0 <- generate_datasets(SBC_generator_function(sim_lmbf_2x2_crossed, hypothesis = 0, base_data = base_data_big, alpha_sigma_prior = constant_alpha_sigma), n_sims = n_sims)
+ds_lmbf_constant_H1 <- generate_datasets(SBC_generator_function(sim_lmbf_2x2_crossed, hypothesis = 1, base_data = base_data_big, alpha_sigma_prior = constant_alpha_sigma), n_sims = n_sims)
+```
+
+
+```{r}
+res_H0 <- compute_SBC(ds_lmbf_constant_H0[1:50], backend_H0, keep_fits = FALSE)
+
+plot_ecdf_diff(res_H0, combine_variables = combine_lmBF_arrays)
+plot_sim_estimated(res_H0$stats, variables = res_H0$stats$variable[grepl("^g_", res_H0$stats$variable)])
+plot_sim_estimated(res_H0$stats, variables = res_H0$stats$variable[!grepl("(^g_|item|subj)", res_H0$stats$variable)])
+plot_sim_estimated(res_H0$stats, variables = res_H0$stats$variable[grepl("reward:item", res_H0$stats$variable)])
+plot_sim_estimated(res_H0$stats, variables = res_H0$stats$variable[grepl("item-", res_H0$stats$variable)])
+
+```
+
+
+
+```{r}
+#lm(mean ~ 0 + simulated_value, data = res_H0$stats %>% filter(grepl("reward:item-", variable)))
+#lm(mean ~ 0 + simulated_value, data = res_H0$stats %>% filter(grepl("item-", variable)))
+confint(lm(mean ~ 0 + simulated_value, data = res_H0$stats %>% filter(grepl("^g_item$", variable))))
+confint(lm(mean ~ 0 + simulated_value, data = res_H0$stats %>% filter(grepl("^g_subj$", variable))))
+confint(lm(mean ~ 0 + simulated_value, data = res_H0$stats %>% filter(grepl("g_reward:transition:item", variable))))
+1/sqrt(2)
+```
+
+
+```{r}
+#| fig-width: 8
+#| fig-height: 8
+res_H1 <- compute_SBC(ds_lmbf_constant_H1[1:50], backend_H1, keep_fits = FALSE)
+
+plot_ecdf_diff(res_H1, combine_variables = combine_lmBF_arrays)
+plot_sim_estimated(res_H1$stats, variables = res_H1$stats$variable[grepl("^g_", res_H1$stats$variable)])
+plot_sim_estimated(res_H1$stats, variables = res_H1$stats$variable[!grepl("(^g_|item|subj)", res_H1$stats$variable)])
+
+```
+
+```{r}
+set.seed(54122344)
+ds_constant <- SBC_datasets_for_bf(ds_lmbf_constant_H0, ds_lmbf_constant_H1)
+backend_constant <- SBC_backend_extractBF_comparison(backend_H0, backend_H1)
+N_for_filename <- nrow(ds_constant$generated[[1]])
+res_constant <- compute_SBC(ds_constant, backend_constant, keep_fits = FALSE,
+                            cache_mode = "results",
+                            cache_location = file.path(cache_dir, paste0("lmbf_2x2_crossed_constant_", make.names(base_pred), "_", N_for_filename, ".rds")))
+
+plot_ecdf_diff(res_constant, combine_variables = combine_lmBF_arrays)
+bp_constant <- binary_probabilities_from_stats(res_constant$stats)
+t.test(bp_constant$prob, mu = 0.5)
+ml_dap_p(bp_constant$prob)
+miscalibration_resampling_p(bp_constant$prob, bp_constant$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp_constant$prob, y = bp_constant$simulated_value)
+```
+
+```{r}
+ff <- SBC_fit(backend_constant, ds_constant$generated[[1]], 1)
+SBC_posterior_cdf(ff, c("model" = 0))
+ff$fit0$bf /ff$fit1$bf
+extractBF(ff$fit0$bf /ff$fit1$bf)
+```
+
+
+```{r}
+bp_constant %>% filter(prob < 0.2) %>% arrange(desc(prob)) %>% select(simulated_value, prob) %>%
+  group_by(round(prob, digits = 2)) %>% summarise(n = n(), mean(simulated_value))
+
+bp_constant_ss <- bp_constant %>% filter(prob < 0.2) %>% arrange(desc(prob)) %>% select(simulated_value, prob) %>%
+   summarise(n = n(), true = sum(simulated_value), mean(simulated_value))
+bp_constant_ss
+
+binom.test(bp_constant_ss$true, bp_constant_ss$n)
+```
+
+
+```{r}
+res_split_constant <- split_SBC_results_for_bf(res_constant)
+plot_ecdf_diff(res_split_constant$stats_H0, combine_variables = combine_lmBF_arrays)
+plot_ecdf_diff(res_split_constant$stats_H1, combine_variables = combine_lmBF_arrays)
+
+#TODO explore the missing `simulated_value` cases.
+plot_sim_estimated(res_split_constant$stats_H0)
+plot_sim_estimated(res_split_constant$stats_H0 %>% filter(variable == "g_Subject") %>% mutate(across(all_of(c("simulated_value", "mean", "q5", "q95")), log10 )))
+plot_sim_estimated(res_split_constant$stats_H1)
+plot_sim_estimated(res_split_constant$stats_H1 %>% filter(variable == "g_Subject") %>% mutate(across(all_of(c("simulated_value", "mean", "q5", "q95")), log10 )))
+
+```
+
+
