@@ -15,6 +15,27 @@ devtools::load_all()
 theme_set(theme_minimal())
 ```
 
+Call Paul 24.07
+Artificial example for constant prior:
+- flat prior on shared coefficient
+- correlated predictors
+
+Explain why SBC and prediction calibration get different results in finite samples (PDF vs CDF / histogram vs. CDF)
+
+Explain what SBC does with the K > 2 case (especially how ordering matters). Discuss possible solutions.
+
+Notationally distinguish model parameters vs BMA parameters space
+
+Data-averaged posterior - BF for _some_ model, expalin that it means unrelated, have an example.
+
+Practical example - close to zero probability for the correct model. (maybe weaker, "on a more theoretical note")
+
+Vertical line for 80% power in the plots.
+
+Do we know what the "usual issues" are? Bad normalization constants probably fail DAP quickly.
+
+=======
+
 
 Throughout this paper we assume there is a single shared data space $Y$ and a set of Bayesian statistical models $\mathcal{M_i}$ for $i \in \{0, \dots, K-1\}$, each model associated and parameter space $\Theta_i$. For $y \in Y, \theta \in \Theta_i$ each model implies the following joint, marginal, and posterior densities:
 
@@ -73,30 +94,31 @@ This weighted prediction is then typically the output of BMA.
 
 Due to the tight connection between Bayes factors, marginal data distributions and BMA, computing one immediately lets us derive the others. And so a check of correctness for either is also a check of correctness for the others.
 
+In the next sections we discuss some identities that need to hold for valid Bayes factors/BMA posteriors and thus can be employed to check if a computation is correct. Implicitly, all the theory below holds only for infinitely precise computation and average over infinitely many simulations.
+
 ### Bayes factors and prediction calibration
 
-There is a straightforward way to check the correctness of posterior model probabilities - whenever $\pi_\text{BMA}(i | y) = p$, the true model should be $\mathcal{M}_i$ in $p$ of the cases. I.e. that the predictions are calibrated.
+There is a straightforward way to check the correctness of posterior model probabilities with respect to the BMA supermodel - whenever $\pi_\text{BMA}(i | y) = p$, the true model should be $\mathcal{M}_i$ in $p$ of the cases. I.e. that the predictions are calibrated.
 
-A candidate density $\phi_\text{BMA}(i | y)$ passess the *prediction calibration check* if:
+Formally, given a candidate density $\phi_\text{BMA}(i | y)$, denote $\text{Pred}_{k, p} = \left\{y \in Y | \phi_\text{BMA}\left(k | y \right)  = p\right\}$ passess the *prediction calibration check* if:
 
 $$
-\forall x,i: 0\leq x \leq 1, i \in {0, \dots, K - 1}:\\
-\text{Pr}(\mathcal{M_i} | \phi_\text{BMA}(i | y)  = x) = x 
+\forall p,k: 0\leq p \leq 1,  k \in {0, \dots, K - 1}:\\
+\sum_{i=0}^{K - 1}\int_{\text{Pred}_{k, p}} \text{d}y \  \pi^i_\text{marg}(y) > 0 \implies \text{Pr}(\mathcal{M}_i | y \in \text{Pred}_{k, p} ) = p 
 $$
 
 expanding this
 
 $$
 \frac{
-   \int_Y \text{d}y \: \pi^i_\text{marg}(y) \mathbb{I}\left[\phi_\text{BMA}(i | y)  = x \right]}{ 
-   \sum_{j = 0}^{K-1} \Pr(\mathcal{M}_j) \int_Y \text{d}y \: \pi^j_\text{marg}(y) \mathbb{I}\left[\phi_\text{BMA}(i | y)  = x \right]}  = x
+   \text{Pr}(\mathcal{M}_k)\int_{\text{Pred}_{k, p}} \text{d}y \: \pi^k_\text{marg}(y) }{ 
+   \sum_{j = 0}^{K-1} \Pr(\mathcal{M}_j) \int_{\text{Pred}_{k, p}} \text{d}y \: \pi^j_\text{marg}(y) }  = p
 $$
 
-TODO: double check the equation above.
 
 This requires simulations (we do not know real-world ground truth and don't believe our models too much either).
 
-Running $S$ simulations and for each $s \in {1, \dots S}$ we obtain $i_s$, $y_s \sim \pi^i_\text{marg}$ and compute $\phi_\text{BMA}(j | y_s)$ for $j \in \{0, \dots, \}$.
+Running $S$ simulations and for each $s \in {1, \dots S}$ we obtain $i_s$, $y_s \sim \pi^{i_s}_\text{marg}$ and compute $\phi_\text{BMA}(j | y_s)$ for $j \in \{0, \dots, K - 1\}$.
 
 Especially for binary case ($K = 2$) there is a large number of available methods for checking prediction calibration (TODO survey) - the $K > 2$ case can then be handled by looking at the binary calibration of the top (highest probability) prediction or by looking at calibration of the predictions for model $i$ vs. all others for all $i$.
 
@@ -127,21 +149,21 @@ The SBC identity cannot be checked directly, so we make two changes: 1) check on
 
 When ties are possible, we need to randomly break them.
 
-SBC for Bayes Factors is in fact the same as binary prediction calibration, i.e. considering the BMA supermodel, $\phi_\text{BMA}$ passes continuous SBC w.r.t. $f((i, \theta), y) = i$ if and only if $\phi_\text{BMA}$ passes the prediction calibration check.
+SBC for Bayes Factors is in fact the same as binary prediction calibration, i.e. considering the BMA supermodel, $\phi_\text{BMA}$ passes continuous SBC w.r.t. $f: \Theta_\text{BMA} \times Y \to \{0, \ldots K - 1\}, f((i, \theta_i), y) = i$ if and only if $\phi_\text{BMA}$ passes the prediction calibration check.
 
 More generally for any $f: \Theta \times Y \to \{0,1\}$, $\phi$ passes continuous SBC w.r.t $f$ if and only if:
 
 $$
-\forall x: \text{Pr}\left(f(\theta, y) = 1 | x = \int_\Theta \: \text{d}\theta \: f(\theta, y)\phi(\theta | y)\right) = x 
+\forall p: \text{Pr}\left(f(\theta, y) = 1 | \int_\Theta \: \text{d}\theta \: f(\theta, y)\phi(\theta | y) = p\right) = p
 $$
 
 -   see Appendix for proof.
 
-Even more generally, SBC has to pass (and calibraiton has to hold) also for any subset of of $Y$.
+Even more generally, SBC has to pass (and calibration has to hold) also for any subset of of $Y$.
 
 But when using SBC instead of just binary calibration, we can extend the check --- we can test the correctness of the full BMA model.
 
-An important property of SBC is that by allowing test quantity $f$ to depend on $y$, we can in principle detect any mismatch between $\phi_\text{post}$ and $\pi_\text{post}$ --- we only need a suitable test quantity that is sensitive to the problem at hand. Modrák et al. provide theoretical and empirical evidence that the likelihood $f(\theta, y) = \pi_\text{obs}(y | \theta)$ is often highly sensitive in that regard.
+An important property of SBC is that by allowing test quantity $f$ to depend on $y$, we can in principle detect any mismatch between $\phi_\text{post}$ and $\pi_\text{post}$ --- we only need a suitable test quantity that is sensitive to the problem at hand. Modrák et al. provide theoretical and empirical evidence that the likelihood $f(\theta, y) = \pi_\text{obs}(y | \theta)$ is often highly sensitive in that regard. Applying that to the BMA supermodel, SBC can in principle detect any problem in Bayes factor computation.
 
 #### Data-averaged posterior
 
@@ -155,9 +177,18 @@ Typically not full joint distribution but univariate projections $f: \Theta \to 
 
 Alternatively, we can compare the moments of the prior to the moments of the data-averaged posterior (cite).
 
-The method of Schad et al. is to check the data-averaged posterior criterion for the model index in the BMA supermodel (i.e. for $f((i, \theta)) = i$).
+The method of Schad et al. is to check the data-averaged posterior criterion for the model index in the BMA supermodel (i.e. with $f: \Theta_\text{BMA} \to \{0, \ldots K - 1\}$ and $\forall (i, \theta_i) \in \Theta_\text{BMA}: f((i, \theta_i)) = i$).
 
-A fundamental limitation is that data-averaged posterior ignores the mapping between data and posteriors --- it only checks that the observed Bayes factors look like reasonable Bayes factors for *some* model, but cannot check that they are correct for the model under investigation. For example, if we have uniform prior over the models and replace each Bayes factor with its inverse. Although this violates prediction calibration and SBC. Data-averaged posterior also won't necessarily flag assigning posterior probability of 0 to the correct model, which is immediately flagged by SBC/prediction calibration.
+A fundamental limitation is that data-averaged posterior ignores the mapping between data and posteriors --- it can at best ensure that there exists a set of models $\mathbf{M^\prime} = \{\mathcal{M}^\prime_0, \ldots, \mathcal{M}^\prime_{K-1}\}$ over the data space $Y$, such that $\forall i \in \{0, \ldots,K-1\}, y \in Y: \phi_\text{BMA}(i|y) = \text{Pr}(\mathcal{M}^\prime_{K-1} |y)$ where the probability is with respect to $\mathbf{M^\prime}$. However, we can never rule out that the models implied by $\phi_\text{BMA}$ are very different from what we expected. Some examples of specific model mixups that can never be detected by data-averaged posterior check include:
+
+- **All models identical**, i.e. $\mathcal{M}^\prime_0 = \ldots = \mathcal{M}^\prime_{K-1}$
+- **Flipped model indices**, i.e. $\forall i: \mathcal{M}^\prime_i = \mathcal{M}_{K - i - 1}$ - when $K = 2$ and $\text{Pr}(\mathcal{M}_0) = \text{Pr}(\mathcal{M}_1)$, this corresponds to computing the inverse of the Bayes factor
+- **Different outcome family** in the context of regression models. E.g. assuming $\mathcal{M}_i$ are generalized linear models with gamma response, $\mathcal{M}^\prime_i$ could be normal linear regression models.
+- **Different predictor sets** in the context of regression models. E.g. assuming $\mathcal{M}_i$ are linear models, $\mathcal{M}^\prime_i$ could be linear regression models with arbitrary predictor sets present in $Y$.
+
+Note that all of those problems are not implausible to arise from a simple programming error in Bayes factor computation. The first two problems will violate both prediction calibration and SBC (even without extra test quantities) in all cases. The latter two will almost certainly fail those checks as well, although one may be able to construct some contrived counterexamples. SBC with suitable test quantities will discover all problems.
+
+Additional, but likely less relevant problem is that data-averaged posterior also won't necessarily flag assigning posterior probability of 0 to the correct model, which is immediately flagged by SBC/prediction calibration. In practice, posterior probability will almost never be computed as exactly zero, but a package may repeatedly assign very low probability to the correct model and still pass data-averaged posterior.
 
 Data-averaged posterior is repeatedly confused with SBC in the literature on model validation, but it is a fundamentally different check (e.g. because it is insensitive to some types of problems SBC is sensitive to as can be seen in the theoretical analysis above as well as practical examples below)
 
@@ -188,9 +219,11 @@ Alternatively, we can tweak the prior probability, to get 0.5 with the newly com
 
 The [good check](https://osf.io/preprints/psyarxiv/59gj8) (cite). This shares some of the big problems with data-averaged posterior --- ignores the mapping between BFs and data. Additionally, both the variance and second raw moment of the Bayes factor in favor of the false hypothesis can have very large or even undefined variance, which explains the slow convergence. Even though large variance of BFs is not a problem for either SBC or data-averaged posterior (see appendix)
 
+TODO https://arxiv.org/pdf/2306.03580
+
 ## Evaluation methods
 
-The fact that a check can recognize an incorrectly computed Bayes factor/marginal likelihood/posterior model probability in principle does not mean it can recognize the problem in practice. We run simulation studies to show the power of various approaches to detect specific discrepancies.
+The fact that a check can recognize an incorrectly computed Bayes factor/marginal likelihood/posterior model probability in principle does not mean it can reliably recognize the problem in practice. We run simulation studies to show the power of various approaches to detect specific discrepancies.
 
 We simulate $i$ and then $\theta_i$ and $y$ from the corresponding model. In all simulations we assume uniform prior over models. To investigate how the various test statistics evolve over time, we randomly sample 100 histories of the same length from the simulations (there are always at least 10 times more simulations than the length of a single history under investigation).
 
@@ -207,11 +240,25 @@ For SBC we use the gamma statistic of Saailnoya (also used in Modrák et al.) - 
 First, let us start with a comparison of two extremely simple models with no parameters ($\theta_0 = \theta_1 = \emptyset$) problem:
 
 $$
-Y = \{0,1\}, \text{Pr}(y = 1 | \mathcal{M}_i) = a_i, a_0 < a_1\\
+Y = \{0,1\}, \: \text{Pr}(y = 1 | \mathcal{M}_i) = a_i, \: a_0 < a_1\\
 \text{Pr}(\mathcal{M}_0) = \text{Pr}(\mathcal{M}_1) = \frac{1}{2}
 $$
 
-Any candidate posterior can be described just by two numbers $\phi_\text{BMA}(i | Y = 1) = b_i$. Analytically, we can show that $\phi_\text{BMA}$ will satisfy the data-averaged posterior criterion if and only if $b_0 + b_1 = 1$, i.e. allowing infinitely many wrong Bayes factors, including assigning 100% probability to the wrong model or having $\phi_\text{BMA}(i | Y = 1) = \pi_\text{BMA}( 1 - i | Y = 1)$.
+Any candidate posterior can be described just by two numbers $\phi_\text{BMA}(i | Y = 1) = b_i$. Analytically, we can show that $\phi_\text{BMA}$ will satisfy the data-averaged posterior criterion if and only if $b_0 + b_1 = 1$, i.e. allowing infinitely many wrong Bayes factors, including assigning 100% probability to the wrong model or having $\phi_\text{BMA}(i | Y = 1) = \pi_\text{BMA}( 1 - i | Y = 1)$. To be specific the DAP criterion for this model is:
+
+TODO 
+
+$$
+\forall i \in \{0,1\}: \text{Pr}(\mathcal{M}_i) = \sum_{y=0}^1  \phi_\text{BMA}(i | Y = y) \sum_{k=0}^1 \text{Pr}(y | \mathcal{M}_k) \text{Pr}(\mathcal{M}_k) \\
+\frac{1}{2} = (1 - b_i) \sum_{k=0}^1 \frac{1}{2}(1 - a_k) + b_i \sum_{k=0}^1 \frac{1}{2}a_k\\
+1 = \sum_{k=0}^1 (1 - a_k) - b_i \sum_{k=0}^1 (1 - a_k) + b_i \sum_{k=0}^1 a_k \\
+1 = 2 - \sum_{k=0}^1 a_k - 2b_i + b_i\sum_{k=0}^1 a_k + b_i \sum_{k=0}^1 a_k \\
+
+0 = (1 - b_0 - 1 + b_1) \sum_{k=0}^1 \frac{1}{2}(1 - a_k) + (b_0 - b_1) \sum_{k=0}^1 \frac{1}{2}a_k\\
+0 = -(b_0 - b_1) \sum_{k=0}^1 \frac{1}{2}(1 - a_k) + (b_0 - b_1) \sum_{k=0}^1 \frac{1}{2}a_k\\
+
+
+$$
 
 In contrast, $\phi_\text{BMA}$ will pass the prediction calibration check (and hence SBC for $f(i, y) = i$) only for the correct posterior and for the prior ($b_i = \text{Pr}(\mathcal{M}_i) = \frac{1}{2}$). The proof is that either $b_0 = b_1$ and then the model is calibrated only if $b_0 = b_1 = \frac{1}{2}$ or that $b_0 \neq b_1$ and then the model is calibrated only when $a_i = b_i$.
 
@@ -258,11 +305,11 @@ $$
 \end{aligned}
 $$
 
-With both variables known - in our experiments we used $\lambda = 3, \phi = 5$ and $N = 25$ as this makes the observed BF values cover the full $[0,1]$ interval. In that setting, the correct BF is just the likelihood ratio of the two models.
+With both variables known - in our experiments we used $\lambda = 3, \phi = 5$ and $N = 25$ as this makes the observed posterior probabilities of models values cover the full $[0,1]$ interval. In that setting, the correct BF is just the likelihood ratio of the two models.
 
 Beyond the model index, we use two derived quantities in SBC, one is the log-likelihood, second is an estimate of variance, specifically $f(i, y) = \begin{cases}\text{Mean}(y) & i = 0 \\ \text{Var}(y) & i = 1 \end{cases}$ --- this is an example of a simple data-dependent test quantity designed with the specific models in mind: under model 0, mean should be equal to variance, so we use it in that case. It is here to show, that one does not need to bring in the full model likelihood (which might be laborious to re-implement) to gain benefits of derived quantities.
 
-Let us start with the case that the the BFs are all $\frac{1}{2}$ --- we know that neither data-averaged posterior, nor miscalibration can detect this in principle (and that holds in the simulations), but data-dependent quantities typically discover the problem reasonably quickly.
+Let us start with the case that the the posterior probabilities are all $\frac{1}{2}$ --- we know that neither data-averaged posterior, nor miscalibration can detect this in principle (and that holds in the simulations), but data-dependent quantities typically discover the problem reasonably quickly.
 
 ```{r}
 #| fig-cap: Histories of check statistics for poisson-NB model ignoring all data in BF computation. 
@@ -301,7 +348,7 @@ plot_log_p_histories(hist_pnb_vari$miscalibration, "Miscalibration") +
 plot_log_p_histories(hist_pnb_vari$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
 ```
 
-There is however a case where DAP works better than the other options, that is when the main problem is overall bias in the BF - here we add 2 to the logarithm of the Bayes factor for all simulations. This is discovered relatively quickly by all of the options, but DAP requires the fewest simulations.
+There is however a case where DAP works better than the other options, that is when the main problem is overall bias in the BF (e.g. because of wrong normalization constant in one of the models) - here we add 2 to the logarithm of the Bayes factor for all simulations. This is discovered relatively quickly by all of the options, but DAP requires the fewest simulations.
 
 ```{r}
 #| fig-cap: Histories of check statistics for biased poisson-NB model. 
@@ -347,10 +394,12 @@ https://link.springer.com/article/10.1007/s41237-024-00232-7
 
 ## Discussion
 
-While there are cases where DAP performs somewhat better than SBC/prediction calibration, it also fails catastrophically in many examples. Using DAP for validation of Bayes factor computation should thus be considered only as a supplement to SBC.
+While there are cases where DAP performs somewhat better than SBC/prediction calibration, it also fails catastrophically in many examples. Using DAP for validation of Bayes factor computation should thus be considered only as a supplement to SBC or prediction calibration.
 
 Our results also show that to rule out problems in BF computation, simulation studies need to use a lot of simulations --- even quite strong miscalibration can require several hundred simulations to be reliably uncovered. 
 
 Another advantage of running SBC for the full BMA model is that we can use the same simulations to check that the individual models are well implemented/calibrated --- if the individual models are wrong, we cannot make any strong inferences about the method for computing Bayes factors (though the specific combination is invalidated).
 
 Using multiple test quantities or even multiple methods for checking the calibration of the model yields to multiple testing issues. However, here Type II error is the biggest problem. We can usually run more simulations to sort flukes from real problems with little expense. Additionally, in a perfect world a failed calibration check is followed by investigation to get understanding why the computation failed.
+
+Checking packages for Bayes factors is difficult as the implied priors are typically non-standard and at best partially documented.

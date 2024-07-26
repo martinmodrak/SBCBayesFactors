@@ -46,6 +46,8 @@ prior_model_H0 <- stan_model(paste0("stan/JZS_ttest_H0", variant, ".stan"))
 prior_model_H1 <- stan_model(paste0("stan/JZS_ttest_H1", variant, ".stan"))
 ```
 
+## Posterior SBC
+
 ```{r}
 set.seed(2556652)
 prior_data <- c(-1, 1)

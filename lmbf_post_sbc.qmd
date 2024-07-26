@@ -169,6 +169,7 @@ backend_H1 <- SBC_backend_lmBF(y ~ x1 + x2, rscaleFixed = r_scale)
 
 
 ```{r}
+set.seed(6218945)
 ds_post <- SBC_datasets_for_bf(ds_lmbf_post_H0, ds_lmbf_post_H1, prob_H1 = prob1_prior)
 backend_post <- SBC_backend_extractBF_comparison(backend_H0, backend_H1)
 N_for_filename <- nrow(ds_post$generated[[1]])
@@ -180,6 +181,8 @@ plot_ecdf_diff(res_post)
 bp_post <- binary_probabilities_from_stats(res_post$stats)
 t.test(bp_post$prob, mu = prob1_prior)
 miscalibration_resampling_p(bp_post$prob, bp_post$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp_post$prob, y = bp_post$simulated_value)
+
 ```
 
 
@@ -259,6 +262,7 @@ plot_sim_estimated(res_H1)
 ```
 
 ```{r}
+set.seed(2478555)
 ds_constant <- SBC_datasets_for_bf(ds_lmbf_constant_H0, ds_lmbf_constant_H1)
 backend_constant <- SBC_backend_extractBF_comparison(backend_H0, backend_H1)
 N_for_filename <- nrow(ds_constant$generated[[1]])
@@ -270,6 +274,9 @@ plot_ecdf_diff(res_constant)
 bp_constant <- binary_probabilities_from_stats(res_constant$stats)
 t.test(bp_constant$prob, mu = 0.5)
 miscalibration_resampling_p(bp_constant$prob, bp_constant$simulated_value)
+
+reliabilitydiag::reliabilitydiag(x = bp_constant$prob, y = bp_constant$simulated_value)
+
 ```
 
 
