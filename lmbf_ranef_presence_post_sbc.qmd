@@ -50,7 +50,14 @@ f_H0 <- y ~ 1 + x1
 f_H1 <- update(f_H0, . ~ . + Subject)
 
 
-r_scale <- sqrt(2) / 4
+r_scale_fixed <- sqrt(2) / 4
+r_scale_random <- sqrt(2) / 4
+r_scale_cont <- sqrt(2) / 4
+scenario_mod <- ""
+# r_scale_fixed <- sqrt(2) / 4
+# r_scale_random <- 1
+# r_scale_cont <- sqrt(2) / 4
+# scenario_mod <- "_scale2"
 
 set.seed(5482334)
 N_prior_data <- 12
@@ -74,7 +81,7 @@ prior_df <- sim_lmbf_ranef_data(N_prior_data, N_prior_subjects) %>%
 
 mm_H0 <- model.matrix(f_H0, prior_df)[, -1, drop = FALSE]
 
-prior_data_stan <- list(N = N_prior_data, r_fixed = r_scale, r_random = r_scale, y = prior_df$y,
+prior_data_stan <- list(N = N_prior_data, r_fixed = r_scale_fixed, r_random = r_scale_random, y = prior_df$y,
                         K = ncol(mm_H0),
                         X = mm_H0,
                              G = N_prior_subjects, group = as.integer(prior_df$Subject))
@@ -97,11 +104,11 @@ draws_prior_H1 <- posterior::as_draws_matrix(res_prior_H1)
 draws_prior_H0 <- posterior::as_draws_matrix(res_prior_H0)
 
 
-bf_H1 <- lmBF(f_H1, data = prior_df, whichRandom = "Subject", rscaleFixed = r_scale, rscaleCont = r_scale, rscaleRandom = r_scale)
+bf_H1 <- lmBF(f_H1, data = prior_df, whichRandom = "Subject", rscaleFixed = r_scale_fixed, rscaleCont = r_scale_cont, rscaleRandom = r_scale_random)
 if(all(as.character(f_H0) == as.character(y ~ 1))) {
   bf_prior <- extractBF(bf_H1)
 } else {
-  bf_H0 <- lmBF(f_H0, data = prior_df, rscaleFixed = r_scale, rscaleCont = r_scale, rscaleRandom = r_scale)
+  bf_H0 <- lmBF(f_H0, data = prior_df, rscaleFixed = r_scale_fixed, rscaleCont = r_scale_cont, rscaleRandom = r_scale_random)
   bf_prior <- extractBF(bf_H1 / bf_H0, logbf = TRUE)
 }
 prob1_prior <- exp(bf_prior$bf) / (1 + exp(bf_prior$bf))
@@ -119,14 +126,14 @@ bf_prior_bs
 ```
 
 ```{r}
-draws_lmbf_H1 <- lmBF(f_H1, data = prior_df, whichRandom = "Subject", rscaleFixed = r_scale, rscaleCont = r_scale, rscaleRandom = r_scale, posterior = TRUE, iterations = 2000)
-draws_lmbf_H0 <- lmBF(f_H0, data = prior_df, whichRandom = "Subject", rscaleFixed = r_scale, rscaleCont = r_scale, rscaleRandom = r_scale, posterior = TRUE, iterations = 2000)
+draws_lmbf_H1 <- lmBF(f_H1, data = prior_df, whichRandom = "Subject", rscaleFixed = r_scale_fixed, rscaleCont = r_scale_cont, rscaleRandom = r_scale_random, posterior = TRUE, iterations = 2000)
+draws_lmbf_H0 <- lmBF(f_H0, data = prior_df, whichRandom = "Subject", rscaleFixed = r_scale_fixed, rscaleCont = r_scale_cont, rscaleRandom = r_scale_random, posterior = TRUE, iterations = 2000)
 ```
 
 
 
 ```{r}
-sim_lmbf_ranef_posterior <- function(N, N_subjects, formula, df_prior, draws, r_scale_fixed = r_scale, r_scale_random = r_scale) {
+sim_lmbf_ranef_posterior <- function(N, N_subjects, formula, df_prior, draws, rscaleFixed = r_scale_fixed, rscaleRandom = r_scale_random) {
   draws <- posterior::merge_chains(draws)
   draw_id <- sample.int(posterior::ndraws(draws), size = 1)
 
@@ -148,7 +155,7 @@ sim_lmbf_ranef_posterior <- function(N, N_subjects, formula, df_prior, draws, r_
   ranef <- as.numeric(posterior::draws_of(rvars_chosen_draw$ranef))
   if(length(ranef) < N_subjects) {
     ranef_g <- as.numeric(draws[draw_id, "g_ranef"])
-    ranef_new <- rnorm(N_subjects - length(ranef)) * sqrt(ranef_g) * sigma * r_scale_random;
+    ranef_new <- rnorm(N_subjects - length(ranef)) * sqrt(ranef_g) * sigma * rscaleRandom;
     ranef <- c(ranef, ranef_new)
   }
       
@@ -159,7 +166,7 @@ sim_lmbf_ranef_posterior <- function(N, N_subjects, formula, df_prior, draws, r_
       mu = alpha,
       sig2 = sigma^2,
       `x1-A` = beta[1] / sqrt(2),
-      g_Subject = ranef_g * r_scale_random^2
+      g_Subject = ranef_g * rscaleRandom^2
     )
   for(i in 1:N_subjects) {
     variables[[paste0("Subject-", i)]] <- ranef[i]
@@ -173,7 +180,7 @@ sim_lmbf_ranef_posterior <- function(N, N_subjects, formula, df_prior, draws, r_
     variables = variables))
 }
 
-sim_lmbf_fixed_posterior <- function(N, N_subjects, formula, df_prior, draws, r_scale_fixed = r_scale) {
+sim_lmbf_fixed_posterior <- function(N, N_subjects, formula, df_prior, draws, rscaleFixed = r_scale_fixed) {
   draws <- posterior::merge_chains(draws)
   draw_id <- sample.int(posterior::ndraws(draws), size = 1)
 
@@ -230,14 +237,14 @@ ds_lmbf_post_H1 <- generate_datasets(SBC_generator_function(sim_lmbf_ranef_poste
 set.seed(21485654)
 ds_post <- SBC_datasets_for_bf(ds_lmbf_post_H0, ds_lmbf_post_H1, prob_H1 = prob1_prior)
 
-backend_H0 <- SBC_backend_lmBF(f_H0, rscaleFixed = r_scale, rscaleCont = r_scale, rscaleRandom = r_scale)
-backend_H1 <- SBC_backend_lmBF(f_H1, whichRandom = "Subject", rscaleFixed = r_scale, rscaleCont = r_scale, rscaleRandom = r_scale)
+backend_H0 <- SBC_backend_lmBF(f_H0, rscaleFixed = r_scale_fixed, rscaleCont = r_scale_cont, rscaleRandom = r_scale_random)
+backend_H1 <- SBC_backend_lmBF(f_H1, whichRandom = "Subject", rscaleFixed = r_scale_fixed, rscaleCont = r_scale_cont, rscaleRandom = r_scale_random)
 
 backend_post <- SBC_backend_extractBF_comparison(backend_H0, backend_H1)
 N_for_filename <- nrow(ds_post$generated[[1]])
 res_post <- compute_SBC(ds_post, backend_post, keep_fits = FALSE,
                             cache_mode = "results",
-                            cache_location = file.path(cache_dir, paste0("lmbf_ranef_post_presence_", N_for_filename, ".rds")))
+                            cache_location = file.path(cache_dir, paste0("lmbf_ranef_post_presence_", N_for_filename, scenario_mod, ".rds")))
 
 plot_ecdf_diff(res_post, combine_variables = combine_lmBF_arrays)
 bp_post <- binary_probabilities_from_stats(res_post$stats)
@@ -266,7 +273,7 @@ plot_sim_estimated(res_split$stats_H1)
 # Constant prior
 
 ```{r}
-sim_lmbf_ranef <- function(N, N_subjects, formula, alpha_sigma_prior, r_scale_fixed = r_scale, r_scale_random = r_scale) {
+sim_lmbf_ranef <- function(N, N_subjects, formula, alpha_sigma_prior, rscaleFixed = r_scale_fixed, rscaleRandom = r_scale_random) {
   if(is.function(alpha_sigma_prior)) {
     alpha_sigma <- alpha_sigma_prior()
   } else {
@@ -282,11 +289,11 @@ sim_lmbf_ranef <- function(N, N_subjects, formula, alpha_sigma_prior, r_scale_fi
   # Transform 0/1 to the contrasts used by lmBF
   X_prime <- -(X - 0.5) * sqrt(2)
 
-  beta_std <- rcauchy(K, scale = r_scale_fixed)
+  beta_std <- rcauchy(K, scale = rscaleFixed)
   beta <- beta_std * sigma
   
-  ranef_g <- r_scale_random^2 / rgamma(1, 0.5, scale = 0.5)
-    
+  ranef_g <- rscaleRandom^2 / rgamma(1, 0.5, scale = 0.5)
+
   ranef <- rnorm(N_subjects) * sqrt(ranef_g) * sigma
 
   mu <- alpha + X_prime %*% beta + ranef[df$Subject]
@@ -310,7 +317,7 @@ sim_lmbf_ranef <- function(N, N_subjects, formula, alpha_sigma_prior, r_scale_fi
     variables = variables))
 }
 
-sim_lmbf_fixed <- function(N, N_subjects, formula, alpha_sigma_prior, r_scale_fixed = r_scale) {
+sim_lmbf_fixed <- function(N, N_subjects, formula, alpha_sigma_prior, rscaleFixed = r_scale_fixed) {
   if(is.function(alpha_sigma_prior)) {
     alpha_sigma <- alpha_sigma_prior()
   } else {
@@ -326,7 +333,7 @@ sim_lmbf_fixed <- function(N, N_subjects, formula, alpha_sigma_prior, r_scale_fi
   # Transform 0/1 to the contrasts used by lmBF
   X_prime <- -(X - 0.5) * sqrt(2)
   
-  beta_std <- rcauchy(K, scale = r_scale_fixed)
+  beta_std <- rcauchy(K, scale = rscaleFixed)
   beta <- beta_std * sigma
   mu <- alpha + X_prime %*% beta
   df$y <- rnorm(N, mean = mu, sd = sigma)
@@ -351,7 +358,7 @@ sim_lmbf_fixed <- function(N, N_subjects, formula, alpha_sigma_prior, r_scale_fi
 set.seed(3485524)
 N <- 100
 N_subjects <- 15
-n_sims <- 1000
+n_sims <- 100
 constant_alpha_sigma <- list(alpha = 200, sigma = 50)
 ds_lmbf_constant_H0 <- generate_datasets(SBC_generator_function(sim_lmbf_fixed, N = N, N_subjects = N_subjects, formula = f_H0, alpha_sigma_prior = constant_alpha_sigma), n_sims = n_sims)
 ds_lmbf_constant_H1 <- generate_datasets(SBC_generator_function(sim_lmbf_ranef, N = N, N_subjects = N_subjects, formula = f_H0, alpha_sigma_prior = constant_alpha_sigma), n_sims = n_sims)
@@ -366,7 +373,7 @@ backend_constant <- SBC_backend_extractBF_comparison(backend_H0, backend_H1)
 N_for_filename <- nrow(ds_constant$generated[[1]])
 res_constant <- compute_SBC(ds_constant, backend_constant, keep_fits = FALSE,
                             cache_mode = "results",
-                            cache_location = file.path(cache_dir, paste0("lmbf_ranef_post_presence_constant_", N_for_filename, ".rds")))
+                            cache_location = file.path(cache_dir, paste0("lmbf_ranef_post_presence_constant_", N_for_filename, scenario_mod, ".rds")))
 
 plot_ecdf_diff(res_constant, combine_variables = combine_lmBF_arrays)
 bp_constant <- binary_probabilities_from_stats(res_constant$stats)

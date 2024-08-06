@@ -47,7 +47,8 @@ prior_model <- stan_model("stan/lmbf_linreg_bin.stan")
 f_H1 <- y ~ 1 + x1 + x2
 f_H0 <- y ~ 1 + x1
 
-r_scale <- sqrt(2) / 4
+#r_scale <- sqrt(2) / 4
+r_scale <- 1.5
 
 #set.seed(322155)
 # N_prior_data <- 400
@@ -175,7 +176,7 @@ backend_post <- SBC_backend_extractBF_comparison(backend_H0, backend_H1)
 N_for_filename <- nrow(ds_post$generated[[1]])
 res_post <- compute_SBC(ds_post, backend_post, keep_fits = FALSE,
                             cache_mode = "results",
-                            cache_location = file.path(cache_dir, paste0("lmbf_post_", N_for_filename, ".rds")))
+                            cache_location = file.path(cache_dir, paste0("lmbf_post_", N_for_filename, "_R_", round(r_scale, 2) * 100, ".rds")))
 
 plot_ecdf_diff(res_post)
 bp_post <- binary_probabilities_from_stats(res_post$stats)
@@ -268,7 +269,7 @@ backend_constant <- SBC_backend_extractBF_comparison(backend_H0, backend_H1)
 N_for_filename <- nrow(ds_constant$generated[[1]])
 res_constant <- compute_SBC(ds_constant, backend_constant, keep_fits = FALSE,
                             cache_mode = "results",
-                            cache_location = file.path(cache_dir, paste0("lmbf_post_constant_", N_for_filename, ".rds")))
+                            cache_location = file.path(cache_dir, paste0("lmbf_post_constant_", N_for_filename, "_R_", round(r_scale, 2) * 100, ".rds")))
 
 plot_ecdf_diff(res_constant)
 bp_constant <- binary_probabilities_from_stats(res_constant$stats)

@@ -54,21 +54,29 @@ base_data_big <- rbind(base_data_small,
                        base_data_small,
                        base_data_small,
                        base_data_small)
-table(crossed_base_data$subj)
+
 
 #crossed_base_data[,c("rew","trans","rew_trans")] <- model.matrix(~reward*transition, crossed_base_data)[,2:4]
 ```
 
 
 ```{r}
-base_pred <- "reward * transition"
-#base_pred <- "reward"
-f_H1 <- as.formula(paste0("y ~ 1 + ", base_pred, " +(1 + ",base_pred,")* subj + (1 + ",base_pred,")* item"))
-f_H0 <- as.formula(paste0("y ~ 1 + ", base_pred, " - reward +(1 + ",base_pred,")* subj + (1 + ",base_pred,")* item"))
+#base_pred <- "reward * transition"
+base_pred <- "reward"
+include_item <- FALSE
+if(include_item) {
+  f_H1 <- as.formula(paste0("y ~ 1 + ", base_pred, " +(1 + ",base_pred,")* subj + (1 + ",base_pred,")* item"))
+  f_H0 <- as.formula(paste0("y ~ 1 + ", base_pred, " - reward +(1 + ",base_pred,")* subj + (1 + ",base_pred,")* item"))
+  whichRandom <- c("subj", "item")
+} else {
+  f_H1 <- as.formula(paste0("y ~ 1 + ", base_pred, " +(1 + ",base_pred,")* subj"))
+  f_H0 <- as.formula(paste0("y ~ 1 + ", base_pred, " - reward +(1 + ",base_pred,")* subj"))
+  whichRandom <- c("subj")
+}
 
 
-backend_H0 <- SBC_backend_lmBF(f_H0, whichRandom = c("subj", "item"), rscaleFixed = 0.5, rscaleRandom = 1)
-backend_H1 <- SBC_backend_lmBF(f_H1, whichRandom = c("subj", "item"), rscaleFixed = 0.5, rscaleRandom = 1)
+backend_H0 <- SBC_backend_lmBF(f_H0, whichRandom = whichRandom, rscaleFixed = 0.5, rscaleRandom = 1)
+backend_H1 <- SBC_backend_lmBF(f_H1, whichRandom = whichRandom, rscaleFixed = 0.5, rscaleRandom = 1)
 
 backend_bf <- SBC_backend_extractBF_comparison(backend_H0, backend_H1)
 ```
@@ -141,7 +149,7 @@ sim_lmbf_2x2_crossed <- function(hypothesis, alpha_sigma_prior, base_data, r_sca
   col_ranef_labels <- c("", "reward:", "transition:", "reward:transition:")
   col_ranef_val_labels <- c("", "rew.&.", "comm.&.", "rew.&.comm.&.")
   
-  for(group in c("subj", "item")) {
+  for(group in whichRandom) {
     n_ranef <- length(levels(df[[group]]))
     ranef_index <- as.integer(df[[group]])
     
@@ -205,6 +213,8 @@ plot_sim_estimated(res_H0$stats, variables = res_H0$stats$variable[grepl("item-"
 confint(lm(mean ~ 0 + simulated_value, data = res_H0$stats %>% filter(grepl("^g_item$", variable))))
 confint(lm(mean ~ 0 + simulated_value, data = res_H0$stats %>% filter(grepl("^g_subj$", variable))))
 confint(lm(mean ~ 0 + simulated_value, data = res_H0$stats %>% filter(grepl("g_reward:transition:item", variable))))
+sqrt(2)
+sqrt(3)
 1/sqrt(2)
 ```
 

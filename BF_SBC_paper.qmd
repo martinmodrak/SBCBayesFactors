@@ -144,12 +144,14 @@ $$
 
 In other words, we can take the prior as a single draw from the correct posterior.
 
-The SBC identity cannot be checked directly, so we make two changes: 1) check on average over $Y$ and 2) use a test quantity $f: \Theta \times Y \to \mathbb{R} \cup \{-\infty,\infty\}$. For each simulation we then compare the ranks (sample SBC) or CDF (continuous SBC) of $f$ to discrete or continuous uniform distribution. Note that $f$ is used only for the ordering it implies. This is identical to checking that for all $0 < x < 1$, all posterior credible intervals of width $x$ contain the simulated value $x$ of the time.
+The exchangeability implied by the above, cannot be checked directly, so we make two changes: 1) check on average over $Y$ and 2) use a test quantity $f: \Theta \times Y \to \mathbb{R} \cup \{-\infty,\infty\}$. For each simulation we then compare the ranks (sample SBC) or CDF (continuous SBC) of $f$ to discrete or continuous uniform distribution. Note that $f$ is used only for the ordering it implies, so any totally-ordered set will do as the target of a test quantity. This is identical to checking that for all $0 < x < 1$, all posterior credible intervals of width $x$ contain the simulated value $x$ of the time.
 
 
 When ties are possible, we need to randomly break them.
 
-SBC for Bayes Factors is in fact the same as binary prediction calibration, i.e. considering the BMA supermodel, $\phi_\text{BMA}$ passes continuous SBC w.r.t. $f: \Theta_\text{BMA} \times Y \to \{0, \ldots K - 1\}, f((i, \theta_i), y) = i$ if and only if $\phi_\text{BMA}$ passes the prediction calibration check.
+We will also say that $\phi$ passes SBC w.r.t data-independent test quantity $f : \Theta \to \mathbb{R} \cup \{-\infty,\infty\}$ when it passes SBC w.r.t. $f^\prime : \forall y \in Y: f^\prime(\theta, y) = f(\theta)$.
+
+When $K = 2$, then SBC for Bayes Factors is in fact the same as binary prediction calibration, i.e. considering the BMA supermodel, $\phi_\text{BMA}$ passes continuous SBC w.r.t. $f: \Theta_\text{BMA} \to \{0, 1\}, f((i, \theta_i)) = i$ if and only if $\phi_\text{BMA}$ passes the prediction calibration check.
 
 More generally for any $f: \Theta \times Y \to \{0,1\}$, $\phi$ passes continuous SBC w.r.t $f$ if and only if:
 
@@ -173,11 +175,14 @@ $$
 \forall \theta: \pi_\text{prior}(\theta) = \int_Y \mathrm{d} y \: \phi_\text{post}(\theta |y)\int_\Theta \mathrm{d}\tilde\theta  \:  \pi_\text{obs}(y | \tilde\theta) \pi_\text{prior}(\tilde \theta)
 $$
 
-Typically not full joint distribution but univariate projections $f: \Theta \to \mathbb{R}$
+Typically not full joint distribution but univariate projections $f: \Theta \times Y \to \mathbb{R}$, although the literature so far only discusses data-independent test quantities. Similarly to SBC, we will also say that $\phi$ has the correct data-averaged posterior w.r.t. data-independent quantities.
 
-Alternatively, we can compare the moments of the prior to the moments of the data-averaged posterior (cite).
+Alternatively, we can compare the moments of the full prior to the moments of the full data-averaged posterior (cite).
 
-The method of Schad et al. is to check the data-averaged posterior criterion for the model index in the BMA supermodel (i.e. with $f: \Theta_\text{BMA} \to \{0, \ldots K - 1\}$ and $\forall (i, \theta_i) \in \Theta_\text{BMA}: f((i, \theta_i)) = i$).
+The method of Schad et al. is to check the data-averaged posterior criterion for the model index in the BMA supermodel (i.e. with $f: \Theta_\text{BMA} \to \{0, \ldots K - 1\}$ and $\forall (i, \theta_i) \in \Theta_\text{BMA}: f((i, \theta_i)) = i$), although they always look at just two model comparisons, making the response actually binary.
+
+Data-averaged posterior is repeatedly confused with SBC in the literature on model validation, but it is a fundamentally different check. In full generality, data-averaged posterior and SBC are not comparable --- there are test quantities and candidate posteriors that will pass one but fail the other. However, whenever $\phi$ passes SBC for a binary test quantity $f : \Theta \times Y \to \{0, 1\}$ (which is equivalent to having calibrated predictions for that quantity) it will also have the correct data-averaged posterior w.r.t. $f$. This follows, because correct calibration of a binary quantity implies correct average of that quantity, full proof in the Appendix.
+
 
 A fundamental limitation is that data-averaged posterior ignores the mapping between data and posteriors --- it can at best ensure that there exists a set of models $\mathbf{M^\prime} = \{\mathcal{M}^\prime_0, \ldots, \mathcal{M}^\prime_{K-1}\}$ over the data space $Y$, such that $\forall i \in \{0, \ldots,K-1\}, y \in Y: \phi_\text{BMA}(i|y) = \text{Pr}(\mathcal{M}^\prime_{K-1} |y)$ where the probability is with respect to $\mathbf{M^\prime}$. However, we can never rule out that the models implied by $\phi_\text{BMA}$ are very different from what we expected. Some examples of specific model mixups that can never be detected by data-averaged posterior check include:
 
@@ -190,7 +195,6 @@ Note that all of those problems are not implausible to arise from a simple progr
 
 Additional, but likely less relevant problem is that data-averaged posterior also won't necessarily flag assigning posterior probability of 0 to the correct model, which is immediately flagged by SBC/prediction calibration. In practice, posterior probability will almost never be computed as exactly zero, but a package may repeatedly assign very low probability to the correct model and still pass data-averaged posterior.
 
-Data-averaged posterior is repeatedly confused with SBC in the literature on model validation, but it is a fundamentally different check (e.g. because it is insensitive to some types of problems SBC is sensitive to as can be seen in the theoretical analysis above as well as practical examples below)
 
 
 #### Posterior SBC
