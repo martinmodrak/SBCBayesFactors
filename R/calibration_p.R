@@ -179,7 +179,37 @@ bentkus_p <- function(probs, mu = 0.5) {
   return(min(p_bound, 1))
 }
 
-ml_dap_p <- function(probs, mu = 0.5, B = 2000) {
+ml_dap_p <- function(probs, mu = 0.5, B = 2000, alternative = c("two.sided", "less", "greater")) {
+  alternative <- match.arg(alternative)
+  m_probs <- mean(probs)
+  if(m_probs == mu) {
+    return(1)
+  } else if(m_probs < mu) {
+    if(alternative == "less") {
+      return(1)
+    } else {
+      n <- length(probs)
+      e_probs <- c(probs, 1)
+      a <- (1 - mu)/(1 - m_probs)
+      p_probs <- c(rep(a/n, n), (1 - a))
+      bs_matrix <- matrix(nrow = B, ncol = n, sample(e_probs, prob = p_probs, size = B * n, replace = TRUE))
+      bs <- rowMeans(bs_matrix)
+      bs_stat <- abs(qlogis(bs) - qlogis(mu))
+      obs_stat <- abs(qlogis(m_probs) - qlogis(mu))
+      p_one_side <- mean(bs <= m_probs)
+      if(alternative == "two.sided") {
+        return(min(1, p_one_side * 2))
+      } else {
+        return(p_one_side)
+      }
+    }
+  } else {
+    alt_flip <- c("two.sided" = "two.sided", "less" = "greater", "greater" = "less")
+    return(ml_dap_p(probs = 1 - probs, mu = 1 - mu, B = B, alternative = alt_flip[alternative]))
+  }
+}
+
+ml_dap_p_old <- function(probs, mu = 0.5, B = 2000) {
   m_probs <- mean(probs)
   if(m_probs == mu) {
     return(1)
@@ -194,6 +224,6 @@ ml_dap_p <- function(probs, mu = 0.5, B = 2000) {
     obs_stat <- abs(qlogis(m_probs) - qlogis(mu))
     return(mean(bs_stat >= obs_stat))
   } else {
-    return(ml_dap_p(1 - probs, 1 - mu, B))
+    return(ml_dap_p_old(1 - probs, 1 - mu, B))
   }
 }

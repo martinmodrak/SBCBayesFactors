@@ -5,6 +5,7 @@ format: html
 
 ```{r setup}
 devtools::load_all()
+future::plan(future::multisession)
 ```
 
 
@@ -54,9 +55,9 @@ hist(ps)
 # DAP tests
 
 ```{r}
-test_DAP_single <- function(probs_generator, bias = 0, sd = 0, func = calibration_p_saddle, ...) {
+test_DAP_single <- function(probs_generator, bias = 0, sd = 0, func = calibration_p_saddle, n_rep = 100, ...) {
   dotlist <- list(...)
-  ps <- replicate(100, {
+  ps <- replicate(n_rep, {
     probs <- do.call(probs_generator, dotlist)
     if(bias != 0 || sd != 0) {
       probs <- plogis(
@@ -87,7 +88,14 @@ ps <- test_DAP_single(rbeta, shape1 = 2, shape2 = 1, n = 20, func = t_test_p)
 #hist(ps)
 mean(ps < 0.05)
 
-ps <- test_DAP_single(runif, n = 10, func = ml_dap_p)
+ps <- test_DAP_single(runif, n = 10, func = ml_dap_p, n_rep = 1000)
+mean(ps < 0.05)
+mean(ps < 0.1)
+hist(ps)
+
+ps <- test_DAP_single(runif, n = 30, func = ml_dap_p, n_rep = 1000)
+mean(ps < 0.05)
+mean(ps < 0.1)
 hist(ps)
 
 ps <- test_DAP_single(runif, n = 100, func = ml_dap_p)
@@ -107,10 +115,10 @@ hist(ps)
 ```
 
 ```{r}
-n <- 1000
+n <- 10
 #gen <- \() ifelse(runif(n = n) <= 0.5, 0.495, 0.505)
-mu_beta <- 0.51
-prec_beta <- 4
+mu_beta <- 0.25
+prec_beta <- 40
 gen <- \() rbeta(n = n, shape1 = mu_beta * prec_beta, shape2 = (1 - mu_beta)*prec_beta)
 ps <- test_DAP_single(gen, func = hoeffding_p)
 mean(ps < 0.05)
@@ -121,6 +129,53 @@ mean(ps < 0.05)
 ps <- test_DAP_single(gen, func = t_test_p)
 mean(ps < 0.05)
 ```
+
+ML DAP WIDTS - competitive with https://projecteuclid.org/journals/annals-of-statistics/volume-28/issue-3/Finite-sample-nonparametric-inference-and-large-sample-efficiency/10.1214/aos/1015951997.full (although the two points with n = 10 is a bit worse in our case)
+
+```{r}
+#gen <- \() runif(30)
+#true_mean <- 0.5
+
+gen <- \() rbinom(10, prob = 0.05, size = 1)
+true_mean <- 0.05
+
+# Skewed triangle
+# gen <- \() rbeta(10, 2, 1)
+# true_mean <- 2/3
+
+# Inverted triangle
+# n <- 30
+# gen <- \() dplyr::if_else(runif(n) < 0.5, 0.5 * rbeta(n, 1, 2), 0.5 + 0.5 * rbeta(n, 2, 1))
+# true_mean <- 0.5
+
+
+intervals <- future.apply::future_replicate(1000, {
+  probs <- gen()
+  
+  m_probs <- mean(probs)
+  if(m_probs == 0) {
+    lwr <- 0
+  } else {
+    lwr_func <- \(mu_lwr) SBCBayesFactors:::ml_dap_p(probs, mu_lwr, B = 100000, alternative = "less") - 0.025
+    lwr <- uniroot(lwr_func, c(0, m_probs), tol = 0.001)$root
+  }
+  
+  if(m_probs == 1) {
+    upr <- 1
+  } else {
+    upr_func <- \(mu_upr) SBCBayesFactors:::ml_dap_p(probs, mu_upr, B = 100000, alternative = "greater") - 0.025
+    upr <- uniroot(upr_func, c(m_probs, 1), tol = 0.001)$root
+  }
+  c(lwr, upr)
+})
+
+mean(intervals[1,] <= true_mean & intervals[2,] >= true_mean)
+mean(intervals[2,] - intervals[1,])
+sd(intervals[2,] - intervals[1,]) / sqrt(ncol(intervals))
+
+
+```
+
 
 
 ```{r}
