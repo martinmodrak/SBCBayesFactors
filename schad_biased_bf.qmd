@@ -165,6 +165,7 @@ backend_2step_H0_correct <- SBC_backend_cached(
 
 
 ```{r}
+set.seed(58455642)
 ds_2step <- SBC_datasets_for_bf(ds_2step_H0, ds_2step_H1)
 backend_2step <- SBC_backend_bridgesampling(backend_2step_H0_correct, backend_2step_H1)
 
