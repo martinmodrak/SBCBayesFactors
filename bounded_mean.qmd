@@ -1,0 +1,112 @@
+---
+title: "Bounded mean test"
+format: html
+editor: visual
+---
+
+## Literature
+
+
+A possibly oldest reference is Anderson 1969: [Confidence limits for the expected value of an arbitrary bounded random variable with a continuous distribution function](https://purl.stanford.edu/xc975jg9300)
+   - Via Diouf and doufour better than Hoeffding and Hora & Hora
+
+Bickel 1992: [Inference and Auditing: The Stringer Bound](https://doi.org/10.2307/1403650
+), discusses Stringer bound (strictly upper bound) and offers improvements.
+Uses a point mass at 1 in a special case, so related to my proposal, also uses the empirical distribution (of non-zero values). Claim one can move to two-sided bound. -> Need to look at citing papers (https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=Inference+and+Auditing%3A+The+Stringer+Bound&btnG=)
+Romano & Wolf claim that methods are not conservative and efficient.
+
+
+Diouf & Dufour 2005: [Improved Nonparametric Inference for the Mean of a Bounded Random Variable with Application to Poverty Measures](http://web.hec.ca/scse/articles/Diouf.pdf), improve the Anderson 1969 method and provide an additional set of intervals based on confidence bands for the CDF based on eCDF. There does not appear to be huge variability between the methods.
+
+Learned-Miller and Thomas 2019 [A new confidence
+interval for the mean of a bounded random variable](https://arxiv.org/pdf/1905.06208)
+Mix the ordered observations with an ordered vector of uniformly distributed random variables. Compute with Monte Carlo (easy). Looks very good!
+Phan & Learned-Miller claim this to be rediscovery of Gafke 2005.
+No proof of guaranteed coverage, only conjecture and proof for some special cases.
+TODO go through citing papers
+
+Thomas & Learned-Miller 2021: [Towards Practical Mean Bounds for Small Samples](http://proceedings.mlr.press/v139/phan21a/phan21a.pdf)
+Claim that Diouf & Dufour as well as Romano & Wolf do not dominate Anderson, while their technique does.
+Do not compare to Gafke/Learned-Miller & Thomas 2019 - presumably because it isn't better? But the method shares similarities - combine with a random uniform vector...
+Looks computationally mildly expensive (solve a linear program for each bootstrap sample).
+
+Romano & Wolf 2000: [Finite sample nonparametric inference and large sample efficiency](https://doi.org/10.1214/aos/1015951997) prove that there is an asymptotic upper bound on efficiency of any test in this setting and construct an (IMHO somewhat clunky) test that meets this asymptotic bound.
+
+
+Waudby-Smith & Aaditya Ramdas 2022: [Estimating means of bounded random variables by betting](https://arxiv.org/pdf/2010.09686) give both confidence intervals and confidence sequences, but focuse on the case of distributions over just $\{0,1\}$. Their bounds are valid for general distributions on $[0,1]$, but do not exploit the presence of intermediate values and are thus unnecessarily conservative.
+
+### Stack
+
+
+
+DiCiccio & Romano (1988). A review of bootstrap confidence intervals: 
+
+
+Fienberg, S. E., Neter, J., and Leitch, R. A. Estimating
+the total overstatement error in accounting populations.
+Journal of the American Statistical Association, 72(358):
+295–302, 1977.
+  Phan & Learned-Miller claim this is nice but computationally intractable
+
+Maurer, A. and Pontil, M. Empirical Bernstein bounds
+and sample variance penalization. In Proceedings of the
+Twenty-Second Annual Conference on Learning Theory,
+pp. 115–124, 2009.
+Thomas & Learned-Miller 
+
+Fishman - based on Hoeffding's inequality
+
+
+
+Gaffke, N. Three test statistics for a nonparametric one-
+sided hypothesis on the mean of a nonnegative vari-
+able. Mathematical Methods of Statistics, 14(4):451–467,
+2005.
+
+A modern take is Schlag's thesis [New Method for Constructing Exact Tests
+without Making any Assumptions](https://econ-papers.upf.edu/papers/1109.pdf)
+
+
+
+Sxhlag: asi dobry test https://econ-papers.upf.edu/papers/1109.pdf
+Jina verze: 
+https://www.researchgate.net/profile/Karl-Schlag/publication/265427716_Exact_Hypothesis_Testing_without_Assumptions_-_New_and_Old_Results_not_only_for_Experimental_Game_Theory_1/links/55e16cd308aecb1a7cc65feb/Exact-Hypothesis-Testing-without-Assumptions-New-and-Old-Results-not-only-for-Experimental-Game-Theory-1.pdf
+
+
+Another asymptotic bound: https://arxiv.org/pdf/2310.01547
+
+
+Nejasne 
+http://www.math.ru.nl/onderzoek/reports/rep2001/rep01_10.ps.gz
+
+Practical 2 step https://onlinelibrary.wiley.com/doi/pdf/10.3982/ECTA11011?casa_token=3I-dmkDbE_IAAAAA%3ATuOs04LCBlqG4-e-SRrgL2q4e11DBMOnMhXPcE2z1ffu9RTrlLAtyxsTJAsSf1XWY1QuYy37FbJO
+
+Upper bound nonneg https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=84b3baf918dd1fd3a5b7cdb68105957950a00b29
+
+https://www.sciencedirect.com/science/article/abs/pii/S0378375801002944?casa_token=Fw-mPiag4YUAAAAA:w4rin_UrWCwK5M3oRdzdBNe1areFdLtKgduD6kLTi5wQK06vKpcwKvmxLIYwSHTLWa8VbEL0
+
+
+
+Contact sets, least favorable case: https://www.cambridge.org/core/services/aop-cambridge-core/content/view/3A6B8BE6EDBE5E62646C144626D02446/S0266466617000329a.pdf/testing-for-a-general-class-of-functional-inequalities.pdf
+
+Refs in 
+https://www.sciencedirect.com/science/article/abs/pii/S2452306222000119?casa_token=DYTiPMlAUkgAAAAA:njrxR_c84ed1-AjhqkOOBMWdyDTOf67js4bLMd--FVjPevhlv8RipSxQYGhTTUZfO4inlRY4
+
+Estimates by betting + discussion: https://arxiv.org/pdf/2010.09686
+
+Jen malinko lepsi nez Waudby Smith: https://ieeexplore.ieee.org/ielx7/18/10375320/10315047.pdf?tp=&arnumber=10315047&isnumber=10375320&ref=aHR0cHM6Ly9zY2hvbGFyLmdvb2dsZS5jb20v
+Tez https://arxiv.org/pdf/2402.03683
+
+Saddlepoint bootstrap https://www.jstor.org/stable/pdf/2336592.pdf?casa_token=EP7g0sqLYiIAAAAA:zANDxq_1hOkCwFovD7cSm8kOYDVfnkUwM2PUDvENamJ0peDpYBDCqhuPRv2wqsPUfsZSmB01rbZSVEmfQDm6uKq583XywNpZs_r91va8NZjvDGQQ0tw
+
+### Unprocessed, couldn't find
+J. A. HORA and S. C. HORA. Nonparametric bounds for errors in dollar
+unit sampling based on the cumulative distribution function. Proceedings
+of the Decision Sciences Institute pp. 115—117 (1990).
+- Diouf & Dufour explain, claim far worse than asymptotic width (also symmetric around mean, which sounds bad).
+
+V. K. SUTTON and D. M.YOUNG. A comparison of distribution-free
+confidence interval methods for estimating the mean of a random variable
+with bounded support. Baylor University, Department of Information Sys-
+tems (1997).
+-- Diouf & Dufour claim they find Fishman the best, Hora and Hora very wide.
