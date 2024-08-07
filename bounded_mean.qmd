@@ -12,8 +12,7 @@ A possibly oldest reference is Anderson 1969: [Confidence limits for the expecte
 
 Bickel 1992: [Inference and Auditing: The Stringer Bound](https://doi.org/10.2307/1403650
 ), discusses Stringer bound (strictly upper bound) and offers improvements.
-Uses a point mass at 1 in a special case, so related to my proposal, also uses the empirical distribution (of non-zero values). Claim one can move to two-sided bound. -> Need to look at citing papers (https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=Inference+and+Auditing%3A+The+Stringer+Bound&btnG=)
-Romano & Wolf claim that methods are not conservative and efficient.
+Uses a point mass at 1 in a special case, so related to my proposal, also uses the empirical distribution (of non-zero values). Claim one can move to two-sided bound. -> Need to Romano & Wolf claim that methods are not conservative and efficient.
 
 
 Diouf & Dufour 2005: [Improved Nonparametric Inference for the Mean of a Bounded Random Variable with Application to Poverty Measures](http://web.hec.ca/scse/articles/Diouf.pdf), improve the Anderson 1969 method and provide an additional set of intervals based on confidence bands for the CDF based on eCDF. There does not appear to be huge variability between the methods.
@@ -25,7 +24,7 @@ Phan & Learned-Miller claim this to be rediscovery of Gafke 2005.
 No proof of guaranteed coverage, only conjecture and proof for some special cases.
 TODO go through citing papers
 
-Thomas & Learned-Miller 2021: [Towards Practical Mean Bounds for Small Samples](http://proceedings.mlr.press/v139/phan21a/phan21a.pdf)
+Phan & Thomas & Learned-Miller 2021: [Towards Practical Mean Bounds for Small Samples](http://proceedings.mlr.press/v139/phan21a/phan21a.pdf)
 Claim that Diouf & Dufour as well as Romano & Wolf do not dominate Anderson, while their technique does.
 Do not compare to Gafke/Learned-Miller & Thomas 2019 - presumably because it isn't better? But the method shares similarities - combine with a random uniform vector...
 Looks computationally mildly expensive (solve a linear program for each bootstrap sample).
@@ -34,9 +33,19 @@ Romano & Wolf 2000: [Finite sample nonparametric inference and large sample effi
 
 
 Waudby-Smith & Aaditya Ramdas 2022: [Estimating means of bounded random variables by betting](https://arxiv.org/pdf/2010.09686) give both confidence intervals and confidence sequences, but focuse on the case of distributions over just $\{0,1\}$. Their bounds are valid for general distributions on $[0,1]$, but do not exploit the presence of intermediate values and are thus unnecessarily conservative.
+Discussion by Li, Li & Dai does some numerical comparisons. Supplementary Fig 16 has comparison to Phan & Thomas & Learned-Miller 2021 (favorable to Waudby-Smith).
+Basically admit Gafke/Learned-Miller and Thomas 2019 are much better.
+
+Austern & Mackey 2024: [Efficient Concentration with Gaussian
+Approximation](https://arxiv.org/pdf/2208.09922). Close to asymptotic performance, but use pretty large n in experiments. Claim to outperform Romano & Wolf 202.
+
+Bentkus's concentration result - https://www.jstor.org/stable/3481693 
+
 
 ### Stack
 
+Orabona & Jun 2022, [Tight Concentrations and Confidence Sequences from the Regret of Universal Portfolio](https://arxiv.org/abs/2208.09922)
+A new concentration inequality, call it  PRECiSE-A-CO96. Seems like minor improvement over Waudyb-Smith. Code in Matlab :-(
 
 
 DiCiccio & Romano (1988). A review of bootstrap confidence intervals: 
@@ -46,13 +55,13 @@ Fienberg, S. E., Neter, J., and Leitch, R. A. Estimating
 the total overstatement error in accounting populations.
 Journal of the American Statistical Association, 72(358):
 295–302, 1977.
-  Phan & Learned-Miller claim this is nice but computationally intractable
+  Phan & Thomas & Learned-Miller 2021 claim this is nice but computationally intractable
 
 Maurer, A. and Pontil, M. Empirical Bernstein bounds
 and sample variance penalization. In Proceedings of the
 Twenty-Second Annual Conference on Learning Theory,
 pp. 115–124, 2009.
-Thomas & Learned-Miller 
+Phan & Thomas & Learned-Miller 2021 claim this works poorly 
 
 Fishman - based on Hoeffding's inequality
 
