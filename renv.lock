@@ -884,7 +884,7 @@
     },
     "foreign": {
       "Package": "foreign",
-      "Version": "0.8-85",
+      "Version": "0.8-87",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -892,8 +892,7 @@
         "methods",
         "stats",
         "utils"
-      ],
-      "Hash": "26a24dde1722321b78f10d3bf42538d6"
+      ]
     },
     "fs": {
       "Package": "fs",
@@ -1410,9 +1409,9 @@
     },
     "loo": {
       "Package": "loo",
-      "Version": "2.7.0.9000",
+      "Version": "2.8.0",
       "Source": "Repository",
-      "Repository": "https://stan-dev.r-universe.dev",
+      "Repository": "CRAN",
       "Requirements": [
         "R",
         "checkmate",
@@ -1420,8 +1419,7 @@
         "parallel",
         "posterior",
         "stats"
-      ],
-      "Hash": "3ad9ae849bbade5fe9c6d71a0257dfeb"
+      ]
     },
     "magrittr": {
       "Package": "magrittr",
@@ -1753,25 +1751,9 @@
     },
     "posterior": {
       "Package": "posterior",
-      "Version": "1.5.0.9000",
+      "Version": "1.5.0",
       "Source": "Repository",
-      "Repository": "https://stan-dev.r-universe.dev",
-      "Requirements": [
-        "R",
-        "abind",
-        "checkmate",
-        "distributional",
-        "matrixStats",
-        "methods",
-        "parallel",
-        "pillar",
-        "rlang",
-        "stats",
-        "tensorA",
-        "tibble",
-        "vctrs"
-      ],
-      "Hash": "827227cf5572fcdfbb932cc8e58a6f7b"
+      "Repository": "CRAN"
     },
     "pracma": {
       "Package": "pracma",
@@ -2059,7 +2041,7 @@
     },
     "rpart": {
       "Package": "rpart",
-      "Version": "4.1.21",
+      "Version": "4.1.23",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [

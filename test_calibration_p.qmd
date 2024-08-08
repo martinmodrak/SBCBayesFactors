@@ -133,6 +133,29 @@ mean(ps < 0.05)
 ML DAP WIDTS - competitive with https://projecteuclid.org/journals/annals-of-statistics/volume-28/issue-3/Finite-sample-nonparametric-inference-and-large-sample-efficiency/10.1214/aos/1015951997.full (although the two points with n = 10 is a bit worse in our case)
 
 ```{r}
+ml_dap_ci <- function(probs, B = 10000) {
+  m_probs <- mean(probs)
+  if(m_probs == 0) {
+    lwr <- 0
+  } else {
+    #lwr_func <- \(mu_lwr) SBCBayesFactors:::ml_dap_p(probs, mu_lwr, B = B, alternative = "less") - 0.025
+    lwr_func <- \(mu_lwr) ml_dap_p(probs, mu_lwr, B = B, alternative = "less") - 0.025
+    lwr <- uniroot(lwr_func, c(0, m_probs), tol = 0.001)$root
+  }
+  
+  if(m_probs == 1) {
+    upr <- 1
+  } else {
+    #upr_func <- \(mu_upr) SBCBayesFactors:::ml_dap_p(probs, mu_upr, B = B, alternative = "greater") - 0.025
+    upr_func <- \(mu_upr) ml_dap_p(probs, mu_upr, B = B, alternative = "greater") - 0.025
+    upr <- uniroot(upr_func, c(m_probs, 1), tol = 0.001)$root
+  }
+  c(lwr, upr)  
+}
+```
+
+
+```{r}
 #gen <- \() runif(30)
 #true_mean <- 0.5
 
@@ -152,21 +175,7 @@ true_mean <- 0.05
 intervals <- future.apply::future_replicate(1000, {
   probs <- gen()
   
-  m_probs <- mean(probs)
-  if(m_probs == 0) {
-    lwr <- 0
-  } else {
-    lwr_func <- \(mu_lwr) SBCBayesFactors:::ml_dap_p(probs, mu_lwr, B = 100000, alternative = "less") - 0.025
-    lwr <- uniroot(lwr_func, c(0, m_probs), tol = 0.001)$root
-  }
-  
-  if(m_probs == 1) {
-    upr <- 1
-  } else {
-    upr_func <- \(mu_upr) SBCBayesFactors:::ml_dap_p(probs, mu_upr, B = 100000, alternative = "greater") - 0.025
-    upr <- uniroot(upr_func, c(m_probs, 1), tol = 0.001)$root
-  }
-  c(lwr, upr)
+  ml_dap_ci(probs)
 })
 
 mean(intervals[1,] <= true_mean & intervals[2,] >= true_mean)
@@ -177,6 +186,136 @@ sd(intervals[2,] - intervals[1,]) / sqrt(ncol(intervals))
 ```
 
 
+```{r}
+aug_boot_ci <- function(probs, B = 10000) {
+  B_lwr <- matrix(sample(c(0, probs), size = B * (length(probs) + 1), replace = TRUE), nrow = B)
+  lwr <- quantile(rowMeans(B_lwr), prob = 0.025)
+  B_upr <- matrix(sample(c(1, probs), size = B * (length(probs) + 1), replace = TRUE), nrow = B)
+  upr <- quantile(rowMeans(B_upr), prob = 0.975)
+  as.numeric(c(lwr, upr))
+}
+```
+
+
+```{r}
+# gen <- \() runif(10)
+# true_mean <- 0.5
+
+#Two-point
+gen <- \() rbinom(10, prob = 0.05, size = 1)
+true_mean <- 0.05
+
+# Skewed triangle
+# gen <- \() rbeta(10, 2, 1)
+# true_mean <- 2/3
+
+# Inverted triangle
+# n <- 30
+# gen <- \() dplyr::if_else(runif(n) < 0.5, 0.5 * rbeta(n, 1, 2), 0.5 + 0.5 * rbeta(n, 2, 1))
+# true_mean <- 0.5
+
+
+intervals <- replicate(1000, {
+  probs <- gen()
+  aug_boot_ci(probs)
+})
+
+mean(intervals[1,] <= true_mean & intervals[2,] >= true_mean)
+mean(intervals[2,] - intervals[1,])
+sd(intervals[2,] - intervals[1,]) / sqrt(ncol(intervals))
+
+
+```
+
+
+
+
+```{r}
+gaffke_ci <- function(probs, B = 10000) {
+  # u_diff <- MCMCpack::rdirichlet(B, alpha = rep(1, length(probs) + 1))
+  # u <- apply(u_diff[,1:length(probs)], MARGIN = 1, cumsum)
+  # 
+  # z_lwr <- diff(c(sort(1 - probs), 1))
+  # m_matrix_lwr <- sweep(u, MARGIN = 1, STATS = z_lwr, FUN = "*")
+  # m_lwr <- 1 - colSums(m_matrix)
+  # 
+  # z_upr <- diff(c(sort(probs), 1))
+  # m_matrix_upr <- sweep(u, MARGIN = 1, STATS = z_upr, FUN = "*")
+  # m_upr <- 1 - colSums(m_matrix)
+  # 
+  # 1 - quantile(m_lwr, 1 - 0.975)
+  # quantile(m_upr, 0.975)
+  # as.numeric(quantile(m_upr, c(0.025,0.975)))
+  # 
+  
+
+  
+  
+  u_diff <- MCMCpack::rdirichlet(B, alpha = rep(1, length(probs) + 1))
+
+  z_upr <- c(sort(probs), 1)
+  m_matrix_upr <- sweep(u_diff, MARGIN = 2, STATS = z_upr, FUN = "*")
+  m_upr <- rowSums(m_matrix_upr)
+
+  z_lwr <- c(sort(1 - probs), 1)
+  m_matrix_lwr <- sweep(u_diff, MARGIN = 2, STATS = z_lwr, FUN = "*")
+  m_lwr <- rowSums(m_matrix_lwr)
+
+  as.numeric(c(
+    1 - quantile(m_lwr, probs = 0.975),
+    quantile(m_upr, probs = 0.975)
+    ))
+}
+
+
+#probs <- rbinom(30, prob = 0.05, size = 1)
+#probs <- runif(30)
+#probs <-  rbeta(27, 2, 1)
+ n <- 30
+ #probs <-  dplyr::if_else(runif(n) < 0.5, 0.5 * rbeta(n, 1, 2), 0.5 + 0.5 * rbeta(n, 2, 1))
+probs <-  dplyr::if_else(runif(n) < 0.5, 0, 0.5 + 0.5 * rbeta(n, 2, 1))
+
+
+gaffke_ci(probs, B = 100000)
+ml_dap_ci(probs, B = 100000)
+aug_boot_ci(probs, B = 100000)
+```
+
+
+```{r}
+microbenchmark::microbenchmark(gaffke_ci(probs), aug_boot_ci(probs), ml_dap_ci(probs), setup = probs <- rbeta(27,2,1))
+```
+
+
+```{r}
+# gen <- \() runif(10)
+# true_mean <- 0.5
+
+#Two-point
+# gen <- \() rbinom(10, prob = 0.05, size = 1)
+# true_mean <- 0.05
+
+# Skewed triangle
+gen <- \() rbeta(10, 2, 1)
+true_mean <- 2/3
+
+# Inverted triangle
+# n <- 30
+# gen <- \() dplyr::if_else(runif(n) < 0.5, 0.5 * rbeta(n, 1, 2), 0.5 + 0.5 * rbeta(n, 2, 1))
+# true_mean <- 0.5
+
+
+intervals <- future.apply::future_replicate(1000, {
+  probs <- gen()
+  gaffke_ci(probs, B = 10000)
+})
+
+mean(intervals[1,] <= true_mean & intervals[2,] >= true_mean)
+mean(intervals[2,] - intervals[1,])
+sd(intervals[2,] - intervals[1,]) / sqrt(ncol(intervals))
+
+
+```
 
 ```{r}
 func <- hoeffding_p
