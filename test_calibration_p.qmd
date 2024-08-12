@@ -4,6 +4,9 @@ format: html
 ---
 
 ```{r setup}
+library(ggplot2)
+library(dplyr)
+theme_set(theme_minimal())
 devtools::load_all()
 future::plan(future::multisession)
 ```
@@ -138,16 +141,14 @@ ml_dap_ci <- function(probs, B = 10000) {
   if(m_probs == 0) {
     lwr <- 0
   } else {
-    #lwr_func <- \(mu_lwr) SBCBayesFactors:::ml_dap_p(probs, mu_lwr, B = B, alternative = "less") - 0.025
-    lwr_func <- \(mu_lwr) ml_dap_p(probs, mu_lwr, B = B, alternative = "less") - 0.025
+    lwr_func <- \(mu_lwr) SBCBayesFactors:::ml_dap_p(probs, mu_lwr, B = B, alternative = "less") - 0.025
     lwr <- uniroot(lwr_func, c(0, m_probs), tol = 0.001)$root
   }
   
   if(m_probs == 1) {
     upr <- 1
   } else {
-    #upr_func <- \(mu_upr) SBCBayesFactors:::ml_dap_p(probs, mu_upr, B = B, alternative = "greater") - 0.025
-    upr_func <- \(mu_upr) ml_dap_p(probs, mu_upr, B = B, alternative = "greater") - 0.025
+    upr_func <- \(mu_upr) SBCBayesFactors:::ml_dap_p(probs, mu_upr, B = B, alternative = "greater") - 0.025
     upr <- uniroot(upr_func, c(m_probs, 1), tol = 0.001)$root
   }
   c(lwr, upr)  
@@ -159,8 +160,9 @@ ml_dap_ci <- function(probs, B = 10000) {
 #gen <- \() runif(30)
 #true_mean <- 0.5
 
-gen <- \() rbinom(10, prob = 0.05, size = 1)
-true_mean <- 0.05
+# Two point
+# gen <- \() rbinom(10, prob = 0.05, size = 1)
+# true_mean <- 0.05
 
 # Skewed triangle
 # gen <- \() rbeta(10, 2, 1)
@@ -170,6 +172,11 @@ true_mean <- 0.05
 # n <- 30
 # gen <- \() dplyr::if_else(runif(n) < 0.5, 0.5 * rbeta(n, 1, 2), 0.5 + 0.5 * rbeta(n, 2, 1))
 # true_mean <- 0.5
+
+# Extra
+n <- 30
+gen <- \() dplyr::if_else(runif(n) < 0.5, 0.1, 0.5 + 0.5 * rbeta(n, 2, 1))
+true_mean <- 0.5 * (0.1 + 0.5 + 1/3)
 
 
 intervals <- future.apply::future_replicate(1000, {
@@ -196,14 +203,27 @@ aug_boot_ci <- function(probs, B = 10000) {
 }
 ```
 
+ML + Gaffke interval is non-trivial even for a single observation, aug_boot is not:
+
+```{r}
+ml_dap_ci(0, B = 100000)
+gaffke_ci(0, B = 100000)
+aug_boot_ci(0, B = 100000)
+
+ml_dap_ci(0.5, B = 100000)
+gaffke_ci(0.5, B = 100000)
+aug_boot_ci(0.5, B = 100000)
+
+```
+
 
 ```{r}
 # gen <- \() runif(10)
 # true_mean <- 0.5
 
 #Two-point
-gen <- \() rbinom(10, prob = 0.05, size = 1)
-true_mean <- 0.05
+# gen <- \() rbinom(2, prob = 0.5, size = 1)
+# true_mean <- 0.05
 
 # Skewed triangle
 # gen <- \() rbeta(10, 2, 1)
@@ -214,6 +234,8 @@ true_mean <- 0.05
 # gen <- \() dplyr::if_else(runif(n) < 0.5, 0.5 * rbeta(n, 1, 2), 0.5 + 0.5 * rbeta(n, 2, 1))
 # true_mean <- 0.5
 
+gen <- \() rbeta(1, 5, 1)
+true_mean <- 5/6
 
 intervals <- replicate(1000, {
   probs <- gen()
@@ -231,7 +253,7 @@ sd(intervals[2,] - intervals[1,]) / sqrt(ncol(intervals))
 
 
 ```{r}
-gaffke_ci <- function(probs, B = 10000) {
+gaffke_ci <- function(probs, B = 10000, alpha = 0.05) {
   # u_diff <- MCMCpack::rdirichlet(B, alpha = rep(1, length(probs) + 1))
   # u <- apply(u_diff[,1:length(probs)], MARGIN = 1, cumsum)
   # 
@@ -262,23 +284,81 @@ gaffke_ci <- function(probs, B = 10000) {
   m_lwr <- rowSums(m_matrix_lwr)
 
   as.numeric(c(
-    1 - quantile(m_lwr, probs = 0.975),
-    quantile(m_upr, probs = 0.975)
+    1 - quantile(m_lwr, probs = 1 - alpha / 2),
+    quantile(m_upr, probs = 1 - alpha / 2)
     ))
 }
 
 
-#probs <- rbinom(30, prob = 0.05, size = 1)
-#probs <- runif(30)
+#probs <- rbinom(10, prob = 0.05, size = 1)
+probs <- runif(30)
 #probs <-  rbeta(27, 2, 1)
- n <- 30
- #probs <-  dplyr::if_else(runif(n) < 0.5, 0.5 * rbeta(n, 1, 2), 0.5 + 0.5 * rbeta(n, 2, 1))
-probs <-  dplyr::if_else(runif(n) < 0.5, 0, 0.5 + 0.5 * rbeta(n, 2, 1))
+#  n <- 30
+#  #probs <-  dplyr::if_else(runif(n) < 0.5, 0.5 * rbeta(n, 1, 2), 0.5 + 0.5 * rbeta(n, 2, 1))
+# probs <-  dplyr::if_else(runif(n) < 0.5, 0, 0.5 + 0.5 * rbeta(n, 2, 1))
 
 
 gaffke_ci(probs, B = 100000)
 ml_dap_ci(probs, B = 100000)
 aug_boot_ci(probs, B = 100000)
+t.test(probs)$conf.int
+```
+
+
+## npExact
+
+```{r}
+npExact::npMeanSingle(probs, mu = 0.5)$probrej
+ml_dap_p(probs, mu = 0.5)
+```
+
+
+```{r}
+npExact_ci <- function(probs, alpha = 0.05) {
+  if(npExact::npMeanSingle(probs, mu = 1e-6, alpha = alpha)$rejection) {
+    low_l <- 0
+    low_u <- mean(probs)
+    repeat {
+      mid <- 0.5 * (low_l + low_u)
+      reject_mid <- npExact::npMeanSingle(probs, mu = mid, alpha = alpha)$rejection
+      if(reject_mid) {
+        low_l <- mid
+      } else {
+        low_u <- mid
+      }
+      if(low_u - low_l < 1e-3) {
+        low <- low_l
+        break
+      }
+    }
+  } else {
+    low <- 0
+  }
+  
+  if(npExact::npMeanSingle(probs, mu = 1 - 1e-6, alpha = alpha)$rejection) {
+    high_l <- mean(probs)
+    high_u <- 1
+    repeat {
+      mid <- 0.5 * (high_l + high_u)
+      reject_mid <- npExact::npMeanSingle(probs, mu = mid, alpha = alpha)$rejection
+      if(reject_mid) {
+        high_u <- mid
+      } else {
+        high_l <- mid
+      }
+      if(high_u - high_l < 1e-3) {
+        high <- high_l
+        break
+      }
+    }
+  } else {
+    high <- 0
+  }  
+  c(low, high)
+}
+
+npExact_ci(probs)
+ml_dap_ci(probs)
 ```
 
 
@@ -316,6 +396,50 @@ sd(intervals[2,] - intervals[1,]) / sqrt(ncol(intervals))
 
 
 ```
+
+
+Trying to reconstruct (parts of) Figure 10 from Learned-Miller and Thomas 2019
+
+```{r}
+mean_upper_bound_gaffke_ <- function(n, gen, alpha = 0.05) {
+  if(n <= 5) {
+    cis <- replicate(1000, gaffke_ci(gen(n), B = 10000, alpha = 2*alpha))
+  } else {
+    if(n < 50) {
+      chunk.size <- 500/n
+    } else {
+      chunk.size <- NULL
+    }
+    cis <- future.apply::future_replicate(1000, gaffke_ci(gen(n), B = 10000, alpha = 2*alpha), future.chunk.size = chunk.size)
+  }
+  mean(cis[2,])
+}
+mean_upper_bound_gaffke <- memoise::memoise(mean_upper_bound_gaffke_)
+```
+
+
+```{r}
+n <- c(2, 5, 10, 20, 50, 100, 200, 500, 1000)#unique(round(10^seq(1,3, length.out = 20)))
+
+gen <- \(n) rbeta(n, 1, 10)
+
+
+
+ubs <- numeric(length(n))
+for(i in seq_along(n)) {
+  cat(i, " - ", n[i] , "\n")
+  ubs[i] <- mean_upper_bound_gaffke(n[i], gen)
+}
+```
+
+```{r}
+ggplot(data.frame(n = n, ub = ubs), aes(x = n, y = ub)) + geom_hline(yintercept = 1/11) +  geom_line(color = "blue") + scale_x_log10() + scale_y_continuous(breaks = seq(0,1, by = 0.2)) + expand_limits(y = c(0,1))
+```
+
+```{r}
+data.frame(n = n, ub = ubs)
+```
+
 
 ```{r}
 func <- hoeffding_p

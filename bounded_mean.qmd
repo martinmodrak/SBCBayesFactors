@@ -12,55 +12,47 @@ Bickel 1992: [Inference and Auditing: The Stringer Bound](https://doi.org/10.230
 
 Diouf & Dufour 2005: [Improved Nonparametric Inference for the Mean of a Bounded Random Variable with Application to Poverty Measures](http://web.hec.ca/scse/articles/Diouf.pdf), improve the Anderson 1969 method and provide an additional set of intervals based on confidence bands for the CDF based on eCDF. There does not appear to be huge variability between the methods.
 
-Learned-Miller and Thomas 2019 [A new confidence interval for the mean of a bounded random variable](https://arxiv.org/pdf/1905.06208) Mix the ordered observations with an ordered vector of uniformly distributed random variables. Compute with Monte Carlo (easy). Looks very good! Phan & Learned-Miller claim this to be rediscovery of Gafke 2005. No proof of guaranteed coverage, only conjecture and proof for some special cases. TODO go through citing papers
+Learned-Miller and Thomas 2019 [A new confidence interval for the mean of a bounded random variable](https://arxiv.org/pdf/1905.06208) Mix the ordered observations with an ordered vector of uniformly distributed random variables. Compute with Monte Carlo (easy). Looks very good! Phan & Learned-Miller claim this to be rediscovery of Gaffke 2005. No proof of guaranteed coverage, only conjecture and proof for some special cases. TODO go through citing papers
 
-Phan & Thomas & Learned-Miller 2021: [Towards Practical Mean Bounds for Small Samples](http://proceedings.mlr.press/v139/phan21a/phan21a.pdf) Claim that Diouf & Dufour as well as Romano & Wolf do not dominate Anderson, while their technique does. Do not compare to Gafke/Learned-Miller & Thomas 2019 - presumably because it isn't better? But the method shares similarities - combine with a random uniform vector... Looks computationally mildly expensive (solve a linear program for each bootstrap sample).
+  Gaffke, N. Three test statistics for a nonparametric one- sided hypothesis on the mean of a nonnegative variable. Mathematical Methods of Statistics, 14(4):451–467, 2005. Matches the alg in Learned-Miller & Thomas, less evaluation.
+
+
+Phan & Thomas & Learned-Miller 2021: [Towards Practical Mean Bounds for Small Samples](http://proceedings.mlr.press/v139/phan21a/phan21a.pdf) Claim that Diouf & Dufour as well as Romano & Wolf do not dominate Anderson, while their technique does. Do not compare to Gaffke/Learned-Miller & Thomas 2019 - presumably because it isn't better? But the method shares similarities - combine with a random uniform vector... Looks computationally mildly expensive (solve a linear program for each bootstrap sample).
 
 Romano & Wolf 2000: [Finite sample nonparametric inference and large sample efficiency](https://doi.org/10.1214/aos/1015951997) prove that there is an asymptotic upper bound on efficiency of any test in this setting and construct an (IMHO somewhat clunky) test that meets this asymptotic bound.
 
 Waudby-Smith & Aaditya Ramdas 2022: [Estimating means of bounded random variables by betting](https://arxiv.org/pdf/2010.09686) give both confidence intervals and confidence sequences, but focuse on the case of distributions over just $\{0,1\}$. Their bounds are valid for general distributions on $[0,1]$, but do not exploit the presence of intermediate values and are thus unnecessarily conservative. Discussion by Li, Li & Dai does some numerical comparisons. Supplementary Fig 16 has comparison to Phan & Thomas & Learned-Miller 2021 (favorable to Waudby-Smith). Basically admit Gafke/Learned-Miller and Thomas 2019 are much better.
 
+Schlag's thesis [New Method for Constructing Exact Tests without Making any Assumptions](https://econ-papers.upf.edu/papers/1109.pdf)  Numerical simulations lacking, but seems that with n = 60 still has about 1.5 times wider CI than asymptotic (Table 1).
+There's also a working paper Schlag 2013 [Exact Hypothesis Testing without Assumptions -New and Old Results not only for Experimental Game Theory](https://homepage.univie.ac.at/karl.schlag/research/statistics/exacthypothesistesting8.pdf) 
+Repeatedly randomize to {0,1} and use a test on binary outcomes, then average. Just a test, no CI (But can be inverted). Implemented in the `npExact` R package.
+
 Austern & Mackey 2024: [Efficient Concentration with Gaussian Approximation](https://arxiv.org/pdf/2208.09922). Close to asymptotic performance, but use pretty large n in experiments. Claim to outperform Romano & Wolf 202.
 
-Bentkus's concentration result - https://www.jstor.org/stable/3481693
+Orabona & Jun 2022, [Tight Concentrations and Confidence Sequences from the Regret of Universal Portfolio](https://arxiv.org/abs/2208.09922) A new concentration inequality, call it PRECiSE-A-CO96. Seems like minor improvement over Waudyb-Smith. Code in Matlab :-(. Require N > 10000 to come close to asymptotic.
 
-### Stack
-
-Orabona & Jun 2022, [Tight Concentrations and Confidence Sequences from the Regret of Universal Portfolio](https://arxiv.org/abs/2208.09922) A new concentration inequality, call it PRECiSE-A-CO96. Seems like minor improvement over Waudyb-Smith. Code in Matlab :-(
-
-DiCiccio & Romano (1988). A review of bootstrap confidence intervals:
 
 Fienberg, S. E., Neter, J., and Leitch, R. A. Estimating the total overstatement error in accounting populations. Journal of the American Statistical Association, 72(358): 295–302, 1977. Phan & Thomas & Learned-Miller 2021 claim this is nice but computationally intractable
+Estimates multinomial uncertainty for bins of (rounded) values and then combines those together to form confidence for the mean.
+
+
+Wang, W., & Zhao, L. H. (2003). [Nonparametric tests for the mean of a non-negative population.](https://doi.org/10.1016/s0378-3758(01)00294-4). Looks just at an upper bound and constructs a uniformly most powerful test for $n \leq 2$. So maybe a good benchmark? (Theorem 5.2 and equation 5.3 seem to describe the test) 
+
+Shekhar & Ramdas 2023: [On the near-optimality of betting confidence sets
+for bounded means](https://arxiv.org/pdf/2310.01547). Another asymptotic bound on test efficiency, but with respect to a specific distribution. Claims Waudby-Smith & Ramdas 2023 is "near optimal" (weird, since we know it is weak) - compare just to an "Empirical Bernstein" bound. Looks at the asymptotic behaviour of $\limsup_{n\to \infty} \sqrt{n} w_n$ where $w_n$ is the width of the interval.
 
 Maurer, A. and Pontil, M. Empirical Bernstein bounds and sample variance penalization. In Proceedings of the Twenty-Second Annual Conference on Learning Theory, pp. 115–124, 2009. Phan & Thomas & Learned-Miller 2021 claim this works poorly
+Paper has an inequality, but focuses on an application of the inequality. The inequality only uses mean and variance, hence likely weak.
 
-Fishman - based on Hoeffding's inequality
+Bentkus's concentration result - https://www.jstor.org/stable/3481693 (using only sum, so has to be weak, but better than Hoeffding)
+We won't discuss tests based on Hoeffding as it is shown to be substantially worse than many of the alternatives considered.
 
-Gaffke, N. Three test statistics for a nonparametric one- sided hypothesis on the mean of a nonnegative vari- able. Mathematical Methods of Statistics, 14(4):451–467, 2005.
+Bentkus & Zuijlen 2001: [Upper confidence bound for the mean](http://www.math.ru.nl/onderzoek/reports/rep2001/rep01_10.ps.gz) somewhat tightens other results, likely not so useful.
 
-A modern take is Schlag's thesis [New Method for Constructing Exact Tests without Making any Assumptions](https://econ-papers.upf.edu/papers/1109.pdf)
+There are also more general frameworks looking at general moment inequalities e.g. [Romano, Shaikh & Wolf 2014](https://doi.org/10.3982/ECTA11011) or general functional inequalities e.g. [Lee, Song & Whang 2018](https://doi.org/10.1017/S0266466617000329), which we won't review further.
 
-Sxhlag: asi dobry test https://econ-papers.upf.edu/papers/1109.pdf Jina verze: https://www.researchgate.net/profile/Karl-Schlag/publication/265427716_Exact_Hypothesis_Testing_without_Assumptions\_-\_New_and_Old_Results_not_only_for_Experimental_Game_Theory_1/links/55e16cd308aecb1a7cc65feb/Exact-Hypothesis-Testing-without-Assumptions-New-and-Old-Results-not-only-for-Experimental-Game-Theory-1.pdf
+Saddlepoint bootstrap  https://www.jstor.org/stable/2336592 (allows us to do extreme tail probabilitites without ton of samples)
 
-Another asymptotic bound: https://arxiv.org/pdf/2310.01547
-
-Nejasne http://www.math.ru.nl/onderzoek/reports/rep2001/rep01_10.ps.gz
-
-Practical 2 step https://onlinelibrary.wiley.com/doi/pdf/10.3982/ECTA11011?casa_token=3I-dmkDbE_IAAAAA%3ATuOs04LCBlqG4-e-SRrgL2q4e11DBMOnMhXPcE2z1ffu9RTrlLAtyxsTJAsSf1XWY1QuYy37FbJO
-
-Upper bound nonneg https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=84b3baf918dd1fd3a5b7cdb68105957950a00b29
-
-https://www.sciencedirect.com/science/article/abs/pii/S0378375801002944?casa_token=Fw-mPiag4YUAAAAA:w4rin_UrWCwK5M3oRdzdBNe1areFdLtKgduD6kLTi5wQK06vKpcwKvmxLIYwSHTLWa8VbEL0
-
-Contact sets, least favorable case: https://www.cambridge.org/core/services/aop-cambridge-core/content/view/3A6B8BE6EDBE5E62646C144626D02446/S0266466617000329a.pdf/testing-for-a-general-class-of-functional-inequalities.pdf
-
-Refs in https://www.sciencedirect.com/science/article/abs/pii/S2452306222000119?casa_token=DYTiPMlAUkgAAAAA:njrxR_c84ed1-AjhqkOOBMWdyDTOf67js4bLMd--FVjPevhlv8RipSxQYGhTTUZfO4inlRY4
-
-Estimates by betting + discussion: https://arxiv.org/pdf/2010.09686
-
-Jen malinko lepsi nez Waudby Smith: https://ieeexplore.ieee.org/ielx7/18/10375320/10315047.pdf?tp=&arnumber=10315047&isnumber=10375320&ref=aHR0cHM6Ly9zY2hvbGFyLmdvb2dsZS5jb20v Tez https://arxiv.org/pdf/2402.03683
-
-Saddlepoint bootstrap https://www.jstor.org/stable/pdf/2336592.pdf?casa_token=EP7g0sqLYiIAAAAA:zANDxq_1hOkCwFovD7cSm8kOYDVfnkUwM2PUDvENamJ0peDpYBDCqhuPRv2wqsPUfsZSmB01rbZSVEmfQDm6uKq583XywNpZs_r91va8NZjvDGQQ0tw
 
 ### Unprocessed, couldn't find
 
@@ -69,6 +61,190 @@ J. A. HORA and S. C. HORA. Nonparametric bounds for errors in dollar unit sampli
 V. K. SUTTON and D. M.YOUNG. A comparison of distribution-free confidence interval methods for estimating the mean of a random variable with bounded support. Baylor University, Department of Information Sys- tems (1997). -- Diouf & Dufour claim they find Fishman the best, Hora and Hora very wide.
 
 
-### Possible extensions:
+## Augmented bootstrap test
+
+
+Given a sequence $X_1, X_2, \ldots$ of i.i.d. random variables with support on $[0, \infty)$ with the common distribution $X$ and CDF $F$. We want to test the null $H_0 : E(X) \leq \mu$.
+
+The overall idea: mixture of the bootstrap distribution with a proportion of zeroes, such that the mean is $\mu$
+
+
+Denote $\bar{X}_n = \frac{\sum_{i=1}^n X_i}{n}$.
+
+For a sample of size $n$ we never reject when $\bar{X}_n \leq \mu$. When $\bar{X}_n > \mu$ we define r.v. $A_n = 1 - \frac{\mu}{\bar{X}_n}$.
+We now consider the i.i.d random variables $Z_{n,1}, \ldots, Z_{n,n}$ with support $\{0, 1, \ldots, n\}$ and $B_{n,1}, \ldots, B_{n,n}$ over $[0, \infty)$.
+For all $i \in \{1, \ldots, n\}$ we have:
+
+
+$$
+\begin{align}
+P(Z_{n,i} = 0) &= A_n \\
+P(Z_{n,i} = k) &= \frac{1 - A_n}{n} = \frac{\mu}{n \bar{X}_n}  \text{ for } \ 0 < k \leq n \\
+B_{n,i} &= \begin{cases} 0 & Z_{n,i} = 0 \\
+X_{Z_{n,i}} & \text{otherwise} 
+\end{cases}
+\end{align}
+$$
+
+Note that $E(B_{n,i} | \bar{X} > \mu) = \mu$.
+Now we obtain the r.v. $S_n$ 
+
+$$
+S_n = \frac{1}{n}\sum_{i=1}^n B_{n,i}
+$$
+
+Note that given specific observations of $X_1, \ldots, X_n$ we can obtain samples of $S_n$ easily in a Monte Carlo fashion. We then reject at  level $\alpha$ if the observed value of $\bar{X}_n$ is  above the $1 - \alpha$ quantile of $S_n$. We now prove that this is a valid testing procedure.
+
+We remark that when $X$ is just a point mass at $\mu$, we never reject. Let us investigate non-degenerate distributions.
+
+**Theorem:** For any non-degenerate distribution $X$ over $[0, \infty)$ with CDF $F$ such that $E(X) = \mu$ and any $s > \mu$ we have
+
+$$
+ P(S_n > s | \bar{X}_n > \mu) \geq P(\bar{X}_n > s)
+$$
+
+
+**Proof:** It suffices to show that:
+
+$$
+P(B_n > s | \bar{X}_n > \mu) \geq P(X > s).
+$$
+
+We will proceed by proving the inequality holds for $n = 1$ and turns into equality for $n \to \infty$. We then show that the probability is decreasing in $n$ and thus has to hold for all intermediate values.
+
+For $n = 1$ we have
+
+$$
+P(B_1 > s | X_1 > \mu) = \frac{P(Z_1 = 1 \wedge X_1 > s \wedge X_1 > \mu)}{P(X_1 > \mu)} = \frac{P(Z_1 = 1 | X_1 > s)P(X_1 >s)}{1 - F(\mu)} = \\
+\frac{E \left(\frac{\mu}{X_1} | X_1 > s \right)(1 - F(s))}{1 - F(\mu)} 
+$$
+
+now by Jensen's inequality:
+
+$$
+\frac{E \left(\frac{\mu}{X_1} | X_1 > s \right)(1 - F(s))}{1 - F(\mu)}  \geq \frac{\mu(1 - F(s))}{(1 - F(\mu)) E(X_1| X_1 > s)} \geq \frac{\mu(1 - F(s))}{(1 - F(\mu)) E(X_1| X_1 > \mu)}
+$$
+
+Note that $E(X_1 | X_1 > \mu) = \frac{1}{1-F(\mu)} E(X_1 \mathbb{I}(X_1 > \mu))$ where $\mathbb{I}$ is the indicator function. So we obtain:
+
+$$
+\frac{\mu(1 - F(s))}{(1 - F(\mu)) E(X_1| X_1 > \mu)} = \frac{\mu(1 - F(s))}{E(X_1 \mathbb{I}(X_1 > \mu))} \geq \frac{\mu(1 - F(s))}{E(X_1 )} = 1 - F(s) = P(X > s)
+$$
+
+for $n \to \infty$ the proof is trivial as $A_n \to 0$ and thus the CDF of $B_n$ converges to the ECDF of $X$ and we have $\lim_{n \to \infty} P(B_n > s | \bar{X}_n > \mu) = P(X > s)$.
+
+
+Let's try $n=2$:
+
+target:
+$$
+P(S_2 >s | \bar{X}_2 > \mu) \geq P(\bar{X}_2 >s )
+$$
+
+$$
+P(B_2 >s | \bar{X}_2 > \mu) = \frac{P(Z = 1 \wedge X_1 > s \wedge X_1 + X_2 > 2\mu) + P(Z = 2 \wedge X_2 > s \wedge X_1 + X_2 > 2\mu)}{P(\bar{X}_2 > \mu)} = \\
+2\frac{P(Z = 1 \wedge X_1 > s \wedge X_1 + X_2 > 2\mu)}{P(X_1 + X_2 > 2\mu)} = \\
+2\frac{P(X_1 > 2\mu - X_2) P(Z = 1 \wedge X_1 > s | X_1 > 2\mu - X_2)} = \\
+E(\frac{\mu}{X_1} )
+$$
+
+$$
+P(B_2 >s | \bar{X}_2 > \mu) = 
+2 P(Z = 1 \wedge X_1 > s | X_1 > 2\mu - X_2) = \\
+2 ( P(2\mu - X_2 > s) P(Z = 1 | ))
+$$
+Now for the monotonicity:
+
+$$
+P(B_{n+1} > s | \bar{X}_{n + 1} > \mu) \leq P(B_{n} > s | \bar{X}_{n} > \mu)
+$$
+
+Denote $K_n(s) = \sum_{i=1}^{n} \mathbb{I}(X_i > s)$
+
+$$
+P(B_{n+1} > s | \bar{X}_{n + 1} > \mu) = \\
+P \left(K_n(s) = 0\right)  P\left(B_{n+1} > s   \left| \bar{X}_{n + 1} > \mu \wedge K_n(s) = 0 \right. \right) + \left(1 - P \left(K_n(s) = 0\right)\right)  P\left(B_{n+1} > s   \left| \bar{X}_{n + 1} > \mu \wedge K_n(s) > 0 \right. \right) 
+$$
+
+$$
+P(B_{n+1} > s | \bar{X}_{n + 1} > \mu \wedge K_n(s) > 0) = 
+E\left(\left. \frac{\mu}{n \bar{X}_{n+1}}  K_{n + 1}(s)  \right| \bar{X}_{n + 1} > \mu  \wedge K_n(s) > 0 \right) = \\
+E\left(\left. \frac{\mu}{\sum_{i = 1}^{n + 1} X_i} \left(\mathbb{I}(X_{n + 1} > s) +  K_n(s) \right) \right| \bar{X}_{n + 1} > \mu \wedge K_n(s) > 0   \right)  = \\
+E\left(\left. \frac{\sum_{i = 1}^{n} X_i}{\sum_{i = 1}^{n + 1} X_i}\frac{\mu}{\sum_{i = 1}^{n} X_i}  K_n(s)  + \frac{\mu}{\sum_{i = 1}^{n + 1} X_i}\mathbb{I}(X_{n + 1} > s) \right| \bar{X}_{n + 1} > \mu  \wedge K_n(s) > 0 \right)  = \\
+
+E\left(\left. \frac{\mu}{\sum_{i = 1}^{n} X_i} K_n(s) \left(\frac{\sum_{i = 1}^{n} X_i}{\sum_{i = 1}^{n + 1} X_i} + \frac{\mathbb{I}(X_{n + 1} > s)\sum_{i = 1}^{n} X_i }{K_n(s) \sum_{i = 1}^{n + 1} X_i} \right)  \right| \bar{X}_{n + 1} > \mu  \wedge K_n(s) > 0 \right)  \geq \\
+
+E\left(\left. \frac{\mu}{\sum_{i = 1}^{n} X_i} K_n(s)   \right| \bar{X}_{n + 1} > \mu  \wedge K_n(s) > 0 \right)
+
+$$
+
+$$
+P(B_{n+1} > s | \bar{X}_{n + 1} > \mu \wedge K_n(s) = 0) = \\
+E\left(\left. \frac{\mu}{\sum_{i = 1}^{n + 1} X_i} \left(\mathbb{I}(X_{n + 1} > s)\right) \right| \bar{X}_{n + 1} > \mu \wedge K_n(s) = 0   \right)  = \\
+$$
+
+One more
+
+$$
+P(B_{n+1} > s | \bar{X}_{n + 1} > \mu) = 
+E\left(\left. \frac{\mu}{n \bar{X}_{n+1}}  K_{n + 1}(s)  \right| \bar{X}_{n + 1} > \mu   \right) = \\
+
+
+P(\bar{X}_n > \mu) E\left( \frac{\mu}{n \bar{X}_{n+1}}  K_{n + 1}(s)   | \bar{X}_{n + 1} > \mu \wedge \bar{X}_n > \mu \right) + 
+(1 - P(\bar{X}_n > \mu) ) E\left( \frac{\mu}{n \bar{X}_{n+1}}  K_{n + 1}(s)   | \bar{X}_{n + 1} > \mu \wedge\bar{X}_n \leq \mu \right) = \\
+
+$$
+
+
+Another try
+
+$$
+E(X\ \mathbb{I}(Z)) = P(Z) E(X | Z) + (1 - P(Z)) E(0 | \neg Z)\\
+E(X | Z) = E(X\ \mathbb{I}(Z)) \frac{1}{P(Z)}
+$$
+
+$$
+P(B_{n+1} > s | \bar{X}_{n + 1} > \mu) = 
+E\left(\left. \frac{\mu}{n \bar{X}_{n+1}}  K_{n + 1}(s)  \right| \bar{X}_{n + 1} > \mu   \right) = \\
+\frac{1}{P(\bar{X}_{n + 1} > \mu)} E\left( \frac{\mu}{n \bar{X}_{n+1}}  K_{n + 1}(s)  \mathbb{I}(\bar{X}_{n + 1} > \mu)   \right) = \\
+
+\frac{1}{P(\bar{X}_{n + 1} > \mu)} \left( 
+P(\bar{X}_n > \mu) E\left( \frac{\mu}{n \bar{X}_{n+1}}  K_{n + 1}(s)  \mathbb{I}(\bar{X}_{n + 1} > \mu) | \bar{X}_n > \mu \right) + 
+(1 - P(\bar{X}_n > \mu) ) E\left( \frac{\mu}{n \bar{X}_{n+1}}  K_{n + 1}(s)  \mathbb{I}(\bar{X}_{n + 1} > \mu) | \bar{X}_n \leq \mu \right)\right) = \\
+
+$$
+
+
+$$
+P(B_{n+1} > s | \bar{X}_{n + 1} > \mu) = c_n P(B_{n} > s | \bar{X}_{n} > \mu) + (1 - c_n)P(B_{n + 2} > s | \bar{X}_{n + 2} > \mu)
+$$
+
+
+```{r}
+x_prev <- rgamma(3, 1,10)
+mu <- 0.5
+#(sum(x_prev) + bound) / n > mu 
+x_samps_bound <- mu * (length(x_prev) + 1) - sum(x_prev)
+
+x_samps <- rgamma(1000, 10,1)
+x_samps <- x_samps[x_samps > x_samps_bound]
+
+s <- 0.6
+
+k <- sum(x_prev > s)
+if(k == 0) {
+  
+} else {
+  coeff <- sum(x_prev) * (k + x_samps > s) / (k * (sum(x_prev + x_samps)))
+}
+
+mean(coeff)
+sd(coeff) / sqrt(length(coeff))
+
+
+```
+
+
+## Possible extensions:
 
 tails bounded by a distribution with known mean
