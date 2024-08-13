@@ -203,8 +203,12 @@ ml_dap_p <- function(probs, mu = 0.5, B = 2000, alternative = c("two.sided", "le
       }
     }
   } else {
-    alt_flip <- c("two.sided" = "two.sided", "less" = "greater", "greater" = "less")
-    return(ml_dap_p(probs = 1 - probs, mu = 1 - mu, B = B, alternative = alt_flip[alternative]))
+    if(alternative == "less") {
+      return(1)
+    } else {
+      alt_flip <- c("two.sided" = "two.sided", "greater" = "less")
+      return(ml_dap_p(probs = 1 - probs, mu = 1 - mu, B = B, alternative = alt_flip[alternative]))
+    }
   }
 }
 

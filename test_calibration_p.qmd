@@ -118,9 +118,9 @@ hist(ps)
 ```
 
 ```{r}
-n <- 10
+n <- 1000
 #gen <- \() ifelse(runif(n = n) <= 0.5, 0.495, 0.505)
-mu_beta <- 0.25
+mu_beta <- 0.5
 prec_beta <- 40
 gen <- \() rbeta(n = n, shape1 = mu_beta * prec_beta, shape2 = (1 - mu_beta)*prec_beta)
 ps <- test_DAP_single(gen, func = hoeffding_p)
@@ -129,9 +129,47 @@ ps <- test_DAP_single(gen, func = bentkus_p)
 mean(ps < 0.05)
 ps <- test_DAP_single(gen, func = ml_dap_p)
 mean(ps < 0.05)
-ps <- test_DAP_single(gen, func = t_test_p)
+hist(ps)
+# ps <- test_DAP_single(gen, func = t_test_p)
+# mean(ps < 0.05)
+```
+
+
+```{r}
+n <- 1
+gen <- \()  dplyr::if_else(runif(n) < 0.5, 0.1, 0.5 + 0.5 * runif(n))
+mu <- 0.5 * (0.1 + 0.75)
+ps <- test_DAP_single(gen, func = \(probs) ml_dap_p(probs, mu = mu, alternative = "less"), n_rep = 10000)
+mean(ps < 0.99)
+hist(ps)
+
+ml_dap_p(0.99, mu = mu, B = 100000, alternative = "less")
+mean(ps < 0.5)
+
+hist(ps)
+
+gen2 <- \(n) dplyr::if_else(runif(n) < 0.5, 0.1, 0.5 + 0.5 * runif(n))
+zz <- gen2(10000)
+hist(dplyr::if_else(zz <= mu, 1, mu / zz))
+```
+```{r}
+mu <- 0.05
+gen <- \() rbinom(1, size = 1, prob = mu)
+ps <- test_DAP_single(gen, func = \(probs) ml_dap_p(probs, mu = mu, alternative = "less"), n_rep = 1000)
+hist(ps)
 mean(ps < 0.05)
 ```
+
+```{r}
+df <- 1.5
+gen <- \() abs(rt(100, df = df))
+# https://distribution-explorer.github.io/continuous/halfstudent_t.html
+mu <- 2 * sqrt(df / pi) * gamma((df + 1) / 2) / ((gamma(df / 2)) * (df - 1))
+ps <- test_DAP_single(gen, func = \(probs) ml_dap_p(probs, mu = mu - 1, alternative = "less"), n_rep = 1000)
+hist(ps)
+mean(ps < 0.05)
+```
+
 
 ML DAP WIDTS - competitive with https://projecteuclid.org/journals/annals-of-statistics/volume-28/issue-3/Finite-sample-nonparametric-inference-and-large-sample-efficiency/10.1214/aos/1015951997.full (although the two points with n = 10 is a bit worse in our case)
 
