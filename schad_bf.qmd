@@ -19,7 +19,44 @@ if(!dir.exists(cache_dir))  {
 options("brms.backend" = "rstan")
 rstan::rstan_options(auto_write = TRUE)
 
-future::plan(future::multisession, workers = 8)
+future::plan(future::multisession, workers = 10)
+```
+
+```{r}
+#trace('new', tracer = quote(if(Class == "brob") { dotlist = list(...); if(!is.null(dotlist$positive) && any(is.na(dotlist$positive))) { browser() } }), print = FALSE )
+#untrace('new')
+trace('as.numeric', signature = "brob", tracer = quote(if(any(is.na(x@positive))) { browser()}), print = FALSE )
+untrace('as.numeric', signature = "brob")
+
+#trace('bridge_sampler', tracer = quote(if(!all(is.finite(upars))) { browser()}), print = FALSE, where = getS3method("bridge_sampler", "stanfit"))
+debugonce(bridge_sampler)
+
+trace(.stan_log_posterior, at = 4, tracer = quote(if(!is.finite(out)){browser()}))
+
+    lml_Null1 <- bridge_sampler(brm01, silent=TRUE)
+my_trace_func <- function()
+trace
+
+b_na <- new("brob", x = c(30,10,15), positive = c(NA,TRUE, NA))
+as.numeric(b_na)
+```
+
+```{r}
+ex <- rstan::extract(brm01$fit, permuted = FALSE)
+samples <- brm01$fit
+
+skeleton <- bridgesampling:::.create_skeleton(samples@sim$pars_oi,
+                                              samples@par_dims[samples@sim$pars_oi])
+
+upars <- apply(ex, 1:2, FUN = function(theta) {
+  rstan::unconstrain_pars(samples, bridgesampling:::.rstan_relist(theta, skeleton))
+})
+
+min(upars)
+
+lp <- apply(upars, c(2,3), \(x) { rstan::log_prob(samples, x) })
+min(lp)
+max(lp)
 ```
 
 
