@@ -391,7 +391,6 @@ plot_ecdf_diff(res_split_constant$stats_H1, combine_variables = combine_lmBF_arr
 
 #TODO explore the missing `simulated_value` cases.
 plot_sim_estimated(res_split_constant$stats_H0)
-plot_sim_estimated(res_split_constant$stats_H0 %>% filter(variable == "g_Subject") %>% mutate(across(all_of(c("simulated_value", "mean", "q5", "q95")), log10 )))
 plot_sim_estimated(res_split_constant$stats_H1)
 plot_sim_estimated(res_split_constant$stats_H1 %>% filter(variable == "g_Subject") %>% mutate(across(all_of(c("simulated_value", "mean", "q5", "q95")), log10 )))
 

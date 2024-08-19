@@ -244,34 +244,35 @@ For SBC we use the gamma statistic of Saailnoya (also used in Modrák et al.) - 
 First, let us start with a comparison of two extremely simple models with no parameters ($\theta_0 = \theta_1 = \emptyset$) problem:
 
 $$
-Y = \{0,1\}, \: \text{Pr}(y = 1 | \mathcal{M}_i) = a_i, \: a_0 < a_1\\
+Y = \{0,1\}, \: \text{Pr}(y = 1 | \mathcal{M}_0) = \frac{1}{3}, \: \text{Pr}(y = 1 | \mathcal{M}_1) = \frac{2}{3}\\
 \text{Pr}(\mathcal{M}_0) = \text{Pr}(\mathcal{M}_1) = \frac{1}{2}
 $$
 
-Any candidate posterior can be described just by two numbers $\phi_\text{BMA}(i | Y = 1) = b_i$. Analytically, we can show that $\phi_\text{BMA}$ will satisfy the data-averaged posterior criterion if and only if $b_0 + b_1 = 1$, i.e. allowing infinitely many wrong Bayes factors, including assigning 100% probability to the wrong model or having $\phi_\text{BMA}(i | Y = 1) = \pi_\text{BMA}( 1 - i | Y = 1)$. To be specific the DAP criterion for this model is:
+Any candidate posterior can be described just by two numbers $\phi_\text{BMA}(\mathcal{M}_1 | Y = y) = b_y$. Analytically, we can show that $\phi_\text{BMA}$ will satisfy the data-averaged posterior criterion if and only if $b_0 + b_1 = 1$, i.e. allowing infinitely many wrong Bayes factors, including assigning 100% probability to the wrong model or having $\phi_\text{BMA}(\mathcal{M}_1 | Y = 0) = 1 - \pi_\text{BMA}( \mathcal{M}_1 | Y = 0)$. To be specific the DAP criterion for this model is:
 
 TODO 
 
 $$
-\forall i \in \{0,1\}: \text{Pr}(\mathcal{M}_i) = \sum_{y=0}^1  \phi_\text{BMA}(i | Y = y) \sum_{k=0}^1 \text{Pr}(y | \mathcal{M}_k) \text{Pr}(\mathcal{M}_k) \\
-\frac{1}{2} = (1 - b_i) \sum_{k=0}^1 \frac{1}{2}(1 - a_k) + b_i \sum_{k=0}^1 \frac{1}{2}a_k\\
-1 = \sum_{k=0}^1 (1 - a_k) - b_i \sum_{k=0}^1 (1 - a_k) + b_i \sum_{k=0}^1 a_k \\
-1 = 2 - \sum_{k=0}^1 a_k - 2b_i + b_i\sum_{k=0}^1 a_k + b_i \sum_{k=0}^1 a_k \\
-
-0 = (1 - b_0 - 1 + b_1) \sum_{k=0}^1 \frac{1}{2}(1 - a_k) + (b_0 - b_1) \sum_{k=0}^1 \frac{1}{2}a_k\\
-0 = -(b_0 - b_1) \sum_{k=0}^1 \frac{1}{2}(1 - a_k) + (b_0 - b_1) \sum_{k=0}^1 \frac{1}{2}a_k\\
-
-
+\forall i \in \{0,1\}: \text{Pr}(\mathcal{M}_i) = \sum_{y=0}^1  \phi_\text{BMA}(i | Y = y) \sum_{k=0}^1 \text{Pr}(y | \mathcal{M}_k) \text{Pr}(\mathcal{M}_k)
 $$
 
-In contrast, $\phi_\text{BMA}$ will pass the prediction calibration check (and hence SBC for $f(i, y) = i$) only for the correct posterior and for the prior ($b_i = \text{Pr}(\mathcal{M}_i) = \frac{1}{2}$). The proof is that either $b_0 = b_1$ and then the model is calibrated only if $b_0 = b_1 = \frac{1}{2}$ or that $b_0 \neq b_1$ and then the model is calibrated only when $a_i = b_i$.
+We note that averaged over the models, both values of $y$ are equally likely, i.e. $\sum_{k=0}^1 \text{Pr}(y | \mathcal{M}_k) \text{Pr}(\mathcal{M}_k) = \frac{1}{2}$
+
+$$
+\frac{1}{2} = \frac{1}{2} \sum_{y=0}^1  b_y \wedge
+\frac{1}{2} = \frac{1}{2}\sum_{y=0}^1  (1 - b_y)
+$$
+
+which both reduce to $b_0 + b_1 = 1$.
+
+In contrast, $\phi_\text{BMA}$ will pass the prediction calibration check (and hence SBC for $f(i, y) = i$) only for the correct posterior and for the prior ($b_i = \text{Pr}(\mathcal{M}_i) = \frac{1}{2}$). The proof is that either $b_0 = b_1$ and then the model is calibrated only if $b_0 = b_1 = \frac{1}{2}$ or that $b_0 \neq b_1$ and then the model is calibrated only when $b_0 = \frac{1}{3}, b_1 = \frac{2}{3}$.
 
 Additionally, checking SBC w.r.t. the likelihood $g(i, y) = a_i^y (1 - a_i)^{1-y}$ also rules out the $b_i = \frac{1}{2}$ option.
 
 How quickly do we find problems empirically? First let us assure ourselves that when the model is correct we find no problems --- in the simulations, we use $a_0 = 0.2, a_1 = 0.9$.
 
 ```{r}
-#| fig-cap: Histories of check statistics for the correct binary model. The horizontal blue line marks rejecting the hypothesis of calibration with 5% false positive rate. We see that in all cases, violations tend to be non-sever and short-lived A) shows the log gamma statistic of default SBC, B) is the bootstrapped miscalabration of Dimitraidis et al. and C) is the t-test for the data-averaged posterior.
+#| fig-cap: Histories of check statistics for the correct binary model. The horizontal blue line marks rejecting the hypothesis of calibration with 5% false positive rate. We see that in all cases, violations tend to be non-severe and short-lived A) shows the log gamma statistic of default SBC, B) is the bootstrapped miscalabration of Dimitraidis et al. and C) is the t-test for the data-averaged posterior.
 #| fig-height: 6
 #| fig-width: 6
 
@@ -286,7 +287,7 @@ Now what happens, if we compute the Bayes factors as if the probabilities were f
 
 
 ```{r}
-#| fig-cap: Histories of check statistics for the flipped binary model. The horizontal blue line marks rejecting the hypothesis of calibration with 5% false positive rate. We see that SBC as well as miscalibration identify the problem very quickly, while DAP does not diagnose it (the rare low p-values arise from using a t-test on what is essentially binary data). Note that the p-values from the miscalibration test are capped at $\frac{1}{2000}$ due to the number of bootstrap samples used.
+#| fig-cap: Histories of check statistics for the flipped binary model. The horizontal blue line marks rejecting the hypothesis of calibration with 5% false positive rate. The vertical orange line marks the number of simulations when the check first attains 80% power. We see that SBC as well as miscalibration identify the problem very quickly, while DAP does not diagnose it (the rare low p-values arise from using a t-test on what is essentially binary data). Note that the p-values from the miscalibration test are capped at $\frac{1}{2000}$ due to the number of bootstrap samples used.
 #| fig-height: 6
 #| fig-width: 6
 
@@ -367,7 +368,7 @@ plot_log_p_histories(hist_pnb_bias$schad, "DAP - Schad et al.")) + plot_annotati
 
 ### Summary of toy examples
 
-In more general models, SBC with any realistic number and choice of test quantities may permit many wrong posteriors. However, when using suitable data-dependent test quantities, those wrong posteriors are hard to construct and are unlikely to be the result of a bug in the computation. On the other hand, wrong posteriors satisfying the data-averaged posterior check are easy to come by and can plausibly arise due to a programming error (e.g. flipping the model indices, not including a part of the data) or bad numerical approximations (increased variance, but no bias).
+In more general models, SBC with any realistic number and choice of test quantities may permit many wrong posteriors. However, when using suitable data-dependent test quantities, those wrong posteriors are hard to construct and are unlikely to be the result of a bug in the computation. On the other hand, wrong posteriors satisfying the data-averaged posterior check are easy to come by and can plausibly arise due to a programming error (e.g. flipping the model indices, not including a part of the data) or bad numerical approximations (increased variance, but no bias). 
 
 ## Real examples
 
@@ -375,23 +376,33 @@ TODO
 
 ### Posterior SBC and the importance of using correct priors
 
+It may be tempting to use a fixed value of $\mu$ and $\sigma^2$ or draw them from some surrogate distribution. In this case however, the assumptions of all of the consistency criteria except the good check do not hold. And indeed, we see subtle violations of all checks.
+
+
+Problems are largest when a parameter with improper prior interacts with some parameter of actual interest. A practically highly relevant example is the interaction of the prior on the intercept (which is often taken as improper) with the prior on random effects. (see Ogle, K., & Barber, J. J. (2020). Ensuring identifiability in hierarchical mixed effects Bayesian models. Ecological Applications. doi:10.1002/eap.2159 for more discussion of this problem).
+
+We test a model with the intercept and a single fixed effect against a model that also has a random effect. We will be using the BayesFactor package.
+
+Now choosing the overall intercept as fixed constant in SBC results in apparent miscalibration, but that is a false positive. Using posterior SBC results in perfectly calibrated
+
+The previous example is the simplest setting where we obtain strong miscalibration due to improper priors for shared parameters, however, the problem subtly affects even much simpler settings.
+
 ttestBF in BayesFactor package, JZS test.
 
 Uses an improper Jeffrey's prior on variance $\pi_\text{prior}\left(\sigma^2\right) = \frac{1}{\sigma^2}$.
 
-It may be tempting to use a fixed value of $\sigma^2$ or draw $\sigma^2$ from some surrogate distribution. In this case however, the assumptions of all of the consistency criterions except the good check hold. And indeed, we see non-trivial violations of all checks.
 
-However, when we do posterior SBC, the computed Bayes factors pass all checks to high precision.
+However, when we use posterior SBC, the computed Bayes factors pass all checks to high precision.
 
 
 
 ### Schad et al.
 
+Unfortunately, their work has multiple problems making their conclusions suspect: they do not simulate from the correct prior for multiple parameters (not just those with improper priors) and they focus on DAP (which we know is weak)
+
 Are BMA quantities useful?
 
 ### Something where bridgesampling works
-
-TODO
 
 Neglecting vectorization
 https://link.springer.com/article/10.1007/s41237-024-00232-7
@@ -407,3 +418,5 @@ Another advantage of running SBC for the full BMA model is that we can use the s
 Using multiple test quantities or even multiple methods for checking the calibration of the model yields to multiple testing issues. However, here Type II error is the biggest problem. We can usually run more simulations to sort flukes from real problems with little expense. Additionally, in a perfect world a failed calibration check is followed by investigation to get understanding why the computation failed.
 
 Checking packages for Bayes factors is difficult as the implied priors are typically non-standard and at best partially documented.
+
+We have also shown that the choice priors for shared parameters like the intercept or standard deviation (which is often given little thought) can have non-negligible effect on Bayes factors, further highlighting the brittleness of Bayes factors.

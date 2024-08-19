@@ -354,9 +354,16 @@ compute_bootstrapped_histories <- function(stats, history_length, n_histories, h
 plot_log_gamma_histories <- function(histories_df, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
   alpha <- sqrt(1/length(unique(histories_df$history_id)))
 
+  power_df <- histories_df %>% group_by(sim_id, variable) %>%
+    summarise(power = mean(log_gamma < log_gamma_threshold), .groups = "drop") %>%
+    filter(power >= 0.8) %>%
+    group_by(variable) %>%
+    summarise(first_power_sim_id = min(c(Inf,sim_id)))
+
   histories_df %>%
     filter(sim_id >= min_sim_id) %>%
     ggplot(aes(x = sim_id, y = log_gamma - log_gamma_threshold, group = history_id)) +
+    geom_vline(aes(xintercept = first_power_sim_id), data = power_df, color = "orangered") +
     geom_line(alpha = alpha) +
     geom_hline(yintercept = 0, color = "lightblue", linewidth = 1) +
     scale_y_continuous("Log Gamma - Threshold", limits = ylim) +
@@ -382,9 +389,17 @@ log_p_labels <- function(breaks) {
 plot_log_p_histories <- function(histories_df, title, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
   alpha <- sqrt(1/length(unique(histories_df$history_id)))
 
+  power_df <- histories_df %>% group_by(sim_id, variable) %>%
+    summarise(power = mean(log_p < log(0.05)), .groups = "drop") %>%
+    filter(power >= 0.8) %>%
+    group_by(variable) %>%
+    summarise(first_power_sim_id = min(c(Inf,sim_id)))
+
+
   histories_df %>%
     filter(sim_id >= min_sim_id) %>%
     ggplot(aes(x = sim_id, y = log_p, group = history_id)) +
+    geom_vline(aes(xintercept = first_power_sim_id), data = power_df, color = "orangered") +
     geom_line(alpha = alpha) +
     geom_hline(yintercept = log(0.05), color = "lightblue", linewidth = 1) +
     scale_y_continuous(paste0("p - ", title), limits = ylim, breaks = log_p_breaks, labels = log_p_labels) +
