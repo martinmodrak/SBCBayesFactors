@@ -17,7 +17,7 @@ use_cmdstanr <- FALSE
 library(rstan)
 rstan_options(auto_write = TRUE)
 
-options(mc.cores = parallel::detectCores())
+options(mc.cores = 8)
 
 library(future)
 
@@ -39,7 +39,7 @@ plan(multisession, workers = 20)
 
 
 
-There's a weird $(1 + \sigma)^{-2}$ prior on sigma, sampling with an inverse CDF rejection scheme:
+There's a weird $(1 + \sigma)^{-2}$ prior on sigma, sampling with an inverse CDF scheme:
 
 ```{r}
 
@@ -231,6 +231,7 @@ plot_rank_hist(res_turtles, variables = "model", bins = 20)
 ```
 
 ```{r}
+# TODO: this needs to change after the update
 no_error_index <- res_turtles$backend_diagnostics$bs_error_H0 == "0%" & res_turtles$backend_diagnostics$bs_error_H1 == "0%"
 plot_ecdf_diff(res_turtles[no_error_index], combine_variables = combine_array_elements)
 
@@ -324,26 +325,46 @@ res_turtles_2 <- compute_SBC(ds_turtles_2, backend_turtles,
 
 ```
 
-
 ```{r}
 res_turtles_2$backend_diagnostics$prob_H1 %>% hist() 
 plot_ecdf_diff(res_turtles_2)
 plot_binary_calibration_diff(res_turtles_2$stats)
-```
-```{r}
-res_turtles_all$stats
+plot_binary_calibration_diff(res_turtles_2$stats)
+plot_ecdf_diff(res_turtles_2$stats)
 ```
 
-
-```{r}
-stats_test <- res_turtles_all$stats %>% group_by(sim_id) %>% filter(simulated_value[variable == "model"] == 1) %>% ungroup()
-plot_ecdf_diff(stats_test, variables = c(paste0("alpha",0:1,""), paste0(".m1.alpha",0:1,"")))
-plot_ecdf_diff(stats_test, variables = paste0(".m1.b[",1:9,"]"))
-```
 
 ```{r}
-stats_test0 <- res_turtles_all$stats %>% group_by(sim_id) %>% filter(simulated_value[variable == "model"] == 0) %>% ungroup()
-plot_ecdf_diff(stats_test0, variables = c(paste0("alpha",0:1,""), paste0(".m0.alpha",0:1,"")))
-
+if(!("log_prob_H1" %in% names(res_turtles$backend_diagnostics))) {
+  res_turtles$backend_diagnostics$log_prob_H1 <- log(res_turtles$backend_diagnostics$prob_H1)
+}
 ```
 
+
+```{r}
+res_turtles_all <- bind_results(res_turtles, res_turtles_2)
+plot_ecdf_diff(res_turtles_all, variables = c("model", "lp__"))
+res_turtles_all$stats %>% group_by(variable) %>% tally()
+plot_binary_calibration_diff(res_turtles_all$stats)
+```
+
+
+
+
+
+```{r}
+iter <- 15500
+warmup <- 500
+init <- 0
+backend_turtles_warp <- SBC_backend_bridgesampling(
+  SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
+  SBC_backend_rstan_sample(m_H1, iter = iter, warmup = warmup, init = init),
+  method = "warp3",
+  repetitions = 5
+)
+# TODO avoid the need for repetitions by not requiring error_meausres
+res_turtles_w <- compute_SBC(ds_turtles, backend_turtles_warp, 
+                           keep_fits = FALSE,
+                           cache_mode = "results",
+                           cache_location = file.path(cache_dir, "turtles_1_w.rds"))
+```

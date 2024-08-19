@@ -1,0 +1,320 @@
+---
+title: "lmBF 2x2 from Schad & Vasishth"
+format: html
+---
+
+This requires the most recent `bayes_factors` branch in the SBC package repo: `remotes::install_github("hyunjimoon/SBC@bayes_factors")`
+
+```{r setup}
+library(SBC)
+library(ggplot2)
+library(dplyr)
+
+library(designr)
+library(LaplacesDemon)
+library(MASS)
+
+
+options(SBC.min_chunk_size = 1)
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir)) {
+  dir.create(cache_dir)
+}
+
+cache_fits_dir <- file.path(cache_dir, "fits_lmbf")
+if(!dir.exists(cache_fits_dir)) {
+  dir.create(cache_fits_dir)
+}
+
+theme_set(theme_minimal())
+```
+
+```{r cluster}
+future::plan(future::multisession, workers = parallel::detectCores)
+```
+
+
+First, we wrap the simulation code in a function for better usage. We also keep track
+of the simulated values for some variables, but other than that there are no changes.
+
+```{r}
+
+priors.theta.multivariateCauchy1 <- function(nlevels=3, scale=1) {
+  g <- rinvchisq(1, 1, scale=scale^2)
+  G <- g*diag(nlevels)
+  theta <- as.vector(mvrnorm(1, rep(0,nlevels), Sigma=G))
+  return( theta )
+}
+
+rscaleFixed <- 0.5
+rscaleRandom <- 1
+
+### SBC: random effect * fixed effect - non-aggregated/aggregated
+design1 <- fixed.factor("A", levels=as.character(1:2), replications=2) + 
+           fixed.factor("B", levels=as.character(1:2), replications=2) + 
+           random.factor("Subject", instances=30)
+dat <- data.frame(design.codes(design1))
+
+eff <- "fixed"
+spherViol <- FALSE
+
+
+sim_lmbf2x2 <- function(hypothesis) {
+  mu <- 200
+  sigma <- 50
+  
+  # ==================================
+  # sample fixed effects 
+  # ==================================
+  
+  variables <- list()
+  
+  # main effect A
+  nfclvF <- length(unique(dat$A))
+  thetaF <- priors.theta.multivariateCauchy1(nlevels=nfclvF-1, scale=rscaleFixed)
+  XXF <- model.matrix(~ 0 + A, data=dat)
+  centering <- diag(nfclvF)-(1/nfclvF)
+  Qa <- eigen(centering)$vectors[,1:(nfclvF-1)]
+  XXFs <- XXF %*% Qa
+  dat$cA <- XXFs
+  if (eff=="fixed" & hypothesis==0) {
+    thetaF[1:length(thetaF)] <- 0
+  } else {
+    variables[["A-2"]] <- thetaF[1] * sigma
+  }
+  sXbA <- XXFs %*% thetaF
+
+  # main effect B
+  nfclvF <- length(unique(dat$B))
+  thetaF <- priors.theta.multivariateCauchy1(nlevels=nfclvF-1, scale=rscaleFixed)
+  XXF <- model.matrix(~ 0 + B, data=dat)
+  centering <- diag(nfclvF)-(1/nfclvF)
+  Qa <- eigen(centering)$vectors[,1:(nfclvF-1)]
+  XXFs <- XXF %*% Qa
+  dat$cB <- XXFs
+  if (eff=="fixed" & hypothesis==0) {
+    thetaF[1:length(thetaF)] <- 0
+  } else {
+    variables[["B-2"]] <- thetaF[1] * sigma
+  }
+  sXbB <- XXFs %*% thetaF
+
+  # interaction A x B
+  #dat$AxB <- factor(as.numeric(dat$A==dat$B)+1)
+  dat$AxB <- factor(dat$cA * dat$cB)
+  nfclvF <- length(unique(dat$AxB))
+  thetaF <- priors.theta.multivariateCauchy1(nlevels=nfclvF-1, scale=rscaleFixed)
+  XXF <- model.matrix(~ 0 + AxB, data=dat)
+  centering <- diag(nfclvF)-(1/nfclvF)
+  Qa <- eigen(centering)$vectors[,1:(nfclvF-1)]
+  XXFs <- XXF %*% Qa # +0.7071068 / -0.7071068
+  if (TRUE) XXFs <- dat$cA * dat$cB # +0.5 / -0.5
+  dat$cAxB <- XXFs
+  if (eff=="fixed" & hypothesis==0) {
+    thetaF[1:length(thetaF)] <- 0
+  } else {
+    variables[["A:B-2.&.2"]] <- thetaF[1] * sigma
+  }
+  sXbAxB <- XXFs %*% thetaF
+  
+  # ==================================
+  # sample random effects
+  # ==================================
+  
+  # sample random intercept
+  nfclvS <- length(unique(dat$Subject))
+  thetaSi <- priors.theta.multivariateCauchy1(nlevels=nfclvS, scale=rscaleRandom)
+  XXSi <- model.matrix(~ 0 + Subject, data=dat)
+  #if (eff=="random" & hypothesis==0) thetaS[1:length(thetaS)] <- 0
+  sXbSi <- XXSi %*% thetaSi
+  
+  subjs <- sort(unique(dat$Subject))
+  for(s_id in seq_along(subjs)) {
+    var_name <- paste0("Subject-", subjs[s_id])
+    variables[[var_name]] <- thetaSi[s_id] * sigma
+  }
+  
+  # sample random slopes: main effect A
+  XXSs <- model.matrix(~ 0 + cA:Subject, data=dat)
+  nfclvSs <- dim(XXSs)[2]
+  if (!spherViol) thetaSs <- priors.theta.multivariateCauchy1(nlevels=nfclvSs, scale=rscaleRandom)
+  if (spherViol ) thetaSs <- priors.theta.multivariateCauchy1(nlevels=nfclvSs, scale=0.001)
+  sXbSsA <- XXSs %*% thetaSs
+  
+  # sample random slopes: main effect B
+  XXSs <- model.matrix(~ 0 + cB:Subject, data=dat)
+  nfclvSs <- dim(XXSs)[2]
+  if (!spherViol) thetaSs <- priors.theta.multivariateCauchy1(nlevels=nfclvSs, scale=rscaleRandom)
+  if (spherViol ) thetaSs <- priors.theta.multivariateCauchy1(nlevels=nfclvSs, scale=0.001)
+  sXbSsB <- XXSs %*% thetaSs
+  
+  # sample random slopes: interaction A x B
+  XXSs <- model.matrix(~ 0 + (cAxB):Subject, data=dat)
+  nfclvSs <- dim(XXSs)[2]
+  if (!spherViol) thetaSs <- priors.theta.multivariateCauchy1(nlevels=nfclvSs, scale=rscaleRandom)
+  if (spherViol ) thetaSs <- priors.theta.multivariateCauchy1(nlevels=nfclvSs, scale=1)
+  sXbSsAxB <- XXSs %*% thetaSs
+  
+  # ==================================
+  # sample data
+  # ==================================
+  
+  ee <- rnorm(nrow(dat), 0, sigma)
+  dat$ysim <- mu + sigma * (sXbA + sXbB + sXbAxB + sXbSi + sXbSsA + sXbSsB + sXbSsAxB) + ee
+  list(
+    generated = dat,
+    variables = variables
+  )
+}
+```
+
+Use the SBC helpers to generate desired number of datasets
+
+```{r}
+set.seed(3214555)
+ds_1 <- generate_datasets(SBC_generator_function(sim_lmbf2x2, hypothesis = 1), n_sims = 500)
+ds_0 <- generate_datasets(SBC_generator_function(sim_lmbf2x2, hypothesis = 0), n_sims = 500)
+```
+
+
+
+
+
+
+We wrap the lmBF backend in `SBC_backend_cached` to reuse the same fits for multiple BF comparisons (this will store the fits on disk)
+
+```{r}
+backend_1 <- SBC_backend_cached(
+  cache_fits_dir,
+  SBC_backend_lmBF(ysim ~ 1 + A + B + A:B + Subject +  (A*B):Subject, data = dat, whichRandom="Subject", rscaleFixed=rscaleFixed, rscaleRandom=rscaleRandom)
+)
+
+backend_0A <- SBC_backend_cached(
+  cache_fits_dir,
+  SBC_backend_lmBF(ysim ~ 1 +     B + A:B + Subject +  (A*B):Subject, data = dat, whichRandom="Subject", rscaleFixed=rscaleFixed, rscaleRandom=rscaleRandom)
+)
+
+backend_0_all <- SBC_backend_cached(
+  cache_fits_dir,
+  SBC_backend_lmBF(ysim ~ 1 +     Subject +  (A*B):Subject, data = dat, whichRandom="Subject", rscaleFixed=rscaleFixed, rscaleRandom=rscaleRandom)
+)
+```
+
+
+Test that the lmBF backend works on its own (and also that we estimate at least roughly the correct values). Some fits apparently have wild uncertainties, but it works as expected for an approximation.
+
+```{r}
+res_1 <- compute_SBC(ds_1[1:10], backend_1, keep_fits = FALSE,
+                     cache_mode = "results",
+                     cache_location = file.path(cache_dir, "lmBF_test_1.rds"))
+
+plot_sim_estimated(res_1, variables = c("A-2", "B-2", "A:B-2.&.2"))
+plot_sim_estimated(res_1, variables = sprintf("Subject-Subject%02d", 1:10))
+
+plot_ecdf(res_1, combine_variables = combine_lmBF_arrays)
+```
+
+We run SBC for the Bayes factor (+ BMA parameters). The warnings about NAs are to 
+be expected from the setup - they arise when the posterior model probability for the larger model is close to 0 and thus almost no BMA draws for the parameter have valid values. It is an outstanding issue in the SBC package to suppress them in this case. 
+The slightly increased Rhats in a few fits are the only real problem)
+
+```{r}
+set.seed(45221322)
+# Combine datasets for each hypothesis
+ds_bf <- SBC_datasets_for_bf(ds_0, ds_1)
+
+# Combine backends for each hypothesis
+backend_bf <- SBC_backend_extractBF_comparison(backend_0A, backend_1)
+
+res <- compute_SBC(ds_bf, backend_bf, keep_fits = FALSE, 
+                   cache_mode = "results",
+                   cache_location = file.path(cache_dir, "lmbf_2x2.rds"))
+
+```
+
+
+All aspects of the fit are substantially miscalibrated, including the model.
+
+However, at the same time, the model is roughly calibrated, so I believe it is unlikely the miscalibration is
+due to some coding error.
+
+```{r}
+plot_ecdf(res, combine_variables = combine_lmBF_arrays)
+plot_ecdf_diff(res, combine_variables = combine_lmBF_arrays)
+
+plot_binary_calibration(res$stats)
+reliabilitydiag::reliabilitydiag()
+plot_binary_calibration_diff(res$stats)
+```
+
+
+Notably, the `extractBF` function will sometimes return BayesFactors that imply posterior model probabilities close to 0/1, but
+unmatched to the model that simulated the data. This is especially true when the posterio probabilities of H1 are close to 0:
+
+```{r}
+bin_prob <- binary_probabilities_from_stats(res$stats)
+
+bin_prob %>% dplyr::select(sim_id, simulated_value, prob) %>%
+  mutate(prob_category = case_when(
+    prob < 0.01 ~ "0 - 0.01",
+    prob < 0.1 ~ "0.01 - 0.1",
+    prob < 0.5 ~ "0.1 - 0.5",
+    prob < 0.9 ~ "0.5 - 0.9",
+    prob < 0.99 ~ "0.9 - 0.99",
+    prob >= 0.99 ~ "0.99 - 1"
+  )) %>%
+  group_by(prob_category) %>% summarise(n_sims = n(), true_H1 = sum(simulated_value == 1), proportion_true_H1 = mean(simulated_value == 1))
+```
+
+
+
+Despite that, the data-averaged posterior shows only mild problems: (on a run with different seed, I got no problems at all)
+
+```{r}
+binary_probabilities_from_stats(res$stats) %>% pull(prob) %>% t.test(mu = 0.5)
+```
+
+The problems are somewhat milder when using the correct null model, but they don't
+really go away (once again the warnings are to be expected).
+
+```{r}
+backend_bf_correct <- SBC_backend_extractBF_comparison(backend_0_all, backend_1)
+
+
+res_correct <- compute_SBC(ds_bf, backend_bf_correct, keep_fits = FALSE, 
+                   cache_mode = "results",
+                   cache_location = file.path(cache_dir, "lmbf_2x2_correct.rds"))
+
+plot_ecdf_diff(res_correct, combine_variables = combine_lmBF_arrays)
+plot_binary_calibration_diff(res_correct$stats)
+```
+
+
+
+Here, the problem is discovered quite cleanly also by data-averaged posterior
+
+```{r}
+binary_probabilities_from_stats(res_correct$stats) %>% pull(prob) %>% t.test(mu = 0.5)
+```
+
+
+```{r}
+bin_prob_correct <- binary_probabilities_from_stats(res_correct$stats)
+
+bin_prob_correct %>% dplyr::select(sim_id, simulated_value, prob) %>%
+  mutate(prob_category = case_when(
+    prob < 0.01 ~ "0 - 0.01",
+    prob < 0.1 ~ "0.01 - 0.1",
+    prob < 0.5 ~ "0.1 - 0.5",
+    prob < 0.9 ~ "0.5 - 0.9",
+    prob < 0.99 ~ "0.9 - 0.99",
+    prob >= 0.99 ~ "0.99 - 1"
+  )) %>%
+  group_by(prob_category) %>% summarise(n_sims = n(), true_H1 = sum(simulated_value == 1), proportion_true_H1 = mean(simulated_value == 1))
+```
+
+
+I haven't really investigated the source of the problems - the simulation code is a bit opaque to me and I don't have an obvious source for the priors and assumptions built into `lmBF`, so maybe this is a mismatch between simulation and model (there is definitely a mismatch in you choosing fixed values for some parameters the model actually tries to estimate).
+
+The problem may also be in the approximation used to fit the model - it is clear that the posterior samples offered by `lmBF` are not correct by themselves. Finally, the problem may lie with the BF computation itself.

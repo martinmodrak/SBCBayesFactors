@@ -125,6 +125,7 @@ backend_agg_H1 <- SBC_backend_brms(ysim ~ 1 + c2vs1 + c3vs1 + (1 + c2vs1 + c3vs1
 
 
 ```{r}
+set.seed(4525665)
 ds_agg <- SBC_datasets_for_bf(ds_agg_H0, ds_agg_H1)
 backend_agg <- SBC_backend_bridgesampling(backend_agg_H0_a, backend_agg_H1)
 

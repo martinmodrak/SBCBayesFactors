@@ -17,6 +17,12 @@ if(!dir.exists(cache_dir))  {
   dir.create(cache_dir)
 }
 
+fits_cache_dir <- file.path(cache_dir, "fits_2step_Item")
+if(!dir.exists(fits_cache_dir))  {
+  dir.create(fits_cache_dir)
+}
+
+
 options("brms.backend" = "rstan")
 rstan::rstan_options(auto_write = TRUE)
 
@@ -123,36 +129,43 @@ simulate_2step <- function(model) {
 
 ```{r}
 set.seed(32215252)
-n_sims <- 200
+n_sims <- 8
 ds_2step_H0 <- generate_datasets(SBC_generator_function(simulate_2step, model = 0), n_sims = n_sims)
 ds_2step_H1 <- generate_datasets(SBC_generator_function(simulate_2step, model = 1), n_sims = n_sims)
 ```
 
 
 ```{r}
-backend_2step_H1 <- SBC_backend_brms(ysim ~ 1 + rew + trans + rew_trans + (1 + rew + trans + rew_trans | subj) + (1 + rew + trans + rew_trans | item),                   family=gaussian(), prior=priors2step, 
+backend_2step_H1 <- SBC_backend_cached(
+  SBC_backend_brms(ysim ~ 1 + rew + trans + rew_trans + (1 + rew + trans + rew_trans | subj) + (1 + rew + trans + rew_trans | item),                   family=gaussian(), prior=priors2step, 
                   save_pars = save_pars(all = TRUE),
                   warmup=2000, iter=10000,
             template_data = simdat2step,
-            out_stan_file = file.path("cache/2step_H1.stan"))
+            out_stan_file = file.path("cache/2step_H1.stan")),
+            cache_dir = fits_cache_dir)
 
 
-backend_2step_H0_1 <- SBC_backend_brms(ysim ~ 1 +      trans + rew_trans + (1 + rew + trans + rew_trans  | subj) + (1 + rew + trans + rew_trans | item),                          family=gaussian(), prior=priors2step, 
+backend_2step_H0_1 <- SBC_backend_cached(
+  SBC_backend_brms(ysim ~ 1 +      trans + rew_trans + (1 + rew + trans + rew_trans  | subj) + (1 + rew + trans + rew_trans | item),                          family=gaussian(), prior=priors2step, 
                   save_pars = save_pars(all = TRUE),
                   warmup=2000, iter=10000,
             template_data = simdat2step,
-            out_stan_file = file.path("cache/2step_H0_1.stan"))
+            out_stan_file = file.path("cache/2step_H0_1.stan")),
+            cache_dir = fits_cache_dir)
 
 
-backend_2step_H0_correct <- SBC_backend_brms(ysim ~ 1 +      (1 + rew + trans + rew_trans  | subj) + (1 + rew + trans + rew_trans | item),                          family=gaussian(), prior=priors2step[-2,], 
+backend_2step_H0_correct <- SBC_backend_cached(
+  SBC_backend_brms(ysim ~ 1 +      (1 + rew + trans + rew_trans  | subj) + (1 + rew + trans + rew_trans | item),                          family=gaussian(), prior=priors2step[-2,], 
                   save_pars = save_pars(all = TRUE),
                   warmup=2000, iter=10000,
             template_data = simdat2step,
-            out_stan_file = file.path("cache/2step_H0_correct.stan"))
+            out_stan_file = file.path("cache/2step_H0_correct.stan")),
+            cache_dir = fits_cache_dir)
 ```
 
 
 ```{r}
+set.seed(58455642)
 ds_2step <- SBC_datasets_for_bf(ds_2step_H0, ds_2step_H1)
 backend_2step <- SBC_backend_bridgesampling(backend_2step_H0_correct, backend_2step_H1)
 
