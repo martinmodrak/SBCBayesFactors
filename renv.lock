@@ -98,6 +98,26 @@
       ],
       "Hash": "a56a6365b3fa73293ea8d084be0d9bb0"
     },
+    "MCMCpack": {
+      "Package": "MCMCpack",
+      "Version": "1.7-0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "MASS",
+        "R",
+        "coda",
+        "grDevices",
+        "graphics",
+        "lattice",
+        "mcmc",
+        "methods",
+        "quantreg",
+        "stats",
+        "utils"
+      ],
+      "Hash": "225c857e115cf09e1804ff3e597fe555"
+    },
     "Matrix": {
       "Package": "Matrix",
       "Version": "1.6-5",
@@ -132,7 +152,7 @@
       "Package": "QuickJSR",
       "Version": "1.2.2",
       "Source": "Repository",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": "CRAN",
       "Hash": "706b2f1907052a0082590a4f119402d6"
     },
     "R6": {
@@ -214,6 +234,20 @@
         "tidyselect"
       ],
       "Hash": "db135f0edc3b39bbf6b5337189f19f28"
+    },
+    "SparseM": {
+      "Package": "SparseM",
+      "Version": "1.84-2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "graphics",
+        "methods",
+        "stats",
+        "utils"
+      ],
+      "Hash": "e78499cbcbbca98200254bd171379165"
     },
     "StanHeaders": {
       "Package": "StanHeaders",
@@ -892,7 +926,8 @@
         "methods",
         "stats",
         "utils"
-      ]
+      ],
+      "Hash": "81fc09bdeab0077a73927ed1243404b6"
     },
     "fs": {
       "Package": "fs",
@@ -1419,7 +1454,8 @@
         "parallel",
         "posterior",
         "stats"
-      ]
+      ],
+      "Hash": "b0fe731e5bd801dda962ac5057a548f6"
     },
     "magrittr": {
       "Package": "magrittr",
@@ -1440,6 +1476,17 @@
         "R"
       ],
       "Hash": "4b3ea27a19d669c0405b38134d89a9d1"
+    },
+    "mcmc": {
+      "Package": "mcmc",
+      "Version": "0.9-8",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "stats"
+      ],
+      "Hash": "d96d8fc4c4682220c601d294d2bc387e"
     },
     "memoise": {
       "Package": "memoise",
@@ -1583,6 +1630,17 @@
         "utils"
       ],
       "Hash": "2c797b46eea7fb58ede195bc0b1f1138"
+    },
+    "npExact": {
+      "Package": "npExact",
+      "Version": "0.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "stats"
+      ],
+      "Hash": "6806cdeab3680da314d51ad7e705f0a3"
     },
     "numDeriv": {
       "Package": "numDeriv",
@@ -1753,7 +1811,23 @@
       "Package": "posterior",
       "Version": "1.5.0",
       "Source": "Repository",
-      "Repository": "CRAN"
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "abind",
+        "checkmate",
+        "distributional",
+        "matrixStats",
+        "methods",
+        "parallel",
+        "pillar",
+        "rlang",
+        "stats",
+        "tensorA",
+        "tibble",
+        "vctrs"
+      ],
+      "Hash": "8dac526a34b9eb62305d16c04cb57837"
     },
     "pracma": {
       "Package": "pracma",
@@ -1855,6 +1929,24 @@
         "vctrs"
       ],
       "Hash": "1cba04a4e9414bdefc9dcaa99649a8dc"
+    },
+    "quantreg": {
+      "Package": "quantreg",
+      "Version": "5.98",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "MASS",
+        "Matrix",
+        "MatrixModels",
+        "R",
+        "SparseM",
+        "graphics",
+        "methods",
+        "stats",
+        "survival"
+      ],
+      "Hash": "017561f17632c065388b7062da030952"
     },
     "ragg": {
       "Package": "ragg",
@@ -1970,7 +2062,7 @@
       "Package": "rlang",
       "Version": "1.1.4",
       "Source": "Repository",
-      "Repository": "https://cloud.r-project.org",
+      "Repository": "CRAN",
       "Requirements": [
         "R",
         "utils"
@@ -2050,7 +2142,7 @@
         "graphics",
         "stats"
       ],
-      "Hash": "d5bc1a16e01e50e08581f0c362d3955d"
+      "Hash": "b3d390424f41d04174cccf84d49676c2"
     },
     "rprojroot": {
       "Package": "rprojroot",

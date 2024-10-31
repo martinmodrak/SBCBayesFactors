@@ -249,6 +249,8 @@ Bentkus & Zuijlen 2001: [Upper confidence bound for the mean](http://www.math.ru
 
 There are also more general frameworks looking at general moment inequalities e.g. [Romano, Shaikh & Wolf 2014](https://doi.org/10.3982/ECTA11011) or general functional inequalities e.g. [Lee, Song & Whang 2018](https://doi.org/10.1017/S0266466617000329), which we won't review further.
 
+Ulrich Mueller's [A More Robust t-test](https://www.princeton.edu/~umueller/heavymean.pdf) might make a nice comparison.
+
 ### Unprocessed refs I couldn't find
 
 J. A. HORA and S. C. HORA. Nonparametric bounds for errors in dollar unit sampling based on the cumulative distribution function. Proceedings of the Decision Sciences Institute pp. 115—117 (1990). - Diouf & Dufour explain, claim far worse than asymptotic width (also symmetric around mean, which sounds bad).

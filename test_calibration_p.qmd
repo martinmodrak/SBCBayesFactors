@@ -117,6 +117,90 @@ hist(ps)
 
 ```
 
+
+```{r}
+gaffke_p <- function(probs, mu = 0.5, B = 10000, alpha = 0.05) {
+  # u_diff <- MCMCpack::rdirichlet(B, alpha = rep(1, length(probs) + 1))
+  # u <- apply(u_diff[,1:length(probs)], MARGIN = 1, cumsum)
+  # 
+  # z_lwr <- diff(c(sort(1 - probs), 1))
+  # m_matrix_lwr <- sweep(u, MARGIN = 1, STATS = z_lwr, FUN = "*")
+  # m_lwr <- 1 - colSums(m_matrix)
+  # 
+  # z_upr <- diff(c(sort(probs), 1))
+  # m_matrix_upr <- sweep(u, MARGIN = 1, STATS = z_upr, FUN = "*")
+  # m_upr <- 1 - colSums(m_matrix)
+  # 
+  # 1 - quantile(m_lwr, 1 - 0.975)
+  # quantile(m_upr, 0.975)
+  # as.numeric(quantile(m_upr, c(0.025,0.975)))
+  # 
+  
+
+  
+  
+  u_diff <- MCMCpack::rdirichlet(B, alpha = rep(1, length(probs) + 1))
+
+  z_upr <- c(sort(probs), 1)
+  m_matrix_upr <- sweep(u_diff, MARGIN = 2, STATS = z_upr, FUN = "*")
+  m_upr <- rowSums(m_matrix_upr)
+
+  z_lwr <- c(sort(1 - probs), 1)
+  m_matrix_lwr <- sweep(u_diff, MARGIN = 2, STATS = z_lwr, FUN = "*")
+  m_lwr <- rowSums(m_matrix_lwr)
+
+  mean(1-m_lwr <= mu)
+  # as.numeric(c(
+  #   1 - quantile(m_lwr, probs = 1 - alpha / 2),
+  #   quantile(m_upr, probs = 1 - alpha / 2)
+  #   ))
+}
+
+gaffke_p(c(0.9,0.9, 1))
+
+```
+
+```{r}
+aug_boot_p <- function(probs, mu = 1, B = 10000) {
+  B_lwr <- matrix(sample(c(0, probs), size = B * (length(probs) + 1), replace = TRUE), nrow = B)
+  #lwr <- quantile(rowMeans(B_lwr), prob = 0.025)
+  # B_upr <- matrix(sample(c(1, probs), size = B * (length(probs) + 1), replace = TRUE), nrow = B)
+  # upr <- quantile(rowMeans(B_upr), prob = 0.975)
+  #as.numeric(c(lwr, upr))
+  mean(B_lwr <= mu)
+}
+```
+
+
+```{r}
+vt <- 2
+vs <- 0.01
+
+worst_case <- function(worst_n= 10) {
+  if(vs < vt - sqrt(vt^2 - vt)) {
+    sample(c(vs,vt), size = worst_n, prob = c(vt - 1, 1 - vs) , replace = TRUE)
+  } else {
+    sample(c(0,vs,vt), size = worst_n, prob = c(1 - vt/(vs*(2*vt - vs)), (vt-vs)/(vs*(2*vt - vs)), 1 / (2*vt - vs) ), replace = TRUE)
+  }
+  
+}
+
+
+#ps <- test_DAP_single(worst_case, n_rep = 1000, func = \(x) ml_dap_p(x, mu = 1, alternative = "less"))
+ps <- test_DAP_single(worst_case, n_rep = 100, func = \(x) gaffke_p(x/vt, mu = 1/vt, B=2000))
+ps <- test_DAP_single(worst_case, n_rep = 100, func = \(x) aug_boot_p(x, mu = 1))
+
+#hist(ps)
+length(ps)
+mean(ps < 0.05)
+
+mean(worst_case(1e8))
+
+
+
+```
+
+
 ```{r}
 n <- 1000
 #gen <- \() ifelse(runif(n = n) <= 0.5, 0.495, 0.505)
