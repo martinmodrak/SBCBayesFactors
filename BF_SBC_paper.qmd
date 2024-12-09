@@ -20,7 +20,7 @@ theme_set(theme_minimal())
 TODO:
 Absolutely necessary:
 - Real example: Bad vectorization/normalization (based on paper)
-  - Do we know what the "usual issues" are? Bad normalization constants probably fail DAP quickly.
+  - Turtles variant, but with normal prior on ranef stddev, "Forget" normalizing constant
 - Schad lmbf2x2 (claimed miscalib, actually OK)
 - Notationally distinguish model parameters vs BMA parameters space
 - Ranef correct figures
@@ -289,7 +289,7 @@ How quickly do we find problems empirically? First let us assure ourselves that 
 #| fig-height: 6
 #| fig-width: 6
 
-hist_binary_correct <- load_histories("binary_correct")
+hist_binary_correct <- load_histories("binary_correct", "binary_example.qmd")
 plot_log_gamma_histories(hist_binary_correct$log_gamma) / (
 plot_log_p_histories(hist_binary_correct$miscalibration, "Miscalibration") + 
 plot_log_p_histories(hist_binary_correct$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
@@ -304,7 +304,7 @@ Now what happens, if we compute the Bayes factors as if the probabilities were f
 #| fig-height: 6
 #| fig-width: 6
 
-hist_binary_flip <- load_histories("binary_flip")
+hist_binary_flip <- load_histories("binary_flip", "binary_example.qmd")
 plot_log_gamma_histories(hist_binary_flip$log_gamma) / (
 plot_log_p_histories(hist_binary_flip$miscalibration, "Miscalibration") + 
 plot_log_p_histories(hist_binary_flip$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
@@ -334,7 +334,7 @@ Let us start with the case that the the posterior probabilities are all $\frac{1
 #| fig-height: 6
 #| fig-width: 6
 
-hist_pnb_ignore_all <- load_histories("pnb_ignore_all")
+hist_pnb_ignore_all <- load_histories("pnb_ignore_all", "poisson_nb_example.qmd")
 plot_log_gamma_histories(hist_pnb_ignore_all$log_gamma) / (
 plot_log_p_histories(hist_pnb_ignore_all$miscalibration, "Miscalibration") + 
 plot_log_p_histories(hist_pnb_ignore_all$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
@@ -347,7 +347,7 @@ One may argue that this is easy to discover, simply check for constant BFs. So t
 #| fig-height: 6
 #| fig-width: 6
 
-hist_pnb_ignore_half <- load_histories("pnb_ignore_half")
+hist_pnb_ignore_half <- load_histories("pnb_ignore_half", "poisson_nb_example.qmd")
 plot_log_gamma_histories(hist_pnb_ignore_half$log_gamma) / (
 plot_log_p_histories(hist_pnb_ignore_half$miscalibration, "Miscalibration") + 
 plot_log_p_histories(hist_pnb_ignore_half$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
@@ -360,7 +360,7 @@ Now let us try to introduce noise into the BF, specifically we will add normal n
 #| fig-height: 6
 #| fig-width: 6
 
-hist_pnb_vari <- load_histories("pnb_vari")
+hist_pnb_vari <- load_histories("pnb_vari", "poisson_nb_example.qmd")
 plot_log_gamma_histories(hist_pnb_vari$log_gamma) / (
 plot_log_p_histories(hist_pnb_vari$miscalibration, "Miscalibration") + 
 plot_log_p_histories(hist_pnb_vari$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
@@ -373,7 +373,7 @@ There is however a case where DAP works better than the other options, that is w
 #| fig-height: 6
 #| fig-width: 6
 
-hist_pnb_bias <- load_histories("pnb_bias")
+hist_pnb_bias <- load_histories("pnb_bias", "poisson_nb_example.qmd")
 plot_log_gamma_histories(hist_pnb_bias$log_gamma) / (
 plot_log_p_histories(hist_pnb_bias$miscalibration, "Miscalibration") + 
 plot_log_p_histories(hist_pnb_bias$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
@@ -396,23 +396,41 @@ Problems are largest when a parameter with improper prior interacts with some pa
 
 We test a model with the intercept and a single fixed effect against a model that also has a random effect. We will be using the BayesFactor package.
 
-Now choosing the overall intercept as fixed constant results in apparent miscalibration for both the model index and all the individual random effect parameters (see @fig-ranef-constant). In this case the problem is the most quickly picked up by the miscalibration test with DAP and SBC for the model index following very quickly. However this is a false positive. Employing posterior SBC to produce a proper prior for the mean and intercept results in perfect calibration in all methods even after running 10 000 simulations. So we can conclude that the BF calculation in the BayesFactor package works well for this case.
+```{r}
+ranef_test <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100_tests.rds"), "lmbf_ranef_presence_post_sbc.qmd")
+ranef_ci_diff <- paste0(round(ranef_test$t$conf.int - ranef_test$t$null.value, 3), collapse = "; ")
+```
+
+
+Now choosing the overall intercept as fixed constant results in apparent miscalibration for both the model index and all the individual random effect parameters (see @fig-ranef-constant). In this case the problem is the most quickly picked up by the miscalibration test with DAP and SBC for the model index following very quickly. However this is a false positive. Employing posterior SBC to produce a proper prior for the mean and intercept results in perfect calibration in all methods even after running 10 000 simulations (@fig-ranef-post, miscalibration p = `round(ranef_test$miscalibration_p))`, 95% CI for DAP difference from expected mean `r ranef_ci_diff`). So we can conclude that the BF calculation in the BayesFactor package works well for this case.
 
 ```{r fig-ranef-constant}
 #| fig-cap: Histories of check statistics for random effect model using constant mean and intercept. 
 #| fig-height: 6
 #| fig-width: 6
 
-hist_ranef_constant <- load_histories("ranef_constant")
+hist_ranef_constant <- load_histories("ranef_constant", "lmbf_ranef_presence_post_sbc.qmd")
 plot_log_gamma_histories(hist_ranef_constant$log_gamma) / (
 plot_log_p_histories(hist_ranef_constant$miscalibration, "Miscalibration") + 
 plot_log_p_histories(hist_ranef_constant$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
 ```
 
+```{r fig-ranef-post}
+res_ranef_post <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100.rds"), "lmbf_ranef_presence_post_sbc.qmd")$result
+
+plot_ecdf_diff(res_ranef_post, combine_variables = combine_lmBF_arrays)
+bp_post <- binary_probabilities_from_stats(res_post$stats)
+#SBC::plot_binary_calibration(bp_post)
+plot(reliabilitydiag::reliabilitydiag(x = bp_post$prob, y = bp_post$simulated_value, region.level = 0.95, region.method = "resampling", n.boot = 1000))
+
+
+```
+
+
 TODO: here we might want to also compare BFs calculated assuming standard improper prior vs. some weakly informative prior on intercept + sigma for the same set of datasets. I'd expect it will turn out to have noticeable effect despite a pretty common recommendation that priors on shared parameters don't matter that much. But maybe that's too tangential for this paper?
 
 
-The previous example is the simplest setting we discovered where we obtain strong miscalibration due to improper priors for shared parameters, however, the problem subtly affects even much simpler settings.
+The previous example is the simplest setting we discovered where we obtain incorrect strong miscalibration due to improper priors for shared parameters, however, the problem subtly affects even much simpler settings.
 
 ttestBF in BayesFactor package, JZS test.
 
@@ -425,7 +443,7 @@ However, when we use posterior SBC, the computed Bayes factors pass all checks t
 
 ### Schad et al.
 
-Unfortunately, their work has multiple problems making their conclusions suspect: they do not simulate from the correct prior for multiple parameters (not just those with improper priors) and they focus on DAP (which we know is weak)
+Unfortunately, their work has multiple problems making their conclusions suspect: they do not simulate from the correct prior for multiple parameters (not just those with improper priors) and they focus on DAP (which we know is weak), finally they also compare the wrong null hypothesis (they simulate null where three coefficients are 0, but compute BF agaisnt a hypothesis that a single coefficient is 0).
 
 Another problem is using Bayesian t-tests for testing means, which can be invalid (most notably, if the posterior probabilities are constant). Here we combine classical t-tests (which work well enough in most cases) and the test of Gaffke 2005, which is more thoroughly investigated in Learned-Miller and Thomas 2019 [A new confidence interval for the mean of a bounded random variable](https://arxiv.org/pdf/1905.06208) --- this test has been proven valid only in special circumstances, but no counterexample is known and it provides much larger power than the alternatives. 
 
@@ -433,10 +451,13 @@ Schad et al. claim miscalibrated, actually is calibrated.
 
 Are BMA quantities useful?
 
+### Turtles example in the `bridgesampling` package
+
 ### Something where bridgesampling works
 
 Neglecting vectorization
 https://link.springer.com/article/10.1007/s41237-024-00232-7
+9/21 neglected the normalizing constant - reuse the turtle models
 
 ## Discussion
 

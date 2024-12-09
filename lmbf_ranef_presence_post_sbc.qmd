@@ -265,9 +265,18 @@ res_post <- compute_SBC(ds_post, backend_post, keep_fits = FALSE,
 
 plot_ecdf_diff(res_post, combine_variables = combine_lmBF_arrays)
 bp_post <- binary_probabilities_from_stats(res_post$stats)
-t.test(bp_post$prob, mu = prob1_prior)
-miscalibration_resampling_p(bp_post$prob, bp_post$simulated_value)
+post_t <- t.test(bp_post$prob, mu = prob1_prior)
+post_t
+post_miscalibration_p <- miscalibration_resampling_p(bp_post$prob, bp_post$simulated_value)
+post_miscalibration_p
+
 reliabilitydiag::reliabilitydiag(x = bp_post$prob, y = bp_post$simulated_value)
+
+saveRDS(
+  list(t  = post_t,
+       miscalibration_p = post_miscalibration_p),
+  file.path(cache_dir, paste0("lmbf_ranef_post_presence_", N_for_filename, "_tests.rds")))
+
 
 ```
 
@@ -371,6 +380,7 @@ sim_lmbf_fixed <- function(N, N_subjects, formula, alpha_sigma_prior, rscaleFixe
 ```
 
 
+
 ```{r}
 N <- 100
 N_subjects <- 15
@@ -439,6 +449,7 @@ bp_ranef_constant <- binary_probabilities_from_stats(res_constant$stats)
 
 hist_ranef_constant_schad <- compute_bootstrapped_histories(bp_ranef_constant, history_length = hist_length_constant, n_histories = 100, step = hist_step_constant,
                                             compute_schad_history, min_sim_id = 10)
+
 
 
 hist_ranef_constant_miscalib <- compute_bootstrapped_histories(bp_ranef_constant, history_length = hist_length_constant, n_histories = 100, step = hist_step_constant,

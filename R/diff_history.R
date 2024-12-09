@@ -286,15 +286,13 @@ compute_calibration_history <- function(history_single_func, stats, step = 1, mi
   if(!("prob" %in% names(stats))) {
     stop("Stats must contain prob - maybe you forgot to call `binary_probabilities_from_stats`?")
   }
-  #fff <- function(...) {stop("Bagr")}
   stats |>
     dplyr::group_by(variable) |>
     dplyr::reframe(
       sim_id = sim_id[include_step(sim_id, step)],
       log_p = history_single_func(prob, simulated_value, step = step, ...)
     ) |>
-    filter(sim_id >= min_sim_id) #|>
-    #fff
+    dplyr::filter(sim_id >= min_sim_id)
 }
 
 
@@ -413,8 +411,15 @@ save_histories <- function(name, ...) {
   saveRDS(list(...), here::here("cache", paste0("hist_", name, ".rds")))
 }
 
+load_precomputed_file <- function(filename, prodcuer_script) {
+  if(!file.exists(filename)) {
+    stop("File: `", filename, "` does not exist. Run ", producer_script, " to generate it.")
+  }
+  readRDS(filename)
+}
 
-load_histories <- function(name) {
-  readRDS(here::here("cache", paste0("hist_", name, ".rds")))
+load_histories <- function(name, producer_script) {
+  filename <- here::here("cache", paste0("hist_", name, ".rds"))
+  load_precomputed_file(filename, prodcuer_script)
 }
 

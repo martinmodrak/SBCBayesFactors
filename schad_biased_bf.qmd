@@ -183,7 +183,7 @@ res_2step <- compute_SBC(
 ```{r}
 plot_ecdf_diff(res_2step)
 
-plot_binary_calibration_diff(res_2step$stats)
-calibrationband::calibration_bands(round(res_2step$backend_diagnostics$prob_H1, 8), res_2step$stats %>% filter(variable == "model") %>% pull(simulated_value) %>% as.logical())
+#plot_binary_calibration_diff(res_2step$stats)
+#calibrationband::calibration_bands(round(res_2step$backend_diagnostics$prob_H1, 8), res_2step$stats %>% filter(variable == "model") %>% pull(simulated_value) %>% as.logical())
 ```
 
