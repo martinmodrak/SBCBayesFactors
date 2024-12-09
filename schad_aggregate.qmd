@@ -20,7 +20,10 @@ if(!dir.exists(cache_dir))  {
 options("brms.backend" = "rstan")
 rstan::rstan_options(auto_write = TRUE)
 
-future::plan(future::multisession, workers = 8)
+```
+
+```{r cluster}
+setup_cluster(max_workers_local = 8)
 ```
 
 

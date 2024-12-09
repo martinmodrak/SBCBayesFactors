@@ -286,13 +286,15 @@ compute_calibration_history <- function(history_single_func, stats, step = 1, mi
   if(!("prob" %in% names(stats))) {
     stop("Stats must contain prob - maybe you forgot to call `binary_probabilities_from_stats`?")
   }
+  #fff <- function(...) {stop("Bagr")}
   stats |>
     dplyr::group_by(variable) |>
     dplyr::reframe(
       sim_id = sim_id[include_step(sim_id, step)],
       log_p = history_single_func(prob, simulated_value, step = step, ...)
     ) |>
-    filter(sim_id >= min_sim_id)
+    filter(sim_id >= min_sim_id) #|>
+    #fff
 }
 
 

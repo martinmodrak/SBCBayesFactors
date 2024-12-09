@@ -12,30 +12,45 @@ library(ggplot2)
 library(patchwork)
 devtools::load_all()
 
+cache_dir <- here::here("cache")
+
 theme_set(theme_minimal())
 ```
 
-Call Paul 24.07
-Artificial example for constant prior:
-- flat prior on shared coefficient
-- correlated predictors
+TODO:
+Absolutely necessary:
+- Real example: Bad vectorization/normalization (based on paper)
+  - Do we know what the "usual issues" are? Bad normalization constants probably fail DAP quickly.
+- Schad lmbf2x2 (claimed miscalib, actually OK)
+- Notationally distinguish model parameters vs BMA parameters space
+- Ranef correct figures
+- Cleanup + figures for post t-test
+- Caching + bridgesampling
+- More simulations for ranef
+ 
+Important:
+- Schad bridgesampling 2x2 (claimed miscalib, actually OK)
+- Find a failure mode for bridgesamplinb/lmbf
+- Gaffke history
+- Explain why SBC and prediction calibration get different results in finite samples (PDF vs CDF / histogram vs. CDF)
+- Explain what SBC does with the K > 2 case (especially how ordering matters). Discuss possible solutions.
 
-Explain why SBC and prediction calibration get different results in finite samples (PDF vs CDF / histogram vs. CDF)
+Nice to have:
+- Practical example - close to zero probability for the correct model. (maybe weaker, "on a more theoretical note")
+- contrast with https://arxiv.org/pdf/2406.19346
+- parallel dataset generation
+- Test & Discuss effect of prior on shared parameters in ranef model
 
-Explain what SBC does with the K > 2 case (especially how ordering matters). Discuss possible solutions.
 
-Notationally distinguish model parameters vs BMA parameters space
 
-Data-averaged posterior - BF for _some_ model, expalin that it means unrelated, have an example.
 
-Practical example - close to zero probability for the correct model. (maybe weaker, "on a more theoretical note")
 
-Vertical line for 80% power in the plots.
 
-Do we know what the "usual issues" are? Bad normalization constants probably fail DAP quickly.
 
 =======
 
+
+TODO: 
 
 Throughout this paper we assume there is a single shared data space $Y$ and a set of Bayesian statistical models $\mathcal{M_i}$ for $i \in \{0, \dots, K-1\}$, each model associated and parameter space $\Theta_i$. For $y \in Y, \theta \in \Theta_i$ each model implies the following joint, marginal, and posterior densities:
 
@@ -250,8 +265,6 @@ $$
 
 Any candidate posterior can be described just by two numbers $\phi_\text{BMA}(\mathcal{M}_1 | Y = y) = b_y$. Analytically, we can show that $\phi_\text{BMA}$ will satisfy the data-averaged posterior criterion if and only if $b_0 + b_1 = 1$, i.e. allowing infinitely many wrong Bayes factors, including assigning 100% probability to the wrong model or having $\phi_\text{BMA}(\mathcal{M}_1 | Y = 0) = 1 - \pi_\text{BMA}( \mathcal{M}_1 | Y = 0)$. To be specific the DAP criterion for this model is:
 
-TODO 
-
 $$
 \forall i \in \{0,1\}: \text{Pr}(\mathcal{M}_i) = \sum_{y=0}^1  \phi_\text{BMA}(i | Y = y) \sum_{k=0}^1 \text{Pr}(y | \mathcal{M}_k) \text{Pr}(\mathcal{M}_k)
 $$
@@ -269,9 +282,9 @@ In contrast, $\phi_\text{BMA}$ will pass the prediction calibration check (and h
 
 Additionally, checking SBC w.r.t. the likelihood $g(i, y) = a_i^y (1 - a_i)^{1-y}$ also rules out the $b_i = \frac{1}{2}$ option.
 
-How quickly do we find problems empirically? First let us assure ourselves that when the model is correct we find no problems --- in the simulations, we use $a_0 = 0.2, a_1 = 0.9$.
+How quickly do we find problems empirically? First let us assure ourselves that when the model is correct we find no problems --- in the simulations, we use $a_0 = 0.2, a_1 = 0.9$. See @fig-binary-correct.
 
-```{r}
+```{r fig-binary-correct}
 #| fig-cap: Histories of check statistics for the correct binary model. The horizontal blue line marks rejecting the hypothesis of calibration with 5% false positive rate. We see that in all cases, violations tend to be non-severe and short-lived A) shows the log gamma statistic of default SBC, B) is the bootstrapped miscalabration of Dimitraidis et al. and C) is the t-test for the data-averaged posterior.
 #| fig-height: 6
 #| fig-width: 6
@@ -283,10 +296,10 @@ plot_log_p_histories(hist_binary_correct$schad, "DAP - Schad et al.")) + plot_an
 ```
 
 
-Now what happens, if we compute the Bayes factors as if the probabilities were flipped (i.e. computing the inverse of the true Bayes factor)
+Now what happens, if we compute the Bayes factors as if the probabilities were flipped (i.e. computing the inverse of the true Bayes factor), see @fig-binary-flipped.
 
 
-```{r}
+```{r fig-binary-flipped}
 #| fig-cap: Histories of check statistics for the flipped binary model. The horizontal blue line marks rejecting the hypothesis of calibration with 5% false positive rate. The vertical orange line marks the number of simulations when the check first attains 80% power. We see that SBC as well as miscalibration identify the problem very quickly, while DAP does not diagnose it (the rare low p-values arise from using a t-test on what is essentially binary data). Note that the p-values from the miscalibration test are capped at $\frac{1}{2000}$ due to the number of bootstrap samples used.
 #| fig-height: 6
 #| fig-width: 6
@@ -314,9 +327,9 @@ With both variables known - in our experiments we used $\lambda = 3, \phi = 5$ a
 
 Beyond the model index, we use two derived quantities in SBC, one is the log-likelihood, second is an estimate of variance, specifically $f(i, y) = \begin{cases}\text{Mean}(y) & i = 0 \\ \text{Var}(y) & i = 1 \end{cases}$ --- this is an example of a simple data-dependent test quantity designed with the specific models in mind: under model 0, mean should be equal to variance, so we use it in that case. It is here to show, that one does not need to bring in the full model likelihood (which might be laborious to re-implement) to gain benefits of derived quantities.
 
-Let us start with the case that the the posterior probabilities are all $\frac{1}{2}$ --- we know that neither data-averaged posterior, nor miscalibration can detect this in principle (and that holds in the simulations), but data-dependent quantities typically discover the problem reasonably quickly.
+Let us start with the case that the the posterior probabilities are all $\frac{1}{2}$ --- we know that neither data-averaged posterior, nor miscalibration can detect this in principle (and that holds in the simulations), but data-dependent quantities typically discover the problem reasonably quickly - see @fig-pnb-ignore-all. 
 
-```{r}
+```{r fig-pnb-ingore-all}
 #| fig-cap: Histories of check statistics for poisson-NB model ignoring all data in BF computation. 
 #| fig-height: 6
 #| fig-width: 6
@@ -327,9 +340,9 @@ plot_log_p_histories(hist_pnb_ignore_all$miscalibration, "Miscalibration") +
 plot_log_p_histories(hist_pnb_ignore_all$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
 ```
 
-One may argue that this is easy to discover, simply check for constant BFs. So the next step is a situation where just half of the datapoints are ignored - this still cannot be detected by miscalibration or DAP, but SBC will detect it with suitable derived quantities. The posterior is now closer to correct, so we require more simulations to discover the problem, but both data-dependent quantities uncover the issue.
+One may argue that this is easy to discover, simply check for constant BFs. So the next step is a situation where just half of the datapoints are ignored - this still cannot be detected by miscalibration or DAP, but SBC will detect it with suitable derived quantities. The posterior is now closer to correct, so we require more simulations to discover the problem, but both data-dependent quantities uncover the issue, see @fig-pnb-ignore-half.
 
-```{r}
+```{r fig-pnb-ignore-half}
 #| fig-cap: Histories of check statistics for poisson-NB model ignoring half the data in BF computation. 
 #| fig-height: 6
 #| fig-width: 6
@@ -340,9 +353,9 @@ plot_log_p_histories(hist_pnb_ignore_half$miscalibration, "Miscalibration") +
 plot_log_p_histories(hist_pnb_ignore_half$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
 ```
 
-Now let us try to introduce noise into the BF, specifically we will add normal noise with sd 2 to the logarithm of the BF - relatively quickly discovered by miscalibration and SBC, but generally missed by DAP.
+Now let us try to introduce noise into the BF, specifically we will add normal noise with sd 2 to the logarithm of the BF - relatively quickly discovered by miscalibration and SBC, but generally missed by DAP, see @fig-pnb-noise.
 
-```{r}
+```{r fig-pnb-noise}
 #| fig-cap: Histories of check statistics for poisson-NB model with noise in BF. 
 #| fig-height: 6
 #| fig-width: 6
@@ -370,35 +383,53 @@ plot_log_p_histories(hist_pnb_bias$schad, "DAP - Schad et al.")) + plot_annotati
 
 In more general models, SBC with any realistic number and choice of test quantities may permit many wrong posteriors. However, when using suitable data-dependent test quantities, those wrong posteriors are hard to construct and are unlikely to be the result of a bug in the computation. On the other hand, wrong posteriors satisfying the data-averaged posterior check are easy to come by and can plausibly arise due to a programming error (e.g. flipping the model indices, not including a part of the data) or bad numerical approximations (increased variance, but no bias). 
 
-## Real examples
+## Realistic examples
 
 TODO 
 
 ### Posterior SBC and the importance of using correct priors
 
-It may be tempting to use a fixed value of $\mu$ and $\sigma^2$ or draw them from some surrogate distribution. In this case however, the assumptions of all of the consistency criteria except the good check do not hold. And indeed, we see subtle violations of all checks.
+It may be tempting to use a fixed value of $\mu$ and $\sigma^2$ or draw them from some surrogate distribution. In this case however, the assumptions of all of the consistency criteria (except the good check) do not hold. And indeed, we see subtle violations of all checks.
 
 
 Problems are largest when a parameter with improper prior interacts with some parameter of actual interest. A practically highly relevant example is the interaction of the prior on the intercept (which is often taken as improper) with the prior on random effects. (see Ogle, K., & Barber, J. J. (2020). Ensuring identifiability in hierarchical mixed effects Bayesian models. Ecological Applications. doi:10.1002/eap.2159 for more discussion of this problem).
 
 We test a model with the intercept and a single fixed effect against a model that also has a random effect. We will be using the BayesFactor package.
 
-Now choosing the overall intercept as fixed constant in SBC results in apparent miscalibration, but that is a false positive. Using posterior SBC results in perfectly calibrated
+Now choosing the overall intercept as fixed constant results in apparent miscalibration for both the model index and all the individual random effect parameters (see @fig-ranef-constant). In this case the problem is the most quickly picked up by the miscalibration test with DAP and SBC for the model index following very quickly. However this is a false positive. Employing posterior SBC to produce a proper prior for the mean and intercept results in perfect calibration in all methods even after running 10 000 simulations. So we can conclude that the BF calculation in the BayesFactor package works well for this case.
 
-The previous example is the simplest setting where we obtain strong miscalibration due to improper priors for shared parameters, however, the problem subtly affects even much simpler settings.
+```{r fig-ranef-constant}
+#| fig-cap: Histories of check statistics for random effect model using constant mean and intercept. 
+#| fig-height: 6
+#| fig-width: 6
+
+hist_ranef_constant <- load_histories("ranef_constant")
+plot_log_gamma_histories(hist_ranef_constant$log_gamma) / (
+plot_log_p_histories(hist_ranef_constant$miscalibration, "Miscalibration") + 
+plot_log_p_histories(hist_ranef_constant$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
+```
+
+TODO: here we might want to also compare BFs calculated assuming standard improper prior vs. some weakly informative prior on intercept + sigma for the same set of datasets. I'd expect it will turn out to have noticeable effect despite a pretty common recommendation that priors on shared parameters don't matter that much. But maybe that's too tangential for this paper?
+
+
+The previous example is the simplest setting we discovered where we obtain strong miscalibration due to improper priors for shared parameters, however, the problem subtly affects even much simpler settings.
 
 ttestBF in BayesFactor package, JZS test.
 
 Uses an improper Jeffrey's prior on variance $\pi_\text{prior}\left(\sigma^2\right) = \frac{1}{\sigma^2}$.
 
 
-However, when we use posterior SBC, the computed Bayes factors pass all checks to high precision.
+However, when we use posterior SBC, the computed Bayes factors pass all checks to high precision (using 40 000 simulations).
 
 
 
 ### Schad et al.
 
 Unfortunately, their work has multiple problems making their conclusions suspect: they do not simulate from the correct prior for multiple parameters (not just those with improper priors) and they focus on DAP (which we know is weak)
+
+Another problem is using Bayesian t-tests for testing means, which can be invalid (most notably, if the posterior probabilities are constant). Here we combine classical t-tests (which work well enough in most cases) and the test of Gaffke 2005, which is more thoroughly investigated in Learned-Miller and Thomas 2019 [A new confidence interval for the mean of a bounded random variable](https://arxiv.org/pdf/1905.06208) --- this test has been proven valid only in special circumstances, but no counterexample is known and it provides much larger power than the alternatives. 
+
+Schad et al. claim miscalibrated, actually is calibrated.
 
 Are BMA quantities useful?
 
@@ -415,8 +446,8 @@ Our results also show that to rule out problems in BF computation, simulation st
 
 Another advantage of running SBC for the full BMA model is that we can use the same simulations to check that the individual models are well implemented/calibrated --- if the individual models are wrong, we cannot make any strong inferences about the method for computing Bayes factors (though the specific combination is invalidated).
 
-Using multiple test quantities or even multiple methods for checking the calibration of the model yields to multiple testing issues. However, here Type II error is the biggest problem. We can usually run more simulations to sort flukes from real problems with little expense. Additionally, in a perfect world a failed calibration check is followed by investigation to get understanding why the computation failed.
+Using multiple test quantities or even multiple methods for checking the calibration of the model yields to multiple testing issues. However, here Type II error (false negatives) is the biggest problem. We can usually run more simulations to sort flukes from real problems with little expense. Additionally, in a perfect world a failed calibration check is followed by investigation to get understanding why the computation failed.
 
 Checking packages for Bayes factors is difficult as the implied priors are typically non-standard and at best partially documented.
 
-We have also shown that the choice priors for shared parameters like the intercept or standard deviation (which is often given little thought) can have non-negligible effect on Bayes factors, further highlighting the brittleness of Bayes factors.
+We have also shown that the choice of priors for parameters shared across both compared models like the intercept or standard deviation (which is often given little thought) can have non-negligible effect on Bayes factors, further highlighting the brittleness of Bayes factors.

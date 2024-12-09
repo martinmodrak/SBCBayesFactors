@@ -23,8 +23,8 @@ theme_set(theme_minimal())
 n_histories <- 100
 ```
 
-```{r}
-future::plan(future::multisession, workers = parallel::detectCores)
+```{r cluster}
+setup_cluster()
 ```
 
 

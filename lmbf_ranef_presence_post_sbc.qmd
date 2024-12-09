@@ -15,7 +15,7 @@ library(BayesFactor)
 
 
 
-options(mc.cores = 12 , SBC.min_chunk_size = 50)
+options(SBC.min_chunk_size = 50)
 rstan_options(auto_write = TRUE)
 
 cache_dir <- here::here("cache")
@@ -29,11 +29,8 @@ if(!dir.exists(cache_fits_dir)) {
 }
 
 devtools::load_all()
+setup_cluster()
 theme_set(theme_minimal())
-```
-
-```{r cluster}
-future::plan(future::multisession, workers = parallel::detectCores)
 ```
 
 
@@ -53,11 +50,6 @@ f_H1 <- update(f_H0, . ~ . + Subject)
 r_scale_fixed <- sqrt(2) / 4
 r_scale_random <- sqrt(2) / 4
 r_scale_cont <- sqrt(2) / 4
-scenario_mod <- ""
-# r_scale_fixed <- sqrt(2) / 4
-# r_scale_random <- 1
-# r_scale_cont <- sqrt(2) / 4
-# scenario_mod <- "_scale2"
 
 set.seed(5482334)
 N_prior_data <- 12
@@ -97,8 +89,8 @@ prior_data_stan <- list(N = N_prior_data, r_fixed = r_scale_fixed, r_random = r_
 # prior_data_stan_H1$K <- ncol(mm_H1)
 
 
-res_prior_H0 <- sampling(prior_model_H0, data = prior_data_stan, iter = 16000, warmup = 1000, thin = 10)
-res_prior_H1 <- sampling(prior_model_H1, data = prior_data_stan, iter = 16000, warmup = 1000, thin = 10, control = list(adapt_delta = 0.99))
+res_prior_H0 <- sampling(prior_model_H0, data = prior_data_stan, iter = 51000, warmup = 1000, thin = 10)
+res_prior_H1 <- sampling(prior_model_H1, data = prior_data_stan, iter = 51000, warmup = 1000, thin = 10, control = list(adapt_delta = 0.99))
 
 draws_prior_H1 <- posterior::as_draws_matrix(res_prior_H1)
 draws_prior_H0 <- posterior::as_draws_matrix(res_prior_H0)
@@ -133,7 +125,7 @@ draws_lmbf_H0 <- lmBF(f_H0, data = prior_df, whichRandom = "Subject", rscaleFixe
 
 
 ```{r}
-sim_lmbf_ranef_posterior <- function(N, N_subjects, formula, df_prior, draws, rscaleFixed = r_scale_fixed, rscaleRandom = r_scale_random) {
+sim_lmbf_ranef_posterior <- function(N, N_subjects, formula, df_prior, draws, rscaleFixed, rscaleRandom) {
   draws <- posterior::merge_chains(draws)
   draw_id <- sample.int(posterior::ndraws(draws), size = 1)
 
@@ -222,13 +214,38 @@ sim_lmbf_fixed_posterior <- function(N, N_subjects, formula, df_prior, draws, rs
 # Post SBC
 
 ```{r}
-set.seed(854230)
 N <- 100 - nrow(prior_df)
 N_subjects <- 15
 n_sims <- 10000
 
-ds_lmbf_post_H0 <- generate_datasets(SBC_generator_function(sim_lmbf_fixed_posterior, formula = f_H0, N = N, N_subjects = N_subjects, df_prior = prior_df, draws = draws_prior_H0), n_sims = n_sims)
-ds_lmbf_post_H1 <- generate_datasets(SBC_generator_function(sim_lmbf_ranef_posterior, formula = f_H0, N = N, N_subjects = N_subjects, df_prior = prior_df, draws = draws_prior_H1), n_sims = n_sims)
+set.seed(854230)
+ds_lmbf_post_H0 <- generate_datasets(
+  SBC_generator_function(
+    sim_lmbf_fixed_posterior,
+    formula = f_H0,
+    N = N,
+    N_subjects = N_subjects,
+    df_prior = prior_df,
+    draws = draws_prior_H0,
+    future.globals = "sim_lmbf_ranef_data"
+  ),
+  n_sims = n_sims
+)
+set.seed(6895266)
+ds_lmbf_post_H1 <- generate_datasets(
+  SBC_generator_function(
+    sim_lmbf_ranef_posterior,
+    formula = f_H0,
+    N = N,
+    N_subjects = N_subjects,
+    df_prior = prior_df,
+    draws = draws_prior_H1,
+    rscaleFixed = r_scale_fixed, 
+    rscaleRandom = r_scale_random,
+    future.globals = "sim_lmbf_ranef_data"
+  ),
+  n_sims = n_sims
+)
 ```
 
 
@@ -244,12 +261,11 @@ backend_post <- SBC_backend_extractBF_comparison(backend_H0, backend_H1)
 N_for_filename <- nrow(ds_post$generated[[1]])
 res_post <- compute_SBC(ds_post, backend_post, keep_fits = FALSE,
                             cache_mode = "results",
-                            cache_location = file.path(cache_dir, paste0("lmbf_ranef_post_presence_", N_for_filename, scenario_mod, ".rds")))
+                            cache_location = file.path(cache_dir, paste0("lmbf_ranef_post_presence_", N_for_filename, ".rds")))
 
 plot_ecdf_diff(res_post, combine_variables = combine_lmBF_arrays)
 bp_post <- binary_probabilities_from_stats(res_post$stats)
 t.test(bp_post$prob, mu = prob1_prior)
-ml_dap_p(bp_post$prob, mu = prob1_prior )
 miscalibration_resampling_p(bp_post$prob, bp_post$simulated_value)
 reliabilitydiag::reliabilitydiag(x = bp_post$prob, y = bp_post$simulated_value)
 
@@ -354,14 +370,41 @@ sim_lmbf_fixed <- function(N, N_subjects, formula, alpha_sigma_prior, rscaleFixe
 
 ```
 
+
 ```{r}
-set.seed(3485524)
 N <- 100
 N_subjects <- 15
-n_sims <- 100
-constant_alpha_sigma <- list(alpha = 200, sigma = 50)
-ds_lmbf_constant_H0 <- generate_datasets(SBC_generator_function(sim_lmbf_fixed, N = N, N_subjects = N_subjects, formula = f_H0, alpha_sigma_prior = constant_alpha_sigma), n_sims = n_sims)
-ds_lmbf_constant_H1 <- generate_datasets(SBC_generator_function(sim_lmbf_ranef, N = N, N_subjects = N_subjects, formula = f_H0, alpha_sigma_prior = constant_alpha_sigma), n_sims = n_sims)
+n_sims <- 7500
+constant_alpha_sigma <- list(alpha = 0, sigma = 1)
+
+set.seed(854624)
+ds_lmbf_constant_H0 <- generate_datasets(
+  SBC_generator_function(
+    sim_lmbf_fixed,
+    N = N,
+    N_subjects = N_subjects,
+    formula = f_H0,
+    alpha_sigma_prior = constant_alpha_sigma,
+    rscaleFixed = r_scale_fixed, 
+    future.globals = "sim_lmbf_ranef_data"
+  ),
+  n_sims = n_sims
+)
+
+set.seed(2645244)
+ds_lmbf_constant_H1 <- generate_datasets(
+  SBC_generator_function(
+    sim_lmbf_ranef,
+    N = N,
+    N_subjects = N_subjects,
+    formula = f_H0,
+    alpha_sigma_prior = constant_alpha_sigma,
+    rscaleFixed = r_scale_fixed, 
+    rscaleRandom = r_scale_random,
+    future.globals = "sim_lmbf_ranef_data"
+  ),
+  n_sims = n_sims
+)
 
 ```
 
@@ -369,61 +412,46 @@ ds_lmbf_constant_H1 <- generate_datasets(SBC_generator_function(sim_lmbf_ranef, 
 ```{r}
 set.seed(42264855)
 ds_constant <- SBC_datasets_for_bf(ds_lmbf_constant_H0, ds_lmbf_constant_H1)
-backend_constant <- SBC_backend_extractBF_comparison(backend_H0, backend_H1)
+backend_constant <-  SBC_backend_extractBF_comparison(backend_H0, backend_H1)
 N_for_filename <- nrow(ds_constant$generated[[1]])
 res_constant <- compute_SBC(ds_constant, backend_constant, keep_fits = FALSE,
                             cache_mode = "results",
-                            cache_location = file.path(cache_dir, paste0("lmbf_ranef_post_presence_constant_", N_for_filename, scenario_mod, ".rds")))
+                            cache_location = file.path(cache_dir, paste0("lmbf_ranef_post_presence_constant_", N_for_filename, "_", n_sims, ".rds")))
 
 plot_ecdf_diff(res_constant, combine_variables = combine_lmBF_arrays)
 bp_constant <- binary_probabilities_from_stats(res_constant$stats)
 t.test(bp_constant$prob, mu = 0.5)
-ml_dap_p(bp_constant$prob)
+
 miscalibration_resampling_p(bp_constant$prob, bp_constant$simulated_value)
 reliabilitydiag::reliabilitydiag(x = bp_constant$prob, y = bp_constant$simulated_value)
 ```
 
-
 ```{r}
-res_split_constant <- split_SBC_results_for_bf(res_constant)
-plot_ecdf_diff(res_split_constant$stats_H0, combine_variables = combine_lmBF_arrays)
-plot_ecdf_diff(res_split_constant$stats_H1, combine_variables = combine_lmBF_arrays)
+hist_length_constant <- 750
+hist_step_constant <- 10
+stats_filtered <- res_constant$stats %>% filter(variable %in% c("model", "Subject-1", "Subject-2"))
+hist_ranef_constant <- compute_bootstrapped_histories(stats_filtered, history_length = hist_length_constant, n_histories = 100,
+                                                       step = hist_step_constant,
+                                            compute_log_gamma_history)
 
-#TODO explore the missing `simulated_value` cases.
-plot_sim_estimated(res_split_constant$stats_H0)
-plot_sim_estimated(res_split_constant$stats_H1)
-plot_sim_estimated(res_split_constant$stats_H1 %>% filter(variable == "g_Subject") %>% mutate(across(all_of(c("simulated_value", "mean", "q5", "q95")), log10 )))
+bp_ranef_constant <- binary_probabilities_from_stats(res_constant$stats)
+
+
+hist_ranef_constant_schad <- compute_bootstrapped_histories(bp_ranef_constant, history_length = hist_length_constant, n_histories = 100, step = hist_step_constant,
+                                            compute_schad_history, min_sim_id = 10)
+
+
+hist_ranef_constant_miscalib <- compute_bootstrapped_histories(bp_ranef_constant, history_length = hist_length_constant, n_histories = 100, step = hist_step_constant,
+                                            compute_miscalibration_history)
+
+plot_log_gamma_histories(hist_ranef_constant)
+plot_log_p_histories(hist_ranef_constant_schad, "Schad")
+plot_log_p_histories(hist_ranef_constant_miscalib, "Miscalibration resampling")
+
+save_histories("ranef_constant",
+               log_gamma = hist_ranef_constant,
+               schad = hist_ranef_constant_schad,
+               miscalibration = hist_ranef_constant_miscalib)
 
 ```
 
-
-## Constant prior nicer
-
-```{r}
-set.seed(854624)
-N <- 100
-N_subjects <- 15
-n_sims <- 1000
-constant2_alpha_sigma <- list(alpha = 0, sigma = 1)
-ds_lmbf_constant2_H0 <- generate_datasets(SBC_generator_function(sim_lmbf_fixed, N = N, N_subjects = N_subjects, formula = f_H0, alpha_sigma_prior = constant2_alpha_sigma), n_sims = n_sims)
-ds_lmbf_constant2_H1 <- generate_datasets(SBC_generator_function(sim_lmbf_ranef, N = N, N_subjects = N_subjects, formula = f_H0, alpha_sigma_prior = constant2_alpha_sigma), n_sims = n_sims)
-
-```
-
-
-```{r}
-set.seed(42264855)
-ds_constant2 <- SBC_datasets_for_bf(ds_lmbf_constant2_H0, ds_lmbf_constant2_H1)
-backend_constant2 <- backend_constant
-N_for_filename <- nrow(ds_constant2$generated[[1]])
-res_constant2 <- compute_SBC(ds_constant2, backend_constant2, keep_fits = FALSE,
-                            cache_mode = "results",
-                            cache_location = file.path(cache_dir, paste0("lmbf_ranef_post_presence_constant2_", N_for_filename, ".rds")))
-
-plot_ecdf_diff(res_constant2, combine_variables = combine_lmBF_arrays)
-bp_constant2 <- binary_probabilities_from_stats(res_constant2$stats)
-t.test(bp_constant2$prob, mu = 0.5)
-ml_dap_p(bp_constant2$prob)
-miscalibration_resampling_p(bp_constant2$prob, bp_constant2$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp_constant2$prob, y = bp_constant2$simulated_value)
-```

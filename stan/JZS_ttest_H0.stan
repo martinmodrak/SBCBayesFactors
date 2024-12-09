@@ -4,12 +4,16 @@ data {
 }
 
 parameters {
-  real<lower=0> sigma;
+  real<lower=0> sigma2;
+}
+
+transformed parameters {
+  real sigma = sqrt(sigma2);
 }
 
 model {
   target += normal_lpdf(y | 0, sigma);
-  target += -2 * log(sigma);
+  target += -log(sigma2);
 }
 
 generated quantities {

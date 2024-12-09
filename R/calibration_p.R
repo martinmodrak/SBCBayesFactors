@@ -147,117 +147,34 @@ CEP_bins <- function(x, y) {
   return(x[break_locations])
 }
 
-hosmer_lemeshow_p <- function(x,y, breaks = CEP_bins(x,y), log.p = FALSE) {
-  x_cut <- cut(x, breaks = c(0, breaks, 1.001), labels = 1:(length(breaks) + 1), include.lowest = TRUE)
-  stopifnot(all(!is.na(x_cut)))
-  observed <- xtabs(cbind(y0 = 1 - y, y1 = y) ~ x_cut)
-  expected <- xtabs(cbind(yhat0 = 1 - x, yhat1 = x) ~
-                      x_cut)
-  chisq <- sum((observed - expected)^2/expected)
-  G <- length(unique(x_cut))
-  return(pchisq(chisq, G - 2, lower.tail = FALSE, log.p = log.p))
+
+
+gaffke_p <- function(probs, mu = 0.5, B = 10000, alpha = 0.05) {
+  u_diff <- MCMCpack::rdirichlet(B, alpha = rep(1, length(probs) + 1))
+
+  z_upr <- c(sort(probs), 1)
+  m_matrix_upr <- sweep(u_diff, MARGIN = 2, STATS = z_upr, FUN = "*")
+  m_upr <- rowSums(m_matrix_upr)
+
+  z_lwr <- c(sort(1 - probs), 1)
+  m_matrix_lwr <- sweep(u_diff, MARGIN = 2, STATS = z_lwr, FUN = "*")
+  m_lwr <- rowSums(m_matrix_lwr)
+
+  mean(1-m_lwr <= mu)
 }
 
-hoeffding_p <- function(probs, mu = 0.5) {
-  n <- length(probs)
-  diff <- sum(probs) - mu * n
-  p_bound <- 2 * exp(- 2 * diff^2 / n)
-  return(min(p_bound, 1))
-}
+gaffke_p_history <- function(probs, mu = 0.5, B = 10000, alpha = 0.05) {
+  u_diff <- MCMCpack::rdirichlet(B, alpha = rep(1, length(probs) + 1))
 
-# https://www.jstor.org/stable/3481693
-# Seems to slightly improve on Hoeffding
-bentkus_p <- function(probs, mu = 0.5) {
-  z <- sum(probs)
-  n <- length(probs)
-  if(z/n > mu) {
-    binom_p <- pbinom(floor(z), size = n, prob = mu, lower.tail = FALSE)
-  } else {
-    binom_p <- pbinom(floor(n - z), size = n, prob = 1 - mu, lower.tail = FALSE)
-  }
-  p_bound <- binom_p * 2 * exp(1)
-  return(min(p_bound, 1))
-}
+  probs_ord <- order(probs)
+  z_upr <- c(probs[probs_ord], 1)
+  stop("TODO figure this out")
+  m_matrix_upr <- sweep(u_diff, MARGIN = 2, STATS = z_upr, FUN = "*")
+  m_upr <- rowSums(m_matrix_upr)
 
-ml_dap_p <- function(probs, mu = 0.5, B = 2000, alternative = c("two.sided", "less", "greater")) {
-  alternative <- match.arg(alternative)
-  s_probs <- sum(probs)
-  n <- length(probs)
-  m_probs <- s_probs/n
-  if(m_probs == mu) {
-    return(1)
-  } else if(m_probs > mu) {
-    if(alternative == "greater") {
-      return(1)
-    } else {
-      e_probs <- c(probs, 0)
-      a <- 1 - mu / m_probs
-      p_probs <- c(rep(mu / s_probs, n), a)
-      bs_matrix <- matrix(nrow = B, ncol = n, sample(e_probs, prob = p_probs, size = B * n, replace = TRUE))
-      bs <- rowMeans(bs_matrix)
-      p_one_side <- mean(bs >= m_probs)
-      if(alternative == "two.sided") {
-        return(min(1, p_one_side * 2))
-      } else {
-        return(p_one_side)
-      }
-    }
-  } else {
-    if(alternative == "less") {
-      return(1)
-    } else {
-      alt_flip <- c("two.sided" = "two.sided", "greater" = "less")
-      return(ml_dap_p(probs = 1 - probs, mu = 1 - mu, B = B, alternative = alt_flip[alternative]))
-    }
-  }
-}
+  z_lwr <- c(sort(1 - probs), 1)
+  m_matrix_lwr <- sweep(u_diff, MARGIN = 2, STATS = z_lwr, FUN = "*")
+  m_lwr <- rowSums(m_matrix_lwr)
 
-ml_dap_p_old2 <- function(probs, mu = 0.5, B = 2000, alternative = c("two.sided", "less", "greater")) {
-  alternative <- match.arg(alternative)
-  m_probs <- mean(probs)
-  if(m_probs == mu) {
-    return(1)
-  } else if(m_probs < mu) {
-    if(alternative == "less") {
-      return(1)
-    } else {
-      n <- length(probs)
-      e_probs <- c(probs, 1)
-      a <- (1 - mu)/(1 - m_probs)
-      p_probs <- c(rep(a/n, n), (1 - a))
-      bs_matrix <- matrix(nrow = B, ncol = n, sample(e_probs, prob = p_probs, size = B * n, replace = TRUE))
-      bs <- rowMeans(bs_matrix)
-      bs_stat <- abs(qlogis(bs) - qlogis(mu))
-      obs_stat <- abs(qlogis(m_probs) - qlogis(mu))
-      p_one_side <- mean(bs <= m_probs)
-      if(alternative == "two.sided") {
-        return(min(1, p_one_side * 2))
-      } else {
-        return(p_one_side)
-      }
-    }
-  } else {
-    alt_flip <- c("two.sided" = "two.sided", "less" = "greater", "greater" = "less")
-    return(ml_dap_p(probs = 1 - probs, mu = 1 - mu, B = B, alternative = alt_flip[alternative]))
-  }
-}
-
-
-ml_dap_p_old <- function(probs, mu = 0.5, B = 2000) {
-  m_probs <- mean(probs)
-  if(m_probs == mu) {
-    return(1)
-  } else if(m_probs < mu) {
-    n <- length(probs)
-    e_probs <- c(probs, 1)
-    a <- (1 - mu)/(1 - m_probs)
-    p_probs <- c(rep(a/n, n), (1 - a))
-    bs_matrix <- matrix(nrow = B, ncol = n, sample(e_probs, prob = p_probs, size = B * n, replace = TRUE))
-    bs <- rowMeans(bs_matrix)
-    bs_stat <- abs(qlogis(bs) - qlogis(mu))
-    obs_stat <- abs(qlogis(m_probs) - qlogis(mu))
-    return(mean(bs_stat >= obs_stat))
-  } else {
-    return(ml_dap_p_old(1 - probs, 1 - mu, B))
-  }
+  mean(1-m_lwr <= mu)
 }

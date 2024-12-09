@@ -31,31 +31,31 @@ include_individual <- FALSE
 ```
 
 ```{r cluster}
-future::plan(future::multisession, workers = 12)
+setup_cluster()
 ```
 
 
-The 'squared' variant based on https://github.com/richarddmorey/BayesFactor/issues/156
-it appears it is the only one which results in correct calibration :-O
+Code based on https://github.com/richarddmorey/BayesFactor/issues/156
+it is the only one which results in correct calibration :-O
 
 ```{r}
-variant <- "_squared"
-#variant <- ""
-#variant <- "_nojacob"
-prior_model_H0 <- stan_model(paste0("stan/JZS_ttest_H0", variant, ".stan"))
-prior_model_H1 <- stan_model(paste0("stan/JZS_ttest_H1", variant, ".stan"))
+prior_model_H0 <- stan_model("stan/JZS_ttest_H0.stan")
+prior_model_H1 <- stan_model("stan/JZS_ttest_H1.stan")
 ```
 
 ## Posterior SBC
 
 ```{r}
-set.seed(2556652)
+set.seed(899548)
 prior_data <- c(-1, 1)
 r_scale <- sqrt(2) / 2
+
+n_sims <- 50000
+
 #r_scale <- 0.1
 prior_data_stan <- list(N = length(prior_data), y = prior_data, r = r_scale)
-res_prior_H1 <- sampling(prior_model_H1, data = prior_data_stan, iter = 41000, warmup = 1000, thin = 5, cores = 1)
-res_prior_H0 <- sampling(prior_model_H0, data = prior_data_stan, iter = 41000, warmup = 1000, thin = 5, cores = 1)
+res_prior_H1 <- sampling(prior_model_H1, data = prior_data_stan, iter = n_sims + 1000, warmup = 1000, thin = 5, cores = 1)
+res_prior_H0 <- sampling(prior_model_H0, data = prior_data_stan, iter = n_sims + 1000, warmup = 1000, thin = 5, cores = 1)
 
 draws_prior_H1 <- posterior::as_draws_matrix(res_prior_H1)
 draws_prior_H0 <- posterior::as_draws_matrix(res_prior_H0)
@@ -103,12 +103,7 @@ sim_jzs_from_prior <- function(N_new, model = "random", H1_prob = 0.5) {
 ```
 
 ```{r}
-if(variant == "_squared") {
-  n_sims <- 40000
-} else {
-  n_sims <- 10000
-}
-set.seed(512233554)
+set.seed(495842136)
 ds_ttest <- generate_datasets(SBC_generator_function(sim_jzs_from_prior, N_new = 5, H1_prob = prob1_prior), n_sims = n_sims)
 ```
 
@@ -169,12 +164,12 @@ dquants_ttest <- derived_quantities(
 ```{r}
 backend <- SBC_backend_ttestBF(rscale = r_scale)
 ds_ttest_no_sigma <- ds_ttest
-ds_ttest_no_sigma$variables <- posterior::subset_draws(ds_ttest$variables, variable = "sigma", exclude = TRUE) 
+ds_ttest_no_sigma$variables <- posterior::subset_draws(ds_ttest$variables, variable = setdiff(posterior::variables(ds_ttest$variables), "sigma"))
 
 res <- compute_SBC(ds_ttest_no_sigma, backend, keep_fits = FALSE, globals = ttest_globals,
                    dquants = dquants_ttest,
                    cache_mode = "results",
-                   cache_location = file.path(cache_dir, paste0("ttest", variant, ".rds")))
+                   cache_location = file.path(cache_dir, paste0("ttest_", n_sims, ".rds")))
 ```
 
 
@@ -395,7 +390,7 @@ if(include_bs) {
   res_bs <- compute_SBC(ds_ttest[1:100], backend_bs, keep_fits = FALSE,
                      dquants = dquants_ttest_bs,
                      cache_mode = "results",
-                     cache_location = file.path(cache_dir, paste0("ttest_bs", variant, ".rds")))
+                     cache_location = file.path(cache_dir, paste0("ttest_bs", n_sims, ".rds")))
 }
 ```
 

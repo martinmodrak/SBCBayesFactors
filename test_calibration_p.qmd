@@ -8,7 +8,10 @@ library(ggplot2)
 library(dplyr)
 theme_set(theme_minimal())
 devtools::load_all()
-future::plan(future::multisession)
+```
+
+```{r cluster}
+setup_cluster()
 ```
 
 
@@ -119,42 +122,6 @@ hist(ps)
 
 
 ```{r}
-gaffke_p <- function(probs, mu = 0.5, B = 10000, alpha = 0.05) {
-  # u_diff <- MCMCpack::rdirichlet(B, alpha = rep(1, length(probs) + 1))
-  # u <- apply(u_diff[,1:length(probs)], MARGIN = 1, cumsum)
-  # 
-  # z_lwr <- diff(c(sort(1 - probs), 1))
-  # m_matrix_lwr <- sweep(u, MARGIN = 1, STATS = z_lwr, FUN = "*")
-  # m_lwr <- 1 - colSums(m_matrix)
-  # 
-  # z_upr <- diff(c(sort(probs), 1))
-  # m_matrix_upr <- sweep(u, MARGIN = 1, STATS = z_upr, FUN = "*")
-  # m_upr <- 1 - colSums(m_matrix)
-  # 
-  # 1 - quantile(m_lwr, 1 - 0.975)
-  # quantile(m_upr, 0.975)
-  # as.numeric(quantile(m_upr, c(0.025,0.975)))
-  # 
-  
-
-  
-  
-  u_diff <- MCMCpack::rdirichlet(B, alpha = rep(1, length(probs) + 1))
-
-  z_upr <- c(sort(probs), 1)
-  m_matrix_upr <- sweep(u_diff, MARGIN = 2, STATS = z_upr, FUN = "*")
-  m_upr <- rowSums(m_matrix_upr)
-
-  z_lwr <- c(sort(1 - probs), 1)
-  m_matrix_lwr <- sweep(u_diff, MARGIN = 2, STATS = z_lwr, FUN = "*")
-  m_lwr <- rowSums(m_matrix_lwr)
-
-  mean(1-m_lwr <= mu)
-  # as.numeric(c(
-  #   1 - quantile(m_lwr, probs = 1 - alpha / 2),
-  #   quantile(m_upr, probs = 1 - alpha / 2)
-  #   ))
-}
 
 gaffke_p(c(0.9,0.9, 1))
 

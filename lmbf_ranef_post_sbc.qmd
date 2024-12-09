@@ -33,7 +33,7 @@ theme_set(theme_minimal())
 ```
 
 ```{r cluster}
-future::plan(future::multisession, workers = parallel::detectCores)
+setup_cluster()
 ```
 
 

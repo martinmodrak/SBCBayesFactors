@@ -33,7 +33,8 @@ theme_set(theme_minimal())
 ```
 
 ```{r cluster}
-plan(multisession, workers = 20)
+#plan(multisession, workers = 20)
+plan(multisession)
 
 ```
 
