@@ -115,6 +115,8 @@ good_check(true_model, p_M1)
 ```
 ```{r}
 hist_length_correct <- 1000
+invisible(get_precomputed_gamma_thresholds(unique(res_bin_correct$stats$max_rank) + 1,min_sims = 1, max_sims = hist_length_correct))
+
 hist_step_correct <- 10
 hist_correct <- compute_bootstrapped_histories(res_bin_correct$stats, history_length = hist_length_correct, n_histories = n_histories, step = hist_step_correct,
                                             compute_log_gamma_history)
@@ -124,8 +126,6 @@ hist_correct_schad <- compute_bootstrapped_histories(bp_correct, history_length 
                                             compute_schad_history)
 
 
-hist_correct_schad_bf <- compute_bootstrapped_histories(bp_correct, history_length = hist_length_correct, n_histories = n_histories, step = hist_step_correct,
-                                            compute_schad_bf_history)
 
 
 hist_correct_brier <- compute_bootstrapped_histories(bp_correct, history_length = hist_length_correct, n_histories = n_histories, step = hist_step_correct,
@@ -141,7 +141,6 @@ hist_correct_miscalibration <- compute_bootstrapped_histories(bp_correct, histor
 plot_log_gamma_histories(hist_correct)
 plot_log_p_histories(hist_correct_brier, "Brier resampling")
 plot_log_p_histories(hist_correct_schad, "Schad")
-plot_log_p_histories(hist_correct_schad_bf, "Schad BF")
 plot_log_p_histories(hist_correct_miscalibration, "Miscalibration resampling")
 
 save_histories("binary_correct",
@@ -280,14 +279,9 @@ hist_bad <- compute_bootstrapped_histories(res_bin_bad$stats, history_length = 1
 hist_bad_schad <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
                                             compute_schad_history, min_sim_id = 5)
 
-hist_bad_schad_bf <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
-
-                                                                                                compute_schad_bf_history, min_sim_id = 10)
 
 plot_log_gamma_histories(hist_bad)
 plot_log_p_histories(hist_bad_schad, "Schad")
-
-plot_log_p_histories(hist_bad_schad_bf, "schad_bf")
 ```
 
 
@@ -298,10 +292,6 @@ hist_bad <- compute_bootstrapped_histories(res_bin_bad$stats, history_length = 1
 hist_bad_schad <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
                                             compute_schad_history, min_sim_id = 5)
 
-hist_bad_schad_bf <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
-
-                                                                                                compute_schad_bf_history, min_sim_id = 10)
-
 hist_bad_dimitriadis <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
                                             compute_dimitriadis_history, min_sim_id = 10)
 
@@ -309,7 +299,6 @@ hist_bad_dimitriadis <- compute_bootstrapped_histories(binary_probabilities_from
 plot_log_gamma_histories(hist_bad)
 plot_log_p_histories(hist_bad_schad, "Schad")
 
-plot_log_p_histories(hist_bad_schad_bf, "schad_bf")
 plot_log_p_histories(hist_bad_dimitriadis, "Dimitriadis 2023")
 
 ```
