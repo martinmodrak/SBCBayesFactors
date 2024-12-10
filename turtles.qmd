@@ -56,8 +56,7 @@ samps <- samps[samps < xlim]
 
 x_vals <- seq(1e-2, max(xlim), length.out = 200)
 
-nc <- xlim / (1 + xlim)
-pdf_df <- data.frame(x = x_vals, y = (1 + x_vals)^-2 / nc)
+pdf_df <- data.frame(x = x_vals, y = (1 + x_vals)^-2)
 
 
 
@@ -68,6 +67,14 @@ p + scale_y_log10()
 
 ```
 
+```{r}
+x_vals <- seq(0,10, length.out = 100)
+pdf_df <- data.frame(x = x_vals, y = (1 + x_vals)^-2)
+chisq_df <- data.frame(x = x_vals, y = dchisq(x_vals,df = 1))
+ggplot() + aes(x = x ,y = y) + geom_line(data = pdf_df, aes(y = y), color = "blue") + geom_line(data = chisq_df, aes(y = y), color = "red") 
+
+ggplot() + aes(x = x ,y = y) + geom_line(data = pdf_df, aes(y = y), color = "blue") + geom_line(data = chisq_df, aes(y = y), color = "red")  + scale_y_log10()
+```
 
 
 ```{r, comment = ""}
