@@ -17,8 +17,6 @@ use_cmdstanr <- FALSE
 library(rstan)
 rstan_options(auto_write = TRUE)
 
-options(mc.cores = 8)
-
 library(future)
 
 
@@ -30,12 +28,11 @@ if(!dir.exists(cache_dir)) {
 do_tests <- FALSE
 
 theme_set(theme_minimal())
+devtools::load_all()
 ```
 
 ```{r cluster}
-#plan(multisession, workers = 20)
-plan(multisession)
-
+setup_cluster()
 ```
 
 
@@ -77,12 +74,15 @@ cat(readLines("stan/turtles_H0.stan"), sep = "\n")
 ```{r compile-models}
 m_H0 <- stan_model("stan/turtles_H0.stan")
 m_H1 <- stan_model("stan/turtles_H1.stan")
+m_H1_chisq <- stan_model("stan/turtles_H1_chisq.stan")
 ```
+
+## Following `bridgesampling` example
 
 ```{r}
 data("turtles", package = "bridgesampling")
 
-sim_turtles <- function(model, N = NULL, C = NULL) {
+sim_turtles <- function(model, N = NULL, C = NULL, sigma2_prior = "default") {
   if(is.null(N)) {
     stopifnot(is.null(C))
     fixed_predictors <- TRUE
@@ -119,7 +119,13 @@ sim_turtles <- function(model, N = NULL, C = NULL) {
       predictor <- alpha0 + alpha1 * x
       log_lik_spec <- 0
     } else {
-      sigma2_clutch <- r_inv_one_plus_sq(1)
+      if(sigma2_prior == "default") {
+        sigma2_clutch <- r_inv_one_plus_sq(1)
+      } else if(sigma_prior == "chisq") {
+        sigma2_clutch <- rchisq(1, df = 1)
+      } else {
+        stop("Invalid sigma2_prior")
+      }
       sigma_clutch <- sqrt(sigma2_clutch)      
       
       b_clutch_raw <- rnorm(C)
@@ -232,6 +238,12 @@ plot_rank_hist(res_turtles, variables = "model", bins = 20)
 ```
 
 ```{r}
+bp_turtles <- binary_probabilities_from_stats(res_turtles$stats)
+t.test(bp_turtles$prob, mu = 0.5)
+miscalibration_resampling_p(bp_turtles$prob, bp_turtles$simulated_value)
+```
+
+```{r}
 # TODO: this needs to change after the update
 no_error_index <- res_turtles$backend_diagnostics$bs_error_H0 == "0%" & res_turtles$backend_diagnostics$bs_error_H1 == "0%"
 plot_ecdf_diff(res_turtles[no_error_index], combine_variables = combine_array_elements)
@@ -256,6 +268,40 @@ plot_ecdf_diff(stats_split$stats_H0)
 plot_ecdf_diff(stats_split$stats_H1, combine_variables = combine_array_elements)
 ```
 
+## Chi-squared prior
+
+```{r simulateds-chisq}
+set.seed(84662)
+ds_turtles_m1_chisq <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = NULL, C = NULL, sigma2_prior = "chisq"), n_sims = length(ds_turtles_m0))
+ds_turtles_chisq <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1_chisq)
+```
+
+
+```{r turtles1}
+backend_turtles_chisq <- SBC_backend_bridgesampling(
+  SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
+  SBC_backend_rstan_sample(m_H1_chisq, iter = iter, warmup = warmup, init = init)
+)
+res_turtles_chisq <- compute_SBC(ds_turtles_chisq, backend_turtles_chisq, 
+                           keep_fits = FALSE,
+                           cache_mode = "results",
+                           cache_location = file.path(cache_dir, "turtles_1_chisq.rds"))
+```
+
+
+
+```{r}
+plot_ecdf_diff(res_turtles_chisq, combine_variables = combine_array_elements)
+plot_binary_calibration_diff(res_turtles_chisq$stats)
+plot_rank_hist(res_turtles_chisq, variables = "model", bins = 20)
+
+```
+
+```{r}
+bp_turtles_chisq <- binary_probabilities_from_stats(res_turtles_chisq$stats)
+t.test(bp_turtles_chisq$prob, mu = 0.5)
+miscalibration_resampling_p(bp_turtles_chisq$prob, bp_turtles_chisq$simulated_value)
+```
 
 ## Warp3
 
@@ -312,7 +358,7 @@ plot_rank_hist(res_turtles_more, variables = "model", bins = 20)
 
 ```{r turtles2}
 set.seed(784522)
-N_sims <- 1000
+N_sims <- 2000
 N <- 80
 C <- 10
 ds_turtles_m0_2 <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C), n_sims = N_sims)
@@ -330,8 +376,14 @@ res_turtles_2 <- compute_SBC(ds_turtles_2, backend_turtles,
 res_turtles_2$backend_diagnostics$prob_H1 %>% hist() 
 plot_ecdf_diff(res_turtles_2)
 plot_binary_calibration_diff(res_turtles_2$stats)
-plot_binary_calibration_diff(res_turtles_2$stats)
 plot_ecdf_diff(res_turtles_2$stats)
+```
+
+
+```{r}
+bp_turtles_2 <- binary_probabilities_from_stats(res_turtles_2$stats)
+t.test(bp_turtles_2$prob, mu = 0.5)
+miscalibration_resampling_p(bp_turtles_2$prob, bp_turtles_2$simulated_value)
 ```
 
 
@@ -340,6 +392,8 @@ if(!("log_prob_H1" %in% names(res_turtles$backend_diagnostics))) {
   res_turtles$backend_diagnostics$log_prob_H1 <- log(res_turtles$backend_diagnostics$prob_H1)
 }
 ```
+
+
 
 
 ```{r}
@@ -369,3 +423,6 @@ res_turtles_w <- compute_SBC(ds_turtles, backend_turtles_warp,
                            cache_mode = "results",
                            cache_location = file.path(cache_dir, "turtles_1_w.rds"))
 ```
+
+
+
