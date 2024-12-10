@@ -88,6 +88,7 @@ m_H1_chisq <- stan_model("stan/turtles_H1_chisq.stan")
 
 ```{r}
 data("turtles", package = "bridgesampling")
+force(turtles)
 
 sim_turtles <- function(model, N = NULL, C = NULL, sigma2_prior = "default") {
   if(is.null(N)) {
@@ -128,7 +129,7 @@ sim_turtles <- function(model, N = NULL, C = NULL, sigma2_prior = "default") {
     } else {
       if(sigma2_prior == "default") {
         sigma2_clutch <- r_inv_one_plus_sq(1)
-      } else if(sigma_prior == "chisq") {
+      } else if(sigma2_prior == "chisq") {
         sigma2_clutch <- rchisq(1, df = 1)
       } else {
         stop("Invalid sigma2_prior")
@@ -208,8 +209,10 @@ C <- NULL
 
 set.seed(54223248)
 N_sims <- 1000
-ds_turtles_m0 <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C), n_sims = N_sims)
-ds_turtles_m1 <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C), n_sims = N_sims)
+ds_turtles_m0 <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C, future.globals = "turtles"), n_sims = N_sims)
+ds_turtles_m1 <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C, future.globals = "turtles"), n_sims = N_sims)
+
+set.seed(3148955)
 ds_turtles <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1)
 ```
 
@@ -239,7 +242,6 @@ res_turtles$stats
 
 ```{r}
 plot_ecdf_diff(res_turtles, combine_variables = combine_array_elements)
-plot_binary_calibration_diff(res_turtles$stats)
 plot_rank_hist(res_turtles, variables = "model", bins = 20)
 
 ```
@@ -248,6 +250,7 @@ plot_rank_hist(res_turtles, variables = "model", bins = 20)
 bp_turtles <- binary_probabilities_from_stats(res_turtles$stats)
 t.test(bp_turtles$prob, mu = 0.5)
 miscalibration_resampling_p(bp_turtles$prob, bp_turtles$simulated_value)
+my_reliability_diag(bp_turtles)
 ```
 
 ```{r}
@@ -279,7 +282,7 @@ plot_ecdf_diff(stats_split$stats_H1, combine_variables = combine_array_elements)
 
 ```{r simulateds-chisq}
 set.seed(84662)
-ds_turtles_m1_chisq <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = NULL, C = NULL, sigma2_prior = "chisq"), n_sims = length(ds_turtles_m0))
+ds_turtles_m1_chisq <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = NULL, C = NULL, sigma2_prior = "chisq", future.globals = "turtles"), n_sims = length(ds_turtles_m0))
 ds_turtles_chisq <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1_chisq)
 ```
 
@@ -299,7 +302,6 @@ res_turtles_chisq <- compute_SBC(ds_turtles_chisq, backend_turtles_chisq,
 
 ```{r}
 plot_ecdf_diff(res_turtles_chisq, combine_variables = combine_array_elements)
-plot_binary_calibration_diff(res_turtles_chisq$stats)
 plot_rank_hist(res_turtles_chisq, variables = "model", bins = 20)
 
 ```
@@ -308,6 +310,7 @@ plot_rank_hist(res_turtles_chisq, variables = "model", bins = 20)
 bp_turtles_chisq <- binary_probabilities_from_stats(res_turtles_chisq$stats)
 t.test(bp_turtles_chisq$prob, mu = 0.5)
 miscalibration_resampling_p(bp_turtles_chisq$prob, bp_turtles_chisq$simulated_value)
+my_reliability_diag(bp_turtles_chisq)
 ```
 
 ## Warp3

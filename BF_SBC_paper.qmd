@@ -599,9 +599,9 @@ plot_log_p_histories(hist_ranef_constant$schad, "DAP - Schad et al.")) + plot_an
 res_ranef_post <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100.rds"), "lmbf_ranef_presence_post_sbc.qmd")$result
 
 plot_ecdf_diff(res_ranef_post, combine_variables = combine_lmBF_arrays)
-bp_post <- binary_probabilities_from_stats(res_post$stats)
+bp_post <- binary_probabilities_from_stats(res_ranef_post$stats)
 #SBC::plot_binary_calibration(bp_post)
-plot(reliabilitydiag::reliabilitydiag(x = bp_post$prob, y = bp_post$simulated_value, region.level = 0.95, region.method = "resampling", n.boot = 1000))
+my_reliability_diag(bp_post)
 
 
 ```
