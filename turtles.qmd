@@ -227,8 +227,9 @@ C <- NULL
 
 set.seed(54223248)
 N_sims <- 1000
-ds_turtles_m0 <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C, future.globals = "turtles"), n_sims = N_sims)
-ds_turtles_m1 <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C, future.globals = "turtles"), n_sims = N_sims)
+gen_globals <- c("r_inv_one_plus_sq", "turtles")
+ds_turtles_m0 <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
+ds_turtles_m1 <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
 
 set.seed(3148955)
 ds_turtles <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1)
@@ -270,24 +271,15 @@ t.test(bp_turtles$prob, mu = 0.5)
 miscalibration_resampling_p(bp_turtles$prob, bp_turtles$simulated_value)
 my_reliability_diag(bp_turtles)
 ```
+Just those without error in BF
 
 ```{r}
-# TODO: this needs to change after the update
-no_error_index <- res_turtles$backend_diagnostics$bs_error_H0 == "0%" & res_turtles$backend_diagnostics$bs_error_H1 == "0%"
+no_error_index <- res_turtles$backend_diagnostics$bs_error_H0 == 0 & res_turtles$backend_diagnostics$bs_error_H1 == 0
 plot_ecdf_diff(res_turtles[no_error_index], combine_variables = combine_array_elements)
-
+t.test(bp_turtles$prob[no_error_index], mu = 0.5)
+my_reliability_diag(bp_turtles[no_error_index,])
 ```
 
-
-```{r}
-# GOOd test?
-true_model <- res_turtles$stats %>% filter(variable == "model") %>% pull(simulated_value)
-p_H1 <- res_turtles$backend_diagnostics$prob_H1
-bf01 <- (1 - p_H1) / p_H1
-mean(bf01[true_model == 1])
-mean(bf01[true_model == 0])
-
-```
 
 
 ```{r ecdf-split}
@@ -438,8 +430,8 @@ set.seed(784522)
 N_sims <- 2000
 N <- 80
 C <- 10
-ds_turtles_m0_2 <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C), n_sims = N_sims)
-ds_turtles_m1_2 <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C), n_sims = N_sims)
+ds_turtles_m0_2 <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
+ds_turtles_m1_2 <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
 ds_turtles_2 <- SBC_datasets_for_bf(ds_turtles_m0_2, ds_turtles_m1_2)
 
 res_turtles_2 <- compute_SBC(ds_turtles_2, backend_turtles, 
