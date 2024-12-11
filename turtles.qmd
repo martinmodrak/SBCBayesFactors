@@ -68,9 +68,15 @@ p + scale_y_log10()
 x_vals <- seq(0,10, length.out = 100)
 pdf_df <- data.frame(x = x_vals, y = (1 + x_vals)^-2)
 chisq_df <- data.frame(x = x_vals, y = dchisq(x_vals,df = 1))
-ggplot() + aes(x = x ,y = y) + geom_line(data = pdf_df, aes(y = y), color = "blue") + geom_line(data = chisq_df, aes(y = y), color = "red") 
+sqrt_norm_df <- data.frame(x = x_vals, y = 0.5 * x_vals^(-0.5) * 2 * dnorm(sqrt(x_vals), sd = sqrt(2 / (1 - 2/pi))))
+ggplot() + aes(x = x ,y = y) + 
+  geom_line(data = pdf_df, aes(y = y), color = "blue") + 
+  geom_line(data = chisq_df, aes(y = y), color = "red") +
+  geom_line(data = sqrt_norm_df, aes(y = y), color = "green") 
 
-ggplot() + aes(x = x ,y = y) + geom_line(data = pdf_df, aes(y = y), color = "blue") + geom_line(data = chisq_df, aes(y = y), color = "red")  + scale_y_log10()
+ggplot() + aes(x = x ,y = y) + geom_line(data = pdf_df, aes(y = y), color = "blue") + 
+  geom_line(data = chisq_df, aes(y = y), color = "red")  +
+  geom_line(data = sqrt_norm_df, aes(y = y), color = "green")  + scale_y_log10()
 ```
 
 
@@ -82,6 +88,7 @@ cat(readLines("stan/turtles_H0.stan"), sep = "\n")
 m_H0 <- stan_model("stan/turtles_H0.stan")
 m_H1 <- stan_model("stan/turtles_H1.stan")
 m_H1_chisq <- stan_model("stan/turtles_H1_chisq.stan")
+m_H1_norm <- stan_model("stan/turtles_H1_norm.stan")
 ```
 
 ## Following `bridgesampling` example
@@ -129,22 +136,33 @@ sim_turtles <- function(model, N = NULL, C = NULL, sigma2_prior = "default") {
     } else {
       if(sigma2_prior == "default") {
         sigma2_clutch <- r_inv_one_plus_sq(1)
+        sigma_clutch <- sqrt(sigma2_clutch)      
+        
+        sigma2_log_lik <- log(sigma2_clutch)  +# Jacobian
+          (- 2 * log1p(sigma2_clutch))
       } else if(sigma2_prior == "chisq") {
         sigma2_clutch <- rchisq(1, df = 1)
+        sigma_clutch <- sqrt(sigma2_clutch)      
+        
+        sigma2_log_lik <- log(sigma2_clutch)  +# Jacobian
+          dchisq(sigma2_clutch, df = 1, log = TRUE)
+      } else if(sigma2_prior == "sqrt_norm") {
+        sigma_prior_sd <- sqrt(2 / (1 - 2/pi)) # Match the chi-squared variance
+        sigma_clutch <- abs(rnorm(1, sd = sigma_prior_sd))
+        
+        sigma2_log_lik <- log(sigma_clutch)  +# Jacobian
+          log(2) + dnorm(sigma_clutch, sd = sigma_prior_sd, log = TRUE)
       } else {
         stop("Invalid sigma2_prior")
       }
-      sigma_clutch <- sqrt(sigma2_clutch)      
-      
+
       b_clutch_raw <- rnorm(C)
       b_clutch <- b_clutch_raw * sigma_clutch
       
       predictor <- alpha0 + alpha1 * x + b_clutch[clutch]
       
       log_lik_spec <- 
-        log(sigma2_clutch)  +# Jacobian
-        (- 2 * log1p(sigma2_clutch)) + 
-        #log(sigma_clutch) + dnorm(sigma_clutch, log = TRUE) + log(2) +
+        sigma2_log_lik +
         sum(dnorm(b_clutch_raw, log = TRUE))
     }
     
@@ -311,6 +329,55 @@ bp_turtles_chisq <- binary_probabilities_from_stats(res_turtles_chisq$stats)
 t.test(bp_turtles_chisq$prob, mu = 0.5)
 miscalibration_resampling_p(bp_turtles_chisq$prob, bp_turtles_chisq$simulated_value)
 my_reliability_diag(bp_turtles_chisq)
+```
+
+```{r ecdf-split-chisq}
+stats_split_chisq <- split_SBC_results_for_bf(res_turtles_chisq)
+plot_ecdf_diff(stats_split_chisq$stats_H0)
+plot_ecdf_diff(stats_split_chisq$stats_H1, combine_variables = combine_array_elements)
+```
+
+## Normal prior
+
+```{r simulateds-norm}
+set.seed(473158)
+ds_turtles_m1_norm <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = NULL, C = NULL, sigma2_prior = "sqrt_norm", future.globals = "turtles"), n_sims = length(ds_turtles_m0)
+                                        )
+ds_turtles_norm <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1_norm)
+```
+
+
+```{r turtles1}
+backend_turtles_norm <- SBC_backend_bridgesampling(
+  SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
+  SBC_backend_rstan_sample(m_H1_norm, iter = iter, warmup = warmup, init = init)
+)
+res_turtles_norm <- compute_SBC(ds_turtles_norm, backend_turtles_norm, 
+                           keep_fits = FALSE,
+                           cache_mode = "results",
+                           cache_location = file.path(cache_dir, "turtles_1_norm.rds"))
+```
+
+
+
+```{r}
+plot_ecdf_diff(res_turtles_norm, combine_variables = combine_array_elements)
+plot_rank_hist(res_turtles_norm, variables = "model", bins = 20)
+
+```
+
+```{r}
+bp_turtles_norm <- binary_probabilities_from_stats(res_turtles_norm$stats)
+t.test(bp_turtles_norm$prob, mu = 0.5)
+miscalibration_resampling_p(bp_turtles_norm$prob, bp_turtles_norm$simulated_value)
+my_reliability_diag(bp_turtles_norm)
+```
+
+
+```{r ecdf-split-norm}
+stats_split_norm <- split_SBC_results_for_bf(res_turtles_norm)
+plot_ecdf_diff(stats_split_norm$stats_H0)
+plot_ecdf_diff(stats_split_norm$stats_H1, combine_variables = combine_array_elements)
 ```
 
 ## Warp3
