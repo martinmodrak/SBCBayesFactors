@@ -34,8 +34,6 @@ theme_set(theme_minimal())
 ```
 
 
-First, we wrap the simulation code in a function for better usage. We also keep track
-of the simulated values for some variables, but other than that there are no changes.
 
 ```{r}
 prior_model_H1 <- stan_model("stan/lmbf_linreg_bin_1rand.stan")

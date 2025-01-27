@@ -187,8 +187,8 @@ sim_lmbf_2x2_crossed <- function(hypothesis, alpha_sigma_prior, base_data, r_sca
 set.seed(2145855)
 n_sims <- 50
 constant_alpha_sigma <- list(alpha = 200, sigma = 50)
-ds_lmbf_constant_H0 <- generate_datasets(SBC_generator_function(sim_lmbf_2x2_crossed, hypothesis = 0, base_data = base_data_big, alpha_sigma_prior = constant_alpha_sigma), n_sims = n_sims)
-ds_lmbf_constant_H1 <- generate_datasets(SBC_generator_function(sim_lmbf_2x2_crossed, hypothesis = 1, base_data = base_data_big, alpha_sigma_prior = constant_alpha_sigma), n_sims = n_sims)
+ds_lmbf_constant_H0 <- generate_datasets(SBC_generator_function(sim_lmbf_2x2_crossed, hypothesis = 0, base_data = base_data_big, alpha_sigma_prior = constant_alpha_sigma, future.chunk.size = Inf), n_sims = n_sims)
+ds_lmbf_constant_H1 <- generate_datasets(SBC_generator_function(sim_lmbf_2x2_crossed, hypothesis = 1, base_data = base_data_big, alpha_sigma_prior = constant_alpha_sigma, future.chunk.size = Inf), n_sims = n_sims)
 ```
 
 

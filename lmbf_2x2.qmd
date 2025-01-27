@@ -14,6 +14,7 @@ library(designr)
 library(LaplacesDemon)
 library(MASS)
 
+devtools::load_all()
 
 options(SBC.min_chunk_size = 1)
 
