@@ -6,10 +6,6 @@ data {
   array[N] int<lower = 1, upper = C> clutch;
 }
 
-transformed data {
-  real sigma_prior_sd = sqrt(2 / (1 - 2/pi()));
-}
-
 parameters {
   real alpha0_raw;
   real alpha1_raw;
@@ -25,8 +21,9 @@ transformed parameters {
 }
 model {
   // priors
-  target += normal_lcdf(0 | 0, sigma_prior_sd);
-  target += normal_lpdf(sigma | 0, sigma_prior_sd);
+  target += -normal_lccdf(0 | 0, 1); //norm. constant for the sigma prior
+  target += normal_lpdf(sigma | 0, 1);
+
   target += normal_lpdf(alpha0_raw | 0, 1);
   target += normal_lpdf(alpha1_raw | 0, 1);
 
