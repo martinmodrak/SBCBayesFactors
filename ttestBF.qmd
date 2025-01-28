@@ -95,8 +95,8 @@ sim_jzs_from_prior <- function(N_new, model = "random", H1_prob = 0.5) {
     mu = mu,
     sigma = sigma
     ),
-    var_attributes = var_attributes(model = c(binary_var_attribute(), possibly_constant_var_attribute()),
-                                    mu = possibly_constant_var_attribute())
+    var_attributes = SBC::var_attributes(model = c(SBC::binary_var_attribute(), SBC::possibly_constant_var_attribute()),
+                                    mu = SBC::possibly_constant_var_attribute())
   )
 }
 
@@ -104,7 +104,7 @@ sim_jzs_from_prior <- function(N_new, model = "random", H1_prob = 0.5) {
 
 ```{r}
 set.seed(495842136)
-ds_ttest <- generate_datasets(SBC_generator_function(sim_jzs_from_prior, N_new = 5, H1_prob = prob1_prior), n_sims = n_sims)
+ds_ttest <- generate_datasets(SBC_generator_function(sim_jzs_from_prior, N_new = 5, H1_prob = prob1_prior, future.globals = c("draws_prior_H0", "draws_prior_H1", "prior_data", "r_scale")), n_sims = n_sims)
 ```
 
 
@@ -178,18 +178,19 @@ plot_ecdf_diff(res)
 ```
 ```{r}
 bp <- binary_probabilities_from_stats(res$stats)
-miscalibration_resampling_p(bp$prob, bp$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp$prob, y = bp$simulated_value)
-```
-
-```{r}
-reliabilitydiag::reliabilitydiag(x = bp$prob[bp$prob > 0.85], y = bp$simulated_value[bp$prob > 0.85])
-bp %>% filter(prob > 0.85) %>% select(prob, simulated_value) %>% summarise(mean(simulated_value))
+miscalibration_p <- miscalibration_resampling_p(bp$prob, bp$simulated_value)
+miscalibration_p
+my_reliability_diag(bp)
 ```
 
 
 ```{r}
-t.test(bp$prob, mu = prob1_prior)
+t_res <- t.test(bp$prob, mu = prob1_prior)
+t_res
+saveRDS(list(t  = t_res,
+       miscalibration_p = miscalibration_p),
+  file.path(cache_dir, paste0("ttest_post_stats.rds")))
+
 ```
 
 
@@ -249,7 +250,7 @@ sim_jzs_sigma <- function(N, sigma_generator, r_scale = sqrt(2) / 2, model = "ra
 
 ```{r}
 set.seed(265452)
-ds_fixed <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = 1, r_scale = r_scale), n_sims = 10000)
+ds_fixed <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = 1, r_scale = r_scale), n_sims = 20000)
 ```
 
 ```{r}
@@ -261,44 +262,56 @@ res_fixed <- compute_SBC(ds_fixed, backend, keep_fits = FALSE, globals = ttest_g
 ```
 
 
-
-```{r}
-# set.seed(8554522)
-# ds_fixed <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = 1, r_scale = r_scale), n_sims = 10000)
-# 
-# dquants_var <- derived_quantities(
-#   model_sd_08 =  (model - 0.5) * (sd(y) > 0.8),
-#   model_sd = (model - 0.5) * sd(y),
-#   model_sd_m1 = (model - 0.5) * (sd(y) - 1),
-#   model_sd_absm1 = (model - 0.5) * abs(sd(y) - 1),
-#   model_sd_xxx = (model - 0.5) * exp(-sd(y)),
-# )
-# 
-# res_fixed <- compute_SBC(ds_fixed, backend, keep_fits = FALSE, globals = ttest_globals,
-#                          dquants = dquants_var)
-
-```
-
 ```{r}
 plot_ecdf_diff(res_fixed)
 
 bp_fixed <- binary_probabilities_from_stats(res_fixed$stats)
-miscalibration_resampling_p(bp_fixed$prob, bp_fixed$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp_fixed$prob, y = bp_fixed$simulated_value)
+miscalibration_p_fixed <- miscalibration_resampling_p(bp_fixed$prob, bp_fixed$simulated_value)
+miscalibration_p_fixed
+reliability_diag_fixed <- my_reliability_diag(bp_fixed)
+reliability_diag_fixed
 
-t.test(bp_fixed$prob, mu = 0.5)
+t_res_fixed <-  t.test(bp_fixed$prob, mu = 0.5)
+t_res_fixed
 ```
+
+
+```{r}
+stats_filtered <- res_fixed$stats |> filter(variable != "pseudo_log_lik")
+hist_fixed <- compute_bootstrapped_histories(stats_filtered, history_length = 2000, n_histories = 100,
+                                                       step = 20,
+                                            compute_log_gamma_history)
+
+plot_log_gamma_histories(hist_fixed)
+```
+
 
 ```{r}
 high_sd_fixed <- ds_fixed$generated %>% purrr::map_lgl(\(x) sd(x$y) >= 1)
 
-bp_fixed_high <- bp_fixed[high_sd_fixed,]
-bp_fixed_low <- bp_fixed[!high_sd_fixed,]
+bp_fixed_high <- bp_fixed |> filter(sim_id %in% which(high_sd_fixed))
+bp_fixed_low <- bp_fixed |> filter(sim_id %in% which(!high_sd_fixed))
 
-miscalibration_resampling_p(bp_fixed_high$prob, bp_fixed_high$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp_fixed_high$prob, y = bp_fixed_high$simulated_value)
-miscalibration_resampling_p(bp_fixed_low$prob, bp_fixed_low$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp_fixed_low$prob, y = bp_fixed_low$simulated_value)
+miscalibration_p_fixed_high <- miscalibration_resampling_p(bp_fixed_high$prob, bp_fixed_high$simulated_value)
+miscalibration_p_fixed_high
+reliability_diag_fixed_high <-  my_reliability_diag(bp_fixed_high)
+
+
+miscalibration_p_fixed_low <- miscalibration_resampling_p(bp_fixed_low$prob, bp_fixed_low$simulated_value)
+reliability_diag_fixed_low <-  my_reliability_diag(bp_fixed_low)
+
+saveRDS(list(
+       sbc_res = res_fixed,
+       hist = hist_fixed,
+       t  = t_res_fixed,
+       miscalibration_p = miscalibration_p_fixed,
+       reliability_diag = reliability_diag_fixed,
+       miscalibration_p_high = miscalibration_p_fixed_high,
+       reliability_diag_high = reliability_diag_fixed_high,
+       miscalibration_p_low = miscalibration_p_fixed_low,
+       reliability_diag_low = reliability_diag_fixed_low
+       ),
+  file.path(cache_dir, paste0("ttest_fixed_stats.rds")))
 
 ```
 
@@ -308,7 +321,7 @@ reliabilitydiag::reliabilitydiag(x = bp_fixed_low$prob, y = bp_fixed_low$simulat
 Using
 
 $$
-\pi(\sigma) = \frac{1}{1 + \sigma^2}
+\pi(\sigma^2) = \frac{1}{1 + \sigma^2}
 $$
 
 ```{r}
@@ -335,9 +348,22 @@ plot_ecdf_diff(res_inv1psquared)
 
 bp_inv1psquared <- binary_probabilities_from_stats(res_inv1psquared$stats)
 miscalibration_resampling_p(bp_inv1psquared$prob, bp_inv1psquared$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp_inv1psquared$prob, y = bp_inv1psquared$simulated_value)
+my_reliability_diag(bp_inv1psquared)
 
 t.test(bp_inv1psquared$prob, mu = 0.5)
+```
+
+```{r}
+high_sd_inv1psquared <- ds_inv1psquared$generated %>% purrr::map_lgl(\(x) sd(x$y) >= 1)
+
+bp_inv1psquared_high <- bp_inv1psquared |> filter(sim_id %in% which(high_sd_inv1psquared))
+bp_inv1psquared_low <- bp_inv1psquared |> filter(sim_id %in% which(!high_sd_inv1psquared))
+
+miscalibration_resampling_p(bp_inv1psquared_high$prob, bp_inv1psquared_high$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp_inv1psquared_high$prob, y = bp_inv1psquared_high$simulated_value)
+miscalibration_resampling_p(bp_inv1psquared_low$prob, bp_inv1psquared_low$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp_inv1psquared_low$prob, y = bp_inv1psquared_low$simulated_value)
+
 ```
 
 
@@ -373,7 +399,18 @@ reliabilitydiag::reliabilitydiag(x = bp_cauchy$prob, y = bp_cauchy$simulated_val
 t.test(bp_cauchy$prob, mu = 0.5)
 ```
 
+```{r}
+high_sd_cauchy <- ds_cauchy$generated %>% purrr::map_lgl(\(x) sd(x$y) >= 1)
 
+bp_cauchy_high <- bp_cauchy |> filter(sim_id %in% which(high_sd_cauchy))
+bp_cauchy_low <- bp_cauchy |> filter(sim_id %in% which(!high_sd_cauchy))
+
+miscalibration_resampling_p(bp_cauchy_high$prob, bp_cauchy_high$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp_cauchy_high$prob, y = bp_cauchy_high$simulated_value)
+miscalibration_resampling_p(bp_cauchy_low$prob, bp_cauchy_low$simulated_value)
+reliabilitydiag::reliabilitydiag(x = bp_cauchy_low$prob, y = bp_cauchy_low$simulated_value)
+
+```
 
 ## Via bridgesampling
 

@@ -140,8 +140,8 @@ xx$variables
 ```{r}
 set.seed(24854652)
 n_sims <- 500
-ds_issue_2_H0 <- generate_datasets(SBC_generator_function(simulate_issue_2, model = 0), n_sims = n_sims)
-ds_issue_2_H1 <- generate_datasets(SBC_generator_function(simulate_issue_2, model = 1), n_sims = n_sims)
+ds_issue_2_H0 <- generate_datasets(SBC_generator_function(simulate_issue_2, model = 0, future.chunk.size = Inf), n_sims = n_sims)
+ds_issue_2_H1 <- generate_datasets(SBC_generator_function(simulate_issue_2, model = 1, future.chunk.size = Inf), n_sims = n_sims)
 ```
 
 

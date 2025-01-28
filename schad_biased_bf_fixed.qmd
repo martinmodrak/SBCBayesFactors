@@ -17,8 +17,12 @@ if(!dir.exists(cache_dir))  {
   dir.create(cache_dir)
 }
 
-cache_fits <- FALSE
-fits_cache_dir <- file.path(cache_dir, "fits_2step_Item")
+cache_fits <- TRUE
+if(dir.exists("/media/martin/DATA/SBCBayesFactor_cache")) {
+  fits_cache_dir <- "/media/martin/DATA/SBCBayesFactor_cache/fits_2step_Item_fixed"
+} else {
+  fits_cache_dir <- file.path(cache_dir, "fits_2step_Item_fixed")
+}
 if(!dir.exists(fits_cache_dir))  {
   dir.create(fits_cache_dir)
 }
@@ -29,21 +33,17 @@ rstan::rstan_options(auto_write = TRUE)
 ```
 
 ```{r cluster}
-setup_cluster(max_local_workers = 8)
+#setup_cluster(max_local_workers = 6)
 ```
 
 
-# 2step_Item
+# 2step_Item  fixed version
 
 Corresponds to the heading '2x2 repeated measures design with crossed random effects for subjects and
 items: bridgesampling/brms'
 
 ```{r, echo=FALSE}
-priors2step <- c(set_prior("normal(0.7, 0.1)", class = "Intercept"), 
-                 set_prior("normal(0  , 0.1)", class = "b"),
-                 set_prior("normal(0  , 0.1)", class = "sd"), 
-                 set_prior("normal(0  , 0.1)", class = "sigma"), 
-                 set_prior("lkj(2)", class = "cor") )
+
 
 design <-
   fixed.factor("reward", levels=c("rew", "pun")) +
@@ -58,6 +58,15 @@ simdat2step <- design.codes(design)
 simdat2step$ysim <- 0.5 # Dummy value to create the column
 
 randomItemSlope <- 0.001
+priors2step <- c(set_prior("normal(0.7, 0.1)", class = "Intercept"), 
+                 set_prior("normal(0  , 0.1)", class = "b"),
+                 set_prior("normal(0  , 0.1)", class = "sd"), 
+                 set_prior(paste0("constant(", randomItemSlope, ")"), class = "sd", group = "item"),
+                 set_prior("normal(0  , 0.1)", class = "sigma"), 
+                 set_prior("lkj(2)", class = "cor") )
+
+constant_sd_prior <- 
+
 
 #contrasts(simdat2step$PavValueF) <- contr.sdif(5)
 contrasts(simdat2step$reward) <- c(+0.5,-0.5)*2
@@ -147,34 +156,22 @@ backend_2step_H1 <-
                   save_pars = save_pars(all = TRUE),
                   warmup=2000, iter=10000,
             template_data = simdat2step,
-            out_stan_file = file.path("cache/2step_H1.stan"))
+            out_stan_file = file.path("cache/2step_fixed_H1.stan"))
 
 
-backend_2step_H0_1 <-
-  SBC_backend_brms(ysim ~ 1 +      trans + rew_trans + (1 + rew + trans + rew_trans  | subj) + (1 + rew + trans + rew_trans | item),                          family=gaussian(), prior=priors2step, 
-                  save_pars = save_pars(all = TRUE),
-                  warmup=2000, iter=10000,
-            template_data = simdat2step,
-            out_stan_file = file.path("cache/2step_H0_1.stan"))
-
-
-backend_2step_H0_correct <- 
+backend_2step_H0 <- 
   SBC_backend_brms(ysim ~ 1 +      (1 + rew + trans + rew_trans  | subj) + (1 + rew + trans + rew_trans | item),                          family=gaussian(), prior=priors2step[-2,], 
                   save_pars = save_pars(all = TRUE),
                   warmup=2000, iter=10000,
             template_data = simdat2step,
-            out_stan_file = file.path("cache/2step_H0_correct.stan"))
+            out_stan_file = file.path("cache/2step_fixed_H0.stan"))
 
 if(cache_fits) {
   backend_2step_H1 <- SBC_backend_cached(backend_2step_H1,
             cache_dir = fits_cache_dir)
 
 
-  backend_2step_H0_1 <-SBC_backend_cached(backend_2step_H0_1,
-            cache_dir = fits_cache_dir)
-
-
-  backend_2step_H0_correct <- SBC_backend_cached(backend_2step_H0_correct,
+  backend_2step_H0 <- SBC_backend_cached(backend_2step_H0,
             cache_dir = fits_cache_dir)
 }
 ```
@@ -183,21 +180,54 @@ if(cache_fits) {
 ```{r}
 set.seed(58455642)
 ds_2step <- SBC_datasets_for_bf(ds_2step_H0, ds_2step_H1)
-backend_2step <- SBC_backend_bridgesampling(backend_2step_H0_correct, backend_2step_H1)
+backend_2step <- SBC_backend_bridgesampling(backend_2step_H0, backend_2step_H1)
+```
 
+
+```{r}
+idx <- 1:500
+idx_to_test <- purrr::map_lgl(idx, \(i) {
+f1 <- cached_fit_filename(cache_dir = fits_cache_dir, backend_2step_H0, ds_2step$generated[[i]], suffix = "_bridgesampling")
+f2 <- cached_fit_filename(cache_dir = fits_cache_dir, backend_2step_H1, ds_2step$generated[[i]], suffix = "_bridgesampling")
+file.exists(f1) & file.exists(f2)
+
+} )
+
+```
+
+
+```{r}
+if(any(!idx_to_test)) {
 res_2step <- compute_SBC(
-  ds_2step[1:8], 
+  ds_2step[which(!idx_to_test)],
+  backend_2step,
+  keep_fits = FALSE)
+}
+```
+
+
+```{r}
+future::plan(future::sequential)
+res_2step <- compute_SBC(
+  ds_2step, 
   backend_2step,
   keep_fits = FALSE,
+  chunk_size = 1,
   cache_mode = "results",
-  cache_location = file.path(cache_dir, "SBC_2step.rds"))
+  cache_location = file.path(cache_dir, "SBC_2step_fixed.rds"))
 
 ```
 
 ```{r}
 plot_ecdf_diff(res_2step)
 
-#plot_binary_calibration_diff(res_2step$stats)
-#calibrationband::calibration_bands(round(res_2step$backend_diagnostics$prob_H1, 8), res_2step$stats %>% filter(variable == "model") %>% pull(simulated_value) %>% as.logical())
+bp_2step <- binary_probabilities_from_stats(res_2step$stats)
+post_t <- t.test(bp_2step$prob, mu = 0.5)
+post_t
+post_miscalibration_p <- miscalibration_resampling_p(bp_2step$prob, bp_2step$simulated_value)
+post_miscalibration_p
+
+reliabilitydiag::reliabilitydiag(x = bp_2step$prob, y = bp_2step$simulated_value)
+
 ```
 
