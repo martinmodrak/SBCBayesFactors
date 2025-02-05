@@ -222,12 +222,20 @@ res_2step <- compute_SBC(
 plot_ecdf_diff(res_2step)
 
 bp_2step <- binary_probabilities_from_stats(res_2step$stats)
-post_t <- t.test(bp_2step$prob, mu = 0.5)
-post_t
-post_miscalibration_p <- miscalibration_resampling_p(bp_2step$prob, bp_2step$simulated_value)
-post_miscalibration_p
+t_res <- t.test(bp_2step$prob, mu = 0.5)
+t_res
+miscalibration_p <- miscalibration_resampling_p(bp_2step$prob, bp_2step$simulated_value)
+miscalibration_p
 
 reliabilitydiag::reliabilitydiag(x = bp_2step$prob, y = bp_2step$simulated_value)
 
 ```
+
+```{r}
+saveRDS(list(t  = t_res,
+       miscalibration_p = miscalibration_p),
+  file.path(cache_dir, paste0("schad_fixed_stats.rds")))
+
+```
+
 
