@@ -1,0 +1,45 @@
+Notebook[{Cell[
+BoxData[TemplateBox[Association["query" -> "","boxes" -> InterpretationBox[
+"",Failure["NoParse",Association["MessageTemplate" -> "No Wolfram Language translation found.",
+"MessageParameters" -> Association[],"Query" -> ""]]],"allassumptions" -> {},"assumptions" -> {},
+"open" -> {1},"querystate" -> {},"contextinfo" -> Automatic,"version" -> 5],"LinguisticAssistantTemplate"]],
+"Input",ExpressionUUID -> "bb3a5a9e-5c1b-406e-9efd-73736e7555f5"],Cell[
+CellGroupData[
+{Cell[
+BoxData[{RowBox[{RowBox[{"likT","[","x_","]"}]," ","="," ",RowBox[{"PDF","[",RowBox[
+{RowBox[{"NormalDistribution","[",RowBox[{"0",",","1"}],"]"}],",","x"}],"]"}]}],"\n",RowBox[
+{RowBox[{"(*",RowBox[{RowBox[{"likF","[","x_","]"}]," ","="," ",RowBox[{"PDF","[",RowBox[
+{RowBox[{"CauchyDistribution","[",RowBox[{"0",",","1"}],"]"}],",","x"}],"]"}]}],"*)"}]," ",RowBox[
+{"(*",RowBox[{"The"," ","second"," ","moment"," ","may"," ","not"," ","exist"}],"*)"}],"\n",RowBox[
+{RowBox[{"likF","[","x_","]"}]," ","="," ",RowBox[{"PDF","[",RowBox[{RowBox[{"NormalDistribution","[",RowBox[
+{"m2",",","1"}],"]"}],",","x"}],"]"}]}]}],"\n",RowBox[{RowBox[{"bfF","[","x_","]"}]," ","="," ",RowBox[
+{RowBox[{"likF","[","x","]"}],"/"," ",RowBox[{"likT","[","x","]"}]}]}],"\n",RowBox[
+{"secondBfF","=",RowBox[{"Integrate","[",RowBox[{RowBox[{RowBox[{RowBox[{"likF","[","x","]"}],"^","2"}]," ","/"," ",RowBox[
+{"likT","[","x","]"}]}],","," ",RowBox[{"{",RowBox[{"x",",",RowBox[{"-","Infinity"}],","," ","Infinity"}],"}"}]}],"]"}]}]}],
+"Input",CellLabel -> "In[1]:= ",ExpressionUUID -> "3c337c78-79dc-40fe-84d5-60726ca857ca"],Cell[
+BoxData[
+FractionBox[SuperscriptBox["\[ExponentialE]",RowBox[{"-",FractionBox[SuperscriptBox[
+"x","2"],"2"]}]],SqrtBox[RowBox[{"2"," ","\[Pi]"}]]],StandardForm],"Output",CellLabel -> "Out[1]= ",
+ExpressionUUID -> "0e2b7c8e-f04e-4908-85ce-f348d93e094b"],Cell[
+BoxData[FractionBox[
+SuperscriptBox["\[ExponentialE]",RowBox[{RowBox[{"-",FractionBox["1","2"]}]," ",SuperscriptBox[
+RowBox[{"(",RowBox[{RowBox[{"-","m2"}],"+","x"}],")"}],"2"]}]],SqrtBox[RowBox[{"2"," ","\[Pi]"}]]],
+StandardForm],"Output",CellLabel -> "Out[2]= ",ExpressionUUID -> "4e002a8e-be85-4d59-9c90-4df7d75d0931"],Cell[
+BoxData[
+SuperscriptBox["\[ExponentialE]",RowBox[{FractionBox[SuperscriptBox["x","2"],"2"],"-",RowBox[
+{FractionBox["1","2"]," ",SuperscriptBox[RowBox[{"(",RowBox[{RowBox[{"-","m2"}],"+","x"}],")"}],
+"2"]}]}]],StandardForm],"Output",CellLabel -> "Out[3]= ",ExpressionUUID -> "e750e805-a5c5-4411-875b-9f64760c3718"],Cell[
+BoxData[
+SuperscriptBox["\[ExponentialE]",SuperscriptBox["m2","2"]],StandardForm],"Output",
+CellLabel -> "Out[4]= ",ExpressionUUID -> "4aca2735-dbef-4231-a8ac-41fee6b41f5a"]},
+Open],ExpressionUUID -> "28f97c25-4107-4258-aba8-50141577a749"],Cell[
+CellGroupData[
+{Cell[
+BoxData[RowBox[{"N","[",RowBox[{"Exp","[",RowBox[{"1.5","^","2"}],"]"}],"]"}]],
+"Input",CellLabel -> "In[8]:= ",ExpressionUUID -> "61bed925-68b1-4b32-abf9-b1340919a976"],Cell[
+BoxData[
+"9.487735836358526`",StandardForm],"Output",CellLabel -> "Out[8]= ",ExpressionUUID -> "2def65d3-656e-4a02-802c-c67b8d158403"]},
+Open],ExpressionUUID -> "abed186d-c3a8-46b5-804c-db22149a9284"],Cell[
+BoxData[""],
+"Input",ExpressionUUID -> "108549c8-095b-443c-9238-5587ee6732df"]},StyleDefinitions -> "Default.nb",
+FrontEndVersion -> "14. for Wolfram Cloud 1.68.0.1 (June 2, 2024)"]

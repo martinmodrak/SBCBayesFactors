@@ -1,0 +1,137 @@
+---
+title: "Binary example"
+format: html
+---
+
+
+```{r setup}
+library(SBC)
+library(ggplot2)
+library(calibrationband)
+library(dplyr)
+
+options(SBC.min_chunk_size = 100)
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir)) {
+  dir.create(cache_dir)
+}
+
+devtools::load_all()
+theme_set(theme_minimal())
+
+n_histories <- 100
+```
+
+
+```{r cluster}
+setup_cluster()
+```
+
+
+```{r}
+sim_good_example <- function(m0) {
+  model <- rbinom(1, size = 1, prob = 0.5)
+  if(model == 0){
+    if(m0 == "cauchy") {
+      y <- rcauchy(1)
+    } else {
+      y <- rnorm(1, mean = m0)
+    }
+  } else {
+    y <- rnorm(1)
+  }
+  list(
+    variables = list(model = model),
+    generated = list(y = y),
+    var_attributes = var_attributes(
+      model = c(binary_var_attribute(), possibly_constant_var_attribute())
+    )
+  )
+}
+
+```
+
+
+```{r}
+SBC_backend_good_example <- function(m0, n_draws) {
+  structure(list(
+    m0 = m0,
+    n_draws = n_draws
+  ), class = "SBC_backend_good_example")
+}
+
+SBC_fit.SBC_backend_good_example <- function(backend,generated,cores) {
+  if(backend$m0 == "cauchy") {
+    loglik0 <- dcauchy(generated$y, log = TRUE)
+  } else {
+    loglik0 <- dnorm(generated$y, mean = backend$m0, log = TRUE)
+  }
+  loglik1 <- dnorm(generated$y, log = TRUE)
+  structure(list(
+    logbf01 = loglik0 - loglik1,
+    pm1 = plogis(loglik1 - loglik0) ,
+    n_draws = backend$n_draws
+  ), class = "SBC_fit_good_example")
+}
+
+SBC_backend_iid_draws.SBC_backend_good_example <- function(...) {
+  TRUE
+}
+
+SBC_posterior_cdf.SBC_fit_good_example <- function(fit, variables) {
+  SBC:::binary_to_cdf("model", fit$pm1, variables["model"])
+}
+
+SBC_fit_to_draws_matrix.SBC_fit_good_example <- function(fit) {
+  posterior::draws_matrix(model = rbinom(fit$n_draws, size = 1, prob = fit$pm1))
+}
+
+
+good_globals <- c("SBC_fit.SBC_backend_good_example", 
+                    "SBC_backend_iid_draws.SBC_backend_good_example",
+                    "SBC_fit_to_draws_matrix.SBC_fit_good_example",
+                    "SBC_posterior_cdf.SBC_fit_good_example",
+                    "py1"
+                    )
+
+```
+
+```{r}
+set.seed(45865)
+ds_cauchy <- generate_datasets(SBC_generator_function(sim_good_example, m0 = "cauchy"), n_sims = 10000)
+
+res_good_cauchy <- compute_SBC(ds_cauchy, SBC_backend_good_example("cauchy", 100),
+                               globals = good_globals,
+                               cache_mode = "results", cache_location = file.path(cache_dir, "good_cauchy.rds"))
+
+```
+
+
+```{r}
+plot_ecdf_diff(res_good_cauchy)
+plot_rank_hist(res_good_cauchy)
+bp_good_cauchy <- binary_probabilities_from_stats(res_good_cauchy$stats)
+my_reliability_diag(bp_good_cauchy)
+miscalibration_resampling_p(bp_good_cauchy$prob, bp_good_cauchy$simulated_value)
+```
+
+
+```{r}
+set.seed(468523)
+ds_norm2 <- generate_datasets(SBC_generator_function(sim_good_example, m0 = 2), n_sims = 10000)
+
+res_good_norm2 <- compute_SBC(ds_norm2, SBC_backend_good_example(2, 100),
+                               globals = good_globals,
+                               cache_mode = "results", cache_location = file.path(cache_dir, "good_norm2.rds"))
+
+```
+
+
+```{r}
+plot_ecdf_diff(res_good_norm2)
+plot_rank_hist(res_good_norm2)
+bp_good_norm2 <- binary_probabilities_from_stats(res_good_norm2$stats)
+my_reliability_diag(bp_good_norm2)
+miscalibration_resampling_p(bp_good_norm2$prob, bp_good_norm2$simulated_value)
+```
