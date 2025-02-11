@@ -17,7 +17,7 @@ if(!dir.exists(cache_dir))  {
   dir.create(cache_dir)
 }
 
-cache_fits <- TRUE
+cache_fits <- FALSE
 if(dir.exists("/media/martin/DATA/SBCBayesFactor_cache")) {
   fits_cache_dir <- "/media/martin/DATA/SBCBayesFactor_cache/fits_2step_Item_fixed"
 } else {
@@ -34,6 +34,7 @@ rstan::rstan_options(auto_write = TRUE)
 
 ```{r cluster}
 #setup_cluster(max_local_workers = 6)
+future::plan(future::multisession(workers = 40))
 ```
 
 
@@ -185,29 +186,6 @@ backend_2step <- SBC_backend_bridgesampling(backend_2step_H0, backend_2step_H1)
 
 
 ```{r}
-idx <- 1:500
-idx_to_test <- purrr::map_lgl(idx, \(i) {
-f1 <- cached_fit_filename(cache_dir = fits_cache_dir, backend_2step_H0, ds_2step$generated[[i]], suffix = "_bridgesampling")
-f2 <- cached_fit_filename(cache_dir = fits_cache_dir, backend_2step_H1, ds_2step$generated[[i]], suffix = "_bridgesampling")
-file.exists(f1) & file.exists(f2)
-
-} )
-
-```
-
-
-```{r}
-if(any(!idx_to_test)) {
-res_2step <- compute_SBC(
-  ds_2step[which(!idx_to_test)],
-  backend_2step,
-  keep_fits = FALSE)
-}
-```
-
-
-```{r}
-future::plan(future::sequential)
 res_2step <- compute_SBC(
   ds_2step, 
   backend_2step,
@@ -229,5 +207,29 @@ post_miscalibration_p
 
 reliabilitydiag::reliabilitydiag(x = bp_2step$prob, y = bp_2step$simulated_value)
 
+```
+
+
+```{r}
+ds_2step_more <- list()
+n_sims_per_step <- 500
+set.seed(3548552)
+for(i in 1:9) {
+  ds_2step_H0 <- generate_datasets(SBC_generator_function(simulate_2step, model = 0, future.chunk.size = Inf), n_sims = n_sims_per_step)
+  ds_2step_H1 <- generate_datasets(SBC_generator_function(simulate_2step, model = 1, future.chunk.size = Inf), n_sims = n_sims_per_step)
+  ds_2step_more[[i]] <- SBC_datasets_for_bf(ds_2step_H0, ds_2step_H1)
+}
+```
+
+```{r}
+res_2_step_more <- purrr::imap(ds_2step_more, \(ds, id) {
+  compute_SBC(
+    ds, 
+    backend_2step,
+    keep_fits = FALSE,
+    chunk_size = 1,
+    cache_mode = "results",
+    cache_location = file.path(cache_dir, paste0("SBC_2step_fixed_more_", id,".rds")))
+})
 ```
 
