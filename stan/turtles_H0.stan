@@ -2,15 +2,19 @@ data {
   int<lower = 1> N;
   array[N] int<lower = 0, upper = 1> y;
   vector[N] x;
+  real<lower=0> prior_width;
 }
+
 parameters {
   real alpha0_raw;
   real alpha1_raw;
 }
+
 transformed parameters {
-  real alpha0 = sqrt(10.0) * alpha0_raw;
-  real alpha1 = sqrt(10.0) * alpha1_raw;
+  real alpha0 = prior_width * alpha0_raw;
+  real alpha1 = prior_width * alpha1_raw;
 }
+
 model {
   // priors
   target += normal_lpdf(alpha0_raw | 0, 1);

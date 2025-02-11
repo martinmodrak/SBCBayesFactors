@@ -1,5 +1,5 @@
-setup_cluster <- function(max_local_workers = Inf, max_server_workers = 40) {
-  is_local <- parallelly::availableCores() < 40
+setup_cluster <- function(max_local_workers = Inf, max_server_workers = 80) {
+  is_local <- parallelly::availableCores() < 80
   if(is_local) {
     n_workers <- min(parallelly::availableCores(), max_local_workers)
   } else {

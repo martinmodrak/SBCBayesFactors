@@ -4,7 +4,9 @@ data {
   vector[N] x;
   int<lower = 1> C;
   array[N] int<lower = 1, upper = C> clutch;
+  real<lower=0> prior_width;
 }
+
 parameters {
   real alpha0_raw;
   real alpha1_raw;
@@ -15,10 +17,11 @@ parameters {
 transformed parameters {
   vector[C] b;
   real<lower = 0> sigma = sqrt(sigma2);
-  real alpha0 = sqrt(10.0) * alpha0_raw;
-  real alpha1 = sqrt(10.0) * alpha1_raw;
+  real alpha0 = prior_width * alpha0_raw;
+  real alpha1 = prior_width * alpha1_raw;
   b = sigma * b_raw;
 }
+
 model {
   // priors
   target += chi_square_lpdf(sigma2 | 1);
