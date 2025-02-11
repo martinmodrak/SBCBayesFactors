@@ -411,7 +411,7 @@ save_histories <- function(name, ...) {
   saveRDS(list(...), here::here("cache", paste0("hist_", name, ".rds")))
 }
 
-load_precomputed_file <- function(filename, prodcuer_script) {
+load_precomputed_file <- function(filename, producer_script) {
   if(!file.exists(filename)) {
     stop("File: `", filename, "` does not exist. Run ", producer_script, " to generate it.")
   }
@@ -420,6 +420,6 @@ load_precomputed_file <- function(filename, prodcuer_script) {
 
 load_histories <- function(name, producer_script) {
   filename <- here::here("cache", paste0("hist_", name, ".rds"))
-  load_precomputed_file(filename, prodcuer_script)
+  load_precomputed_file(filename, producer_script)
 }
 

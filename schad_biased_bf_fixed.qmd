@@ -34,7 +34,7 @@ rstan::rstan_options(auto_write = TRUE)
 
 ```{r cluster}
 #setup_cluster(max_local_workers = 6)
-future::plan(future::multisession(workers = 40))
+#future::plan(future::multisession(workers = 40))
 ```
 
 
@@ -185,6 +185,42 @@ backend_2step <- SBC_backend_bridgesampling(backend_2step_H0, backend_2step_H1)
 ```
 
 
+
+
+```{r}
+generated <- ds_2step$generated[[1]]
+  args_with_data <- backend_2step_H0$args
+  args_with_data$data <- generated
+
+  standata <- do.call(brms::make_standata, args_with_data)
+  class(standata) <- NULL
+
+f0 <- rstan::sampling(backend_2step_H0$stan_backend$model, standata, cores = 8)
+f0_b <- SBC:::brmsfit_from_stanfit(f0, args_with_data)
+
+#   args_with_data <- backend_2step_H1$args
+#   args_with_data$data <- generated
+# 
+#   standata_H1 <- do.call(brms::make_standata, args_with_data)
+#   class(standata_H1) <- NULL
+# 
+# f1 <- rstan::sampling(backend_2step_H1$stan_backend$model, standata_H1, cores = 8)
+# f1_b <- SBC:::brmsfit_from_stanfit(f1, args_with_data)
+```
+
+
+
+
+
+```{r}
+#debugonce(bridgesampling:::.run.iterative.scheme)
+debugonce(bridgesampling:::.bridge.sampler.normal)
+bridgesampling::bridge_sampler(f0)
+# bridge_H0 <- bridge_sampler(f0_b, verbose = TRUE)
+# bridge_H1 <- bridge_sampler(f1_b)
+```
+
+
 ```{r}
 res_2step <- compute_SBC(
   ds_2step, 
@@ -200,12 +236,20 @@ res_2step <- compute_SBC(
 plot_ecdf_diff(res_2step)
 
 bp_2step <- binary_probabilities_from_stats(res_2step$stats)
-post_t <- t.test(bp_2step$prob, mu = 0.5)
-post_t
-post_miscalibration_p <- miscalibration_resampling_p(bp_2step$prob, bp_2step$simulated_value)
-post_miscalibration_p
+t_res <- t.test(bp_2step$prob, mu = 0.5)
+t_res
+miscalibration_p <- miscalibration_resampling_p(bp_2step$prob, bp_2step$simulated_value)
+miscalibration_p
 
 reliabilitydiag::reliabilitydiag(x = bp_2step$prob, y = bp_2step$simulated_value)
+
+```
+
+
+```{r}
+saveRDS(list(t  = t_res,
+       miscalibration_p = miscalibration_p),
+  file.path(cache_dir, paste0("schad_fixed_stats.rds")))
 
 ```
 
@@ -232,4 +276,6 @@ res_2_step_more <- purrr::imap(ds_2step_more, \(ds, id) {
     cache_location = file.path(cache_dir, paste0("SBC_2step_fixed_more_", id,".rds")))
 })
 ```
+
+
 

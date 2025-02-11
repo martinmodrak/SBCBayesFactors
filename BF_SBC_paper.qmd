@@ -62,6 +62,7 @@ Nice to have:
 - Practical example - close to zero probability for the correct model. (maybe weaker, "on a more theoretical note") 
 - contrast with https://arxiv.org/pdf/2406.19346 
 - Test & Discuss effect of prior on shared parameters in ranef model
+- Miscalibration as not only p, but also CI (if interpretable)
 
 =======
 -->
@@ -338,7 +339,7 @@ probability to the correct model and still pass data-averaged posterior.
 
 Good choice of priors is important for practical success with SBC.
 There are at least three problems one can encounter in this regard:
-1) Many packages use improper priors, which we cannot simulate from.
+1) Some statistical packages use improper priors, which we cannot simulate from.
 2) Many priors are unrealistic --- notably using independent priors
 for all parameters often results in large prior probability on unrealistic datasets
 (TODO cite R2D2 + makemyprior). This both reduces relevance of our simulations
@@ -349,30 +350,28 @@ even a very good prior will result in most simulated datasets being very unlike
 the dataset we are interested in, making us less likely to notice potential problems
 that manifest only in the particular region of data space.
 
-All three problems can be overcome with *posterior SBC* first described in
-(https://users.aalto.fi/\~ave/casestudies/postsbc/postsbc.html).
+All three problems can be overcome with *posterior SBC* (cite Aki's new preprint).
 
 The overall idea of posterior SBC is to fit the model to a (usually small) dataset(s) and treat
 the resulting posterior(s) as the prior for simulations. More formally, if 
-we assume the data space partitions as $Y = Y_1 \times Y_2$, then given a distribution $g$ over
-$Y_1$ we can construct a model $\bar\pi$ such that:
+we assume the data space partitions as $Y = Y_1 \times Y_2$, then given a fixed dataset $y_1 \in Y_1$
+we can construct a new model $\bar\pi$ such that:
 
 $$
 \begin{aligned}
-\bar\pi_\text{prior}(\theta) &=  \int_{Y_1} \text{d}y_1 \: g(y_1)  \pi_\text{post}(\theta | y_1) \\
+\bar\pi_\text{prior}(\theta) &=  \pi_\text{post}(\theta | y_1) \\
 \bar\pi_\text{post}(\theta | y_2) &= \pi_\text{post}(\theta | (y_1, y_2)) \\
 \end{aligned}
 $$
 
-We can then simulate from $\bar\pi_\text{prior}$ by drawing $y_1$ from $g$, fitting $\pi$ to $y_1$ and 
-taking a draw from $\pi_\text{post}(\theta|y_1)$. We may then use this parameter draw
+We can then simulate from $\bar\pi_\text{prior}$ by fitting $\pi$ to $y_1$ and 
+taking draws from $\pi_\text{post}(\theta|y_1)$. We may then use this parameter draw
 to simulate $y_2$ from $\pi_\text{obs}$ and fit $\pi$ to the whole
 dataset $(y_1,y_2)$. 
-The situation simplifies if $g$ is degenerate distribution and we effectively consider just a single fixed $y_1$.
+This setup can be generalized further by replacing the single fixed $y_1$ with a distribution $g$ over possible $y_1$, so we have $\bar\pi_\text{prior}(\theta) \int_{Y_1} \text{d}y_1 \: g(y_1)  \pi_\text{post}(\theta | y_1)$.
 
-To check computation for models with improper priors, we need to choose $Y_1$ to cover the
-smallest dataset size such that $\pi_\text{post}(\theta | y_1)$ is proper for all $y_1 \in Y_1$ with non-zero density under $g$. 
-To provide a better prior, we take $g$ as representing prior beliefs about the data (which tend to be easier to elicit than
+To check computation for models with improper priors, we need to choose $y_1$ such that $\pi_\text{post}(\theta | y_1)$ is proper and amenable to sampling. 
+To provide a better prior, we take the distribution $g$ as representing prior beliefs about the data (which tend to be easier to elicit than
 priors on parameters - cite Paul)
 To target an SBC check
 to a specific dataset, we may take a suitable portion of the dataset as fixed $y_1$ or even take $g$ to be a suitable
@@ -380,21 +379,53 @@ subsampling distribution of the dataset.
 
 To use posterior SBC with Bayes factors, we need to compute the implied prior for 
 the parameters of both models, but we also need the new prior for the model index $\bar\pi_\text{BMA}(i|y_1)$. 
-Another important factor in choosing $g$ thus needs to be that it does not produce too extreme implied prior probability for any 
+Another important factor in choosing $y_1$ thus needs to be that it does not produce too extreme implied prior probability for any 
 of the models under consideration.
 
-Alternatively, if we use a fixed $y_1$, we can tweak the
+Alternatively, we can tweak the
 original prior probability, to get uniform distribution in the implied prior, i.e. $\bar\pi_\text{BMA}(i|y_1) = \frac{1}{K}$.
 
 
-### Other approaches
+### Good check
 
-The [good check](https://osf.io/preprints/psyarxiv/59gj8) (cite). This shares some of the
-big problems with data-averaged posterior --- ignores the mapping between BFs and data.
-Additionally, both the variance and second raw moment of the Bayes factor in favor of the
-false hypothesis can have very large or even undefined variance, which explains the slow
-convergence. Even though large variance of BFs is not a problem for either SBC or
-data-averaged posterior (see appendix)
+The [Good check](https://link.springer.com/article/10.3758/s13428-024-02491-4) (cite). 
+It notes that the expected Bayes factor in favor of the wrong hypothesis is 1, i.e.:
+
+
+$$
+\mathbb{E}(BF_{0,1} | \mathcal{M}_1) = 1
+$$
+
+which is a special case of a more general identity:
+
+$$
+\forall k \in \mathbb{N}:\mathbb{E}(BF^{k + 1}_{0,1} | \mathcal{M}_1) = \mathbb{E}(BF^k_{0,1} | \mathcal{M}_0)
+$$
+
+Sekulovski et al. recommend empirical testing of the identity for $k = 0$ and $k = 1$ via simulations.
+We immediately see that the Good check shares some of the
+big problems with data-averaged posterior --- it also completely ignores the mapping between BFs and data
+and only checks the overall distribution of BFs.
+Additionally, there are huge numerical difficulties. The distribution of BFs (and their powers) from simulations can have very large or even undefined variance, which makes the sample mean a poor estimator of the expected value.
+
+For example, assume the following models with no parameters and a single observation $y \in \mathbb{R}$:
+
+$$
+\begin{split}
+\mathcal{M}_0: y \sim \text{Cauchy}(0, 1) & \hspace{4em}
+\mathcal{M}_1: y \sim N(0, 1) 
+\end{split}
+$$
+
+In this case, $\mathbb{Var}(BF_{0,1} | \mathcal{M}_1)$ is undefined. This is admittedly a bit extreme, most models do not feature Cauchy marginal data distributions. So let's assume that for a fixed, known $\mu$ we instead have $\mathcal{M}_1: y \sim \text{N}(\mu, 1)$. Then we have $\mathbb{Var}(BF_{0,1} | \mathcal{M}_1) = \mathbb{Var}(BF_{1,0} | \mathcal{M}_0) = \exp\left(\mu^2\right)$, so e.g. already for $\mu = 2$ we need over 5 000 simulations just to bring the standard error on the expectation below $0.1$. See appendix for full calculation.
+
+The absence of any bound on variance of the estimate which explains the lack of convergence for some cases 
+and slow convergence for others as reported by Sekulovski et al. It also prevents
+us from evaluating the remaining uncertainty we have about the expectations, as we cannot rule out very rare very large BF values.
+We note that the same cases presented above pose no problem for both SBC and
+data-averaged posterior (see appendix).
+
+For those reasons, we will not evaluate the good check further in this paper.
 
 <!-- TODO https://arxiv.org/pdf/2306.03580 -->
 
@@ -611,6 +642,26 @@ approximations (increased variance, but no bias).
 
 ## Realistic examples
 
+### Turtles example in the `bridgesampling` package
+
+Interestingly enough, the first example in the documentation of the bridgesampling
+package produces slightly miscalibrated Bayes factors.
+
+The model for $H_1$ is a probit regression model with a single varying intercept, specifically:
+
+$$
+\begin{aligned}
+y_i &\sim  \text{Bernoulli}(\Phi(\alpha + \beta x_{i} + \gamma_{g_i})),  &i = 1,2,\ldots,N\\
+\gamma_j &\sim N(0, \tau),  &j = 1,2,\ldots, G \\
+\alpha &\sim N(0, \sqrt{10}),\\
+\beta &\sim N(0, \sqrt{10}),\\
+\pi_\text{prior}(\tau^2) &= \left(1 + \tau^2\right)^{-2}.
+\end{aligned}
+$$
+
+where $\Phi$ is the normal cumulative distribution function. The $H_0$ model is then the same but with the 
+varying intercept removed, i.e. we set $\tau = 0$.
+
 
 ### Posterior SBC and the importance of using correct priors
 
@@ -627,10 +678,21 @@ Ogle, K., & Barber, J. J. (2020). Ensuring identifiability in hierarchical mixed
 Bayesian models. Ecological Applications. doi:10.1002/eap.2159 for more discussion of this
 problem).
 
-We test a model with the intercept and a single fixed effect against a model that also has
-a random effect. We will be using the BayesFactor package.
+We test a linear regression model with a single binary predictor and a single ranodm effect. 
+We will be using the BayesFactor package, which implies the following parametrization and prior distributions of the model:
 
-TODO: math notation
+$$
+\begin{aligned}
+y_i &\sim  N(\alpha + \beta x_{i} + \gamma_{g_i}, \sigma),  &i = 1,2,\ldots,N\\
+\gamma_j &\sim N\left(0, \frac{\sqrt{2}}{4}\sigma \sqrt{\tau} \right), &j = 1,2,\ldots, G \\
+\tau &\sim \text{InvGamma}\left(\frac{1}{2},\frac{1}{2} \right),\\
+\beta &\sim N\left(0, \frac{\sqrt{2}}{4} \sigma \right),\\
+\pi_\text{prior}(\alpha_0, \sigma^2) &= \frac{1}{\sigma^2}.
+\end{aligned}
+$$
+
+Where $x_i = \pm \frac{\sqrt{2}}{2}$ is a binary predictor coded following the standard BayesFactor encoding. Note that the implied prior on $\gamma_j$ is multivariate Cauchy and the prior on $\alpha, \sigma^2$ is improper. 
+Without modifications, we therefore cannot sample from the prior on $\alpha, \sigma^2$.
 
 ```{r}
 ranef_test <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100_tests.rds"), "lmbf_ranef_presence_post_sbc.qmd")
@@ -641,15 +703,17 @@ n_ranef_sims <- length(res_ranef_post)
 
 ```
 
-Now choosing the overall intercept as fixed constant results in apparent miscalibration
+If we choose the overall intercept and residual standard deviation as fixed constants 
+(here $\alpha = 0, \sigma = 1$) we obtain an apparent miscalibration
 for both the model index and all the individual random effect parameters (see
 @fig-ranef-constant). In this case the problem is the most quickly picked up by the
 miscalibration test with data-averaged posterior and SBC for the model index following very quickly. However
-this is a false positive. Employing posterior SBC to produce a proper prior for the mean
-and intercept results in perfect calibration in all methods even after running `r format(n_ranef_sims, big.mark = " ")`
+this is a false positive. Employing posterior SBC using $y_1$ as a dataset with 4 groups and 3 observations each (to make all
+parameters well identified for sampling) produces a proper prior for the mean
+and intercept and results in perfect calibration in all methods even after running `r format(n_ranef_sims, big.mark = " ")`
 simulations (@fig-ranef-post, miscalibration p `r format_p(ranef_test$miscalibration_p)`,
 95% CI for data-averaged posterior difference from expected mean `r ranef_ci_diff`). So we can conclude that
-the BF calculation in the BayesFactor package works well for this case.
+the BF calculation in the BayesFactor package in fact works well for this case.
 
 ```{r fig-ranef-constant}
 #| fig-cap: Histories of check statistics for random effect model using constant mean and intercept. 
@@ -661,7 +725,7 @@ plot_log_p_histories(hist_ranef_constant$schad, "DAP - Schad et al.")) + plot_an
 ```
 
 ```{r fig-ranef-post}
-#| fig-cap: Resul of calibration checks for random effect model using posterior SBC. A) empirical CDF difference plots for model parameters (g_Subject --- standard deviation of the random intercepts, model --- model index, mu --- overall intercept, sig2 --- residual variance, Subject --- merged plot for all random intercepts, x1 --- fixed effect) B) calibration plot.
+#| fig-cap: Result of calibration checks for random effect model using posterior SBC. A) empirical CDF difference plots for model parameters (g_Subject --- standard deviation of the random intercepts, model --- model index, mu --- overall intercept, sig2 --- residual variance, Subject --- merged plot for all random intercepts, x1 --- fixed effect) B) calibration plot.
 ecdf_ranef_post <- plot_ecdf_diff(res_ranef_post, combine_variables = combine_lmBF_arrays)
 bp_post <- binary_probabilities_from_stats(res_ranef_post$stats) 
 #SBC::plot_binary_calibration(bp_post)
@@ -670,13 +734,11 @@ reliabilitydiag_post <- my_reliability_diag(bp_post)
 ((ecdf_ranef_post + theme(legend.position = "bottom")) | reliabilitydiag_post) + plot_layout(widths = c(2,1)) + plot_annotation(tag_levels = "A")
 ```
 
-<!--
 TODO: here we might want to also compare BFs calculated assuming standard improper prior
 vs. some weakly informative prior on intercept + sigma for the same set of datasets. I'd
 expect it will turn out to have noticeable effect despite a pretty common recommendation
 that priors on shared parameters don't matter that much. But maybe that's too tangential
 for this paper?
--->
 
 The previous example is the simplest setting we discovered where we obtain incorrect
 strong miscalibration due to improper priors for shared parameters, however, the problem
@@ -712,7 +774,7 @@ plot_log_gamma_histories(ttest_fixed$hist |> mutate(variable = factor(variable, 
 
 ```{r}
 ttest_post <- load_precomputed_file(here::here("cache/ttest_post_stats.rds"), "ttestBF.qmd")
-ttest_ci_diff <-  format_t_test_diff(ranef_test$t)
+ttest_ci_diff <-  format_t_test_diff(ttest_post$t)
 
 n_test_sim <- ttest_post$t$parameter["df"] + 1
 ```
@@ -745,8 +807,15 @@ Additionally, they treat several variance parameters of random effects as fixed 
 but treat them as unknown parameters in the model and there is a bug in their use of the LKJ prior 
 for random effect correlations. 
 
+```{r}
+schad <- load_precomputed_file(here::here("cache/schad_fixed_stats.rds"), "schad_biased_bf_fixed.qmd")
+n_schad_sim <- schad$t$parameter["df"] + 1
+schad_ci_diff <- format_t_test_diff(schad$t)
+```
+
+
 Using their simulation code for the bridgesampling case, fixing the bugs
-and matching the model to the simulation code we obtain calibrated Bayes factors.
+and matching the model to the simulation code we obtain calibrated Bayes factors. We have run `r format(n_schad_sim, big.mark  = " ")` simulations and obtained miscalibration p `r format_p(schad$miscalibration_p)`, 95% CI for data-averaged posterior difference from expected mean `r schad_ci_diff`.
 
 Similar problems affect also the situations where they claim the Bayes factors are calibrated.
 Further
@@ -759,13 +828,6 @@ Another minor problem is that they use Bayesian t-tests for testing that the
 data-averaged posterior is equal to the prior mean, which can be invalid
 in the same settings as a classical t-test, but can additionally have computational
 issues even for cases when classical t-test would perform well.
-
-### Turtles example in the `bridgesampling` package
-
-Interestingly enough, the first example in the documentation of the bridgesampling
-package produces slightly miscalibrated Bayes factors.
-
-TODO
 
 ### Discovering bad normalization constants
 
@@ -782,7 +844,7 @@ While there are cases where data-averaged posterior performs somewhat better tha
 it also fails catastrophically in many examples where SBC and prediction calibration work. 
 Using data-averaged posterior for validation of Bayes factor
 computation should thus be considered only as a supplement to SBC or prediction
-calibration.
+calibration. The recently proposed good check is in our view very rarely useful.
 
 
 Another advantage of running SBC for the full BMA model is that we can use the same
@@ -816,3 +878,161 @@ have non-negligible effect on Bayes factors, further highlighting the brittlenes
 factors.
 
 Recalibration with SBC does not work in general http://www.stat.columbia.edu/~gelman/research/unpublished/calibration_toy.pdf
+
+## Appendix
+
+### Prediction calibration and ignoring data
+
+Satisfied when data are ignored
+
+### Proof - binary calibration, SBC and data-averaged posterior
+
+We will work with continuous SBC. TODO: copy definitions from Modrák et al.
+Continuous SBC is implies sample SBC and is more relevant, since for BFs we obtain (an approximation of) the
+posterior CDF, not just samples.
+
+**Definition:** A candidate posterior $\phi$ satistfies binary calibration check w.r.t. 
+$f: \Theta \times Y \to \{0,1\}$ if
+
+$$
+\forall p: 0\leq p \leq 1:\\
+\left( \int_{Y} \text{d}y \int_{\theta} \text{d}y \ \mathbb{I}(f(\theta, y) = 1)  \phi(\theta|y) \pi_\text{marg}(y) \right)  > 0 \implies \text{Pr}\left(f(\theta, y) = 1 | \int_\Theta \: \text{d}\theta \: f(\theta, y)\phi(\theta | y) = p \right) = p 
+$$
+
+We note that for BMA supermodel with two submodels the definition is equivalent to the prediction calibration for the model index.
+
+**Theorem:** For any $f: \Theta \times Y \to \{0,1\}$, $\phi$ passes continuous SBC
+w.r.t $f$ if and only if:
+
+$$
+\forall p: \text{Pr}\left(f(\theta, y) = 1 | \right) = p
+$$
+
+Proof bin calibration equivalent SBC for binary vars.
+
+Outline:
+
+Explore how $q$ looks when calibrated and not calibrated.
+
+Lebesgue measure > 0
+
+Binary calibration means that for each subset of $Y$ with a given $p$ the $q$ function is diagonal, so it is diagonal on average over whole $Y$ -> SBC.
+
+If continous SBC then no point masses can be miscalibrated. If it was, there has to be a ball near the "kinks" where SBC doesn't hold where there is no point mass (TODO, maybe incorrect)
+
+When fully continous - use the StackOverflow proof
+
+Proof binary calibration OK -> DAP OK.
+
+### Good check convergence
+
+Assuming $\mathcal{M}_0: y \sim \text{Cauchy}(0, 1), \mathcal{M}_1: y \sim N(0, 1)$ we have
+
+$$
+BF_{0,1}(y) = \frac{\text{Cauchy}(y | 0, 1)}{\text{Norm}(y | 0,1)} = \sqrt{\frac{2}{\pi}} \frac{e^\frac{y^2}{2}}{1 + y^2} 
+$$
+
+and the second raw moment
+
+$$
+\mathbb{E}(BF_{0,1}^2 | \mathcal{M}_1) = \int_{-\infty}^\infty \frac{\left(\text{Cauchy}(y | 0, 1)\right)^2}{\text{Norm(y | 0,1)}} \text{d}y
+$$
+
+which is infinite because 
+
+$$
+\lim_{y \to \pm\infty} \frac{\left(\text{Cauchy}(y | 0, 1)\right)^2}{\text{Norm(y | 0,1)}} = \lim_{y \to \pm\infty} \frac{\sqrt{2} \exp\left(\frac{y^2}{2}\right)}{\pi^\frac{3}{2}(1 + y^2)^2} = \infty 
+$$
+
+and hence also the variance is infinite.
+
+Now, let's assume $\mathcal{M}_0: y \sim N(\mu, 1)$ for a fixed and known $\mu$. Then the second raw moment is:
+
+$$
+\mathbb{E}(BF_{0,1}^2 | \mathcal{M}_1) = \int_{-\infty}^\infty \frac{\left(\text{Norm}(y | \mu, 1)\right)^2}{\text{Norm(y | 0,1)}} \text{d}y = \int_{-\infty}^\infty \frac{\exp\left(\frac{x^2}{2} - (x - \mu)^2\right)}{\sqrt{2 \pi}} \text{d}y \\
+= \exp\left(\mu^2\right) \int_{-\infty}^\infty \frac{\exp\left(-\frac{1}{2} (x - 2\mu)^2\right)}{\sqrt{2 \pi}} \text{d}y = \exp\left(\mu^2\right)
+$$
+
+where in the last step, the integral is over the PDF of a normal distribution with mean $2\mu$ and standard deviation $1$.
+
+Empirically, we can see the lack of any convergence for the Cauchy case and very slow convergence for the normal case in @fig-good-convergence. It follows, that the Good check cannot reliably diagnose BF computation unless we know that the BF distribution is well behaved. 
+
+```{r fig-good-convergence}
+#| fig-cap: Convergence of the good check when a single datapoint is simulated from the standard normal and  A) $\mathcal{M}_0: y \sim \text{Cauchy}(0, 1)$ --- here the variance is infinite and we see no convergence at all or B) $\mathcal{M}_0: y \sim N(2, 1)$ where the average Bayes factor eventually converges, but 50 000 simulations are not enough for reliable convergence. Each line is the cumulative average from a single set of simulations. The highlighted area shows average BF 0.9 - 1.1. Means from first 1000 simulations are not shown.
+#| fig-width: 7
+#| fig-height: 2.5
+plot_good_example <- function(n_sims, n_runs, m0, step = 10, start = 1, linealpha = 0.3) {
+   y <- matrix(rnorm(n_sims * n_runs), nrow = n_sims)
+   if(m0 == "cauchy") {
+     ll0 <- dcauchy(y, log = TRUE)
+   } else {
+     ll0 <- dnorm(y, mean = m0, log = TRUE)
+   }
+   ll1 <- dnorm(y, log = TRUE)
+   bf <- exp(ll0 - ll1)
+   cmeans <- apply(bf, MARGIN = 2, FUN = \(x) cumsum(x) / (1:length(x)))
+   colnames(cmeans) <- 1:n_runs
+   sims <- seq(start, n_sims, by = step)
+   cmeans <- cmeans[sims,]
+   plot_df <- as.data.frame(cmeans) |> mutate(sim = sims) |> 
+     tidyr::pivot_longer(c(everything(), - all_of("sim")), names_to = "run", values_to = "mean_bf")
+   plot_df |> ggplot(aes(x = sim, y = mean_bf, group = run)) + 
+     geom_rect(xmin = start, xmax = n_sims, ymin = 0.9, ymax = 1.1, fill = "lightblue") +
+     geom_hline(yintercept = 1, color = "darkblue") +
+     geom_line(alpha = linealpha) +
+     scale_y_continuous("Cumulative mean BF") +
+     #scale_y_log10("Cumulative mean BF") +
+     scale_x_continuous("Simulations") +
+     expand_limits(y = c(0.9,1.1))
+}
+
+{
+set.seed(68523321)
+good_start <- 1000
+good_step <- 10
+good_linealpha <- 0.2
+good_sims <- 50000
+good_runs <- 20
+(plot_good_example(good_sims, good_runs, m0 = "cauchy", step = good_step, start = good_start, linealpha = good_linealpha) | plot_good_example(good_sims, good_runs, m0 = 2, step = good_step, start = good_start, linealpha = good_linealpha)) + plot_layout(axis_titles = "collect") + plot_annotation(tag_levels = "A")
+  
+}
+
+```
+
+
+#### SBC for the same models
+
+
+```{r fig-good-sbc}
+#| fig-cap: ECDF difference plots from SBC (A) and calibration diagrams (B, C) for Bayes factors when $\mathcal{M}_1: y \sim N(0, 1)$ and either $\mathcal{M}_0: y \sim \text{Cauchy}(0, 1)$ or $\mathcal{M}_0: y \sim N(2, 1)$.
+#| fig-width: 7
+#| fig-height: 4
+res_good_cauchy <- load_precomputed_file(here::here("cache/good_cauchy.rds"), "good_check_examples.qmd")$result
+bp_good_cauchy <- binary_probabilities_from_stats(res_good_cauchy$stats)
+t_good_cauchy <- format_t_test_diff(t.test(bp_good_cauchy$prob, mu = 0.5))
+
+res_good_norm2 <- load_precomputed_file(here::here("cache/good_norm2.rds"), "good_check_examples.qmd")$result
+bp_good_norm2 <- binary_probabilities_from_stats(res_good_norm2$stats)
+t_good_norm2 <- format_t_test_diff(t.test(bp_good_norm2$prob, mu = 0.5))
+
+stats_good_combined <- rbind(
+  res_good_cauchy$stats |> mutate(variable = "Model - Cauchy"),
+  res_good_norm2$stats |> mutate(variable = "Model - Normal"))
+
+rel_good_cauchy <- my_reliability_diag(bp_good_cauchy)
+rel_good_norm2 <- my_reliability_diag(bp_good_norm2)
+
+tag_loc <- theme(plot.tag.location = "panel", plot.tag.position = c(-0.05,1.1))
+
+((plot_ecdf_diff(stats_good_combined) + facet_wrap(~variable, ncol = 1) + labs(tag = "A") + theme(legend.position = "bottom") + tag_loc)  | (rel_good_cauchy + labs(tag = "B - Cauchy") + tag_loc) | (rel_good_norm2 + labs(tag = "C - Normal") + tag_loc)) + plot_layout(axis_titles = "collect_x")
+
+n_sims_good <- nrow(bp_good_norm2)
+stopifnot(n_sims_good == nrow(bp_good_cauchy))
+```
+
+
+
+On the contrary, SBC as well as prediction calibration and data-averaged posterior have no problem and since the BF is computed correctly, show that both scenarios pass the tests (to the precision available with the `r format(n_sims_good, big.mark = " ")` we ran). For SBC and prediction calibration see @fig-good-sbc. For data-averaged posterior, the 95% CI for the difference between prior and average posterior probability is `r t_good_cauchy` for the Cauchy scenario and `r t_good_norm2` for the Normal scenario.  
+
+
+### Miscalibration with surrogate distributions for variance in `ttestBF`
