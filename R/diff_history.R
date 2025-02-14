@@ -61,9 +61,18 @@ rank_counts_from_ranks <- function(ranks, max_rank) {
   return(as.numeric(ranks_inflated_by_1 - 1))
 }
 
+#' @export
+log_gamma_stat <- function(ranks, max_rank, ranks_to_check = NULL) {
+  rank_counts <- rep(0, max_rank + 1)
+  for(i in 0:max_rank) {
+    rank_counts[i + 1] <- sum(ranks == i)
+  }
+  stopifnot(sum(rank_counts) == length(ranks))
+  log_gamma_stat_counts(rank_counts, ranks_to_check)
+}
 
 #' @export
-log_gamma_stat <- function(rank_counts, ranks_to_check = NULL) {
+log_gamma_stat_counts <- function(rank_counts, ranks_to_check = NULL) {
   max_rank <- length(rank_counts) - 1
   if(is.null(ranks_to_check)) {
     rank_ids_to_check = 1:max_rank
@@ -100,7 +109,7 @@ compute_log_gamma_history_single <- function(ranks, max_rank, step = 1) {
   for(i in 1:length(ranks)) {
     rank_t[ranks[i] + 1] <- rank_t[ranks[i] + 1] + 1
     if(include_step(i, step)) {
-      log_gamma[step_id(i, step)] <- log_gamma_stat(rank_t)
+      log_gamma[step_id(i, step)] <- log_gamma_stat_counts(rank_t)
     }
   }
   log_gamma

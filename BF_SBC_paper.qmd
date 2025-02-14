@@ -43,16 +43,11 @@ TODO: Absolutely necessary:
 paper) 
    - Turtles variant, but with normal prior on ranef stddev, "Forget" normalizing
 constant 
-- Schad lmbf2x2 (claimed miscalib, actually OK) 
-- Notationally distinguish model
-parameters vs BMA parameters space 
 - Ranef correct figures 
-- Cleanup + figures for post t-test 
-- Caching + bridgesampling - More simulations for ranef
 
 Important: 
 - Schad bridgesampling 2x2 (claimed miscalib, actually OK) 
-- Find a failure mode for bridgesamplinb/lmbf (turtles?!) 
+- Find a failure mode for bridgesampling/lmbf (turtles?!) 
 - Gaffke history 
 - Explain why SBC and prediction calibration get different results in finite samples (PDF vs CDF / histogram vs. CDF) 
 - Explain what SBC does with the K \> 2 case (especially how ordering matters). Discuss possible
@@ -72,6 +67,15 @@ Nice to have:
 Overall intro on Bayes factors/model selection... TODO
 
 goals of the paper.
+
+
+Despite some criticism (cite), this is a commonly used method to compare models and do
+hypothesis testing in the Bayesian paradigm.
+
+An important practical concern is how to compute Bayes factors and/or the marginal
+densities of data as this typically involves difficult numerical integration.
+
+## Theoretical background
 
 Throughout this paper we assume there is a single shared data space $Y$ and a set of
 Bayesian statistical models $\mathcal{M_i}$ for $i \in \{0, \dots, K-1\}$, each model
@@ -105,13 +109,6 @@ BF_{i,j} = \frac{ \pi^i_\text{marg}\left(y \right) }{\pi^j_\text{marg}\left(y \r
 \frac{\text{Pr}(\mathcal{M_i} | y)}{\text{Pr}(\mathcal{M_j} | y)} \frac{\text{Pr}(\mathcal{M_j})}{\text{Pr}(\mathcal{M_i})}
 $$
 
-Despite some criticism (cite), this is a commonly used method to compare models and do
-hypothesis testing in the Bayesian paradigm.
-
-An important practical concern is how to compute Bayes factors and/or the marginal
-densities of data as this typically involves difficult numerical integration.
-
-## Theoretical background
 
 ### Bayesian model averaging
 
@@ -259,11 +256,15 @@ $$
 
 See Appendix for proof.
 
-Even more generally, SBC has to pass (and calibration has to hold) also for any subset of
-of $Y$.
+Despite the two checks having the same properties in theory (which here means in the limit of both infinite simulations and --- for SBC --- infite posterior draws per simulation), the performance of their practical implementations can differ when a finite number of simulations is used.
 
-An advantage of using SBC instead of just binary calibration is that we can extend the check --- we can
-test the correctness of the full BMA model.
+
+
+When $K \geq 2$, we can still run SBC for the model index and discover problems. One relevant result from Modrák et al. is that in this case, changing the order of the submodels can result in different $\phi$ passing the SBC check. However, in practice examples when a miscalibration is detected only when we reorder a variable are hard to find.
+
+<!-- Even more generally, SBC has to pass (and calibration has to hold) also for any subset of
+of $Y$.-->
+
 
 An important property of SBC is that by allowing test quantity $f$ to depend on $y$, we
 can in principle detect any mismatch between $\phi_\text{post}$ and $\pi_\text{post}$ ---
@@ -271,7 +272,7 @@ we only need a suitable test quantity that is sensitive to the problem at hand. 
 al. provide theoretical and empirical evidence that the likelihood
 $f(\theta, y) = \pi_\text{obs}(y | \theta)$ is often highly sensitive in that regard.
 Applying that to the BMA supermodel, SBC can in principle detect any problem in Bayes
-factor computation.
+factor computation. [Yao & Domke (2023)](https://proceedings.neurips.cc/paper_files/paper/2023/hash/7103cd82de95a7b30983fcf74ba499ac-Abstract-Conference.html) show that we can instead train a classifier that tries to distinguish prior and posterior draws and this allows sensitivity to any type of problem without explicitly constructing a test quantity. Unfortunately, this comes at a price of requiring a potentially very large number of simulations.
 
 #### Data-averaged posterior
 
@@ -749,9 +750,17 @@ ttest_fixed <- load_precomputed_file(here::here("cache/ttest_fixed_stats.rds"), 
 ```
 
 
-The example we will use the `ttestBF` in BayesFactor package, representing the JZS test.
-There is an improper Jeffrey's prior on variance
-$\pi_\text{prior}\left(\sigma^2\right) = \frac{1}{\sigma^2}$.
+One example is the `ttestBF` in BayesFactor package, representing the JZS test, we focus on the one-sample variant, specifically the $\mathcal{M}_1$ model is:
+
+$$
+\begin{aligned}
+y_{1}, ..., y_n &\sim N(\delta\sigma, \sigma) \\
+\delta &\sim \text{Cauchy}\left(0, \frac{\sqrt{2}}{2}\right) \\
+\pi_\text{prior}\left(\sigma^2\right) &= \frac{1}{\sigma^2}
+\end{aligned}
+$$
+and the null model $\mathcal{M}_0$ assumes $\delta = 0$.
+Note the improper Jeffrey's prior on variance. We will use $n = 5$ in our simulations to provide a reasonably wide distribution of observed BFs.
 When we fix $\sigma = 1$, the default statistics and calibration look good. 
 However, when we test SBC for a derived quantity that combines the model index ($i$)
 with the observed sd of the data, specifically $f(i, y) = (i - \frac{1}{2})(\text{sd}(y) - 1)$
@@ -846,6 +855,8 @@ Using data-averaged posterior for validation of Bayes factor
 computation should thus be considered only as a supplement to SBC or prediction
 calibration. The recently proposed good check is in our view very rarely useful.
 
+In the examples we ran, prediction calibration checks tended to have higher power to detect discrepancies than SBC for the model index and sometimes even than SBC for the log likelihood.
+This speaks in favor of using prediction calibration for testing Bayes factor computations. However, there are issues that prediction calibration missed that were only visible when using data-dependent test quantities in SBC. So we argue that prediction calibration is useful as an _addition_ to SBC, not as a replacement.
 
 Another advantage of running SBC for the full BMA model is that we can use the same
 simulations to check that the individual models are well implemented/calibrated --- if the
@@ -881,46 +892,216 @@ Recalibration with SBC does not work in general http://www.stat.columbia.edu/~ge
 
 ## Appendix
 
-### Prediction calibration and ignoring data
+### Proofs and theory
 
-Satisfied when data are ignored
+We will denote the integral of $f(x)$ w.r.t.\ $x$ over domain $X$ as $\int_X \mathrm{d}x \: f(x)$. $\mathbb{I}[P]$ is the indicator function for a given predicate $P$. When a function can be understood as describing a conditional probability distribution, we will use $|$ to separate the function arguments we condition on. This is only to assist comprehension and has the same semantic meaning as using a comma.
 
-### Proof - binary calibration, SBC and data-averaged posterior
+In all cases, we assume an underlying statistical model $\pi$ which decomposes into a prior and observational model. Given a data space $Y$ and a parameter space $\Theta$, then for $y \in Y, \theta \in \Theta$ the model implies the following joint, marginal and posterior distributions:
+%
+\begin{gather*}
+    \pi_\text{joint}(y, \theta) = \pi_\text{obs}(y | \theta) \pi_\text{prior}(\theta)\\
+    \pi_\text{marg}\left(y \right) = \int_\Theta \mathrm{d} \theta \: \pi_{\text{obs}}(y | \theta) \pi_\text{prior}(\theta)\\
+    \pi_\text{post}(\theta | y) = \frac{\pi_\text{obs}(y | \theta) \pi_\text{prior}(\theta)}{\pi_\text{marg}\left(y \right)}.
+\end{gather*}
+%
+Unless noted otherwise, all definitions and proofs implicitly assume a single model $\pi$ is given.
 
-We will work with continuous SBC. TODO: copy definitions from Modrák et al.
-Continuous SBC is implies sample SBC and is more relevant, since for BFs we obtain (an approximation of) the
-posterior CDF, not just samples.
+\begin{definition}[Posterior family] Given a data space $Y$ and a parameter space $\Theta$, a \emph{posterior family} $\phi$ assigns a normalized posterior density to each possible $y \in Y$. I.e. posterior family is a function $\phi : \Theta \times Y  \rightarrow  \mathbb{R^{+}}$ such that
+%
+\begin{equation*}
+\forall y: \int \mathrm{d}\theta \:\phi(\theta | y) = 1.
+\end{equation*}
+%
+For each $y$, we will denote the implied distribution over $\Theta$ as $\phi_y$. 
 
-**Definition:** A candidate posterior $\phi$ satistfies binary calibration check w.r.t. 
+\end{definition}
+
+
+
+\begin{definition}[Test quantity]
+     Given a data space $Y$ and a parameter space $\Theta$ a \emph{test quantity} is any measurable function $f :\Theta \times Y  \to  \mathbb{R} $.
+\end{definition}
+
+In all of the below Given a model $\pi$, data space $Y$, a parameter space $\Theta$, a posterior family $\phi$, and a test quantity $f$, we define
+
+
+**Definition:** A candidate posterior $\phi$ satisfies binary calibration check w.r.t. 
 $f: \Theta \times Y \to \{0,1\}$ if
 
 $$
 \forall p: 0\leq p \leq 1:\\
-\left( \int_{Y} \text{d}y \int_{\theta} \text{d}y \ \mathbb{I}(f(\theta, y) = 1)  \phi(\theta|y) \pi_\text{marg}(y) \right)  > 0 \implies \text{Pr}\left(f(\theta, y) = 1 | \int_\Theta \: \text{d}\theta \: f(\theta, y)\phi(\theta | y) = p \right) = p 
+ \text{Pr}\left(f(\theta, y) = 1 | \int_\Theta \: \text{d}\theta \: f(\theta, y)\phi(\theta | y) = p \right) = p 
 $$
+
+wherever the left-hand side is well-defined (i.e. when there are $y \in Y$ such that $\int_\Theta \: \text{d}\theta \: f(\theta, y)\phi(\theta | y) = p$)
 
 We note that for BMA supermodel with two submodels the definition is equivalent to the prediction calibration for the model index.
 
+
+#### Binary calibration, SBC and data-averaged posterior
+
+We will work with continuous SBC. 
+Continuous SBC is implies sample SBC and is more relevant, since for BFs we obtain (an approximation of) the
+posterior CDF, not just samples.
+
+
+**Definition:** (Continuous rank CDF, continuous $q$, continuous SBC)
+We first define fitted CDF: $C_{\phi,f}: \bar{\mathbb{R}}\times Y\to [0,1]$, $C_{\phi,f}(s | y) := \int_{\Theta}\mathrm{d}\theta\,\mathbb{I}\left[f\left(\theta, y \right) \leq s\right]\phi\left(\theta| y\right)$ and fitted tie probability: $D_{\phi,f}: \bar{\mathbb{R}}\times Y\to [0,1]$, 
+    $D_{\phi,f}(s | y) := \int_\Theta \mathrm{d}\theta \: \phi(\theta | y) \mathbb{I}\left[ f(\theta, y) = s \right]$
+
+We then define the \emph{continuous } $q: [0,1] \times Y \to [0,1]$ as
+\begin{equation*}
+    q_{\phi,f}(x|y) := 
+\int_\Theta \mathrm{d} \tilde\theta \: \pi_\text{post}(\tilde\theta | y) \mbox{Pr}\left(C_{\phi,f} \left(f \left(\left.\tilde\theta, y \right) \right| y \right) - U D_{\phi,f} \left(f \left(\left.\tilde\theta, y \right) \right| y \right) \leq x\right),
+\end{equation*}
+%
+assuming $U$ is a random variable distributed uniformly over the $[0, 1]$ interval. 
+
+
+
+Finally, \emph{$\phi$ passes continuous SBC w.r.t.\ $f$} if $
+\forall x \in [0, 1]: \int_Y \mathrm{d}y \: q_{\phi,f}(x|y) \pi_\text{marg}(y)  = x$.
+\end{definition}
+
+
+
 **Theorem:** For any $f: \Theta \times Y \to \{0,1\}$, $\phi$ passes continuous SBC
-w.r.t $f$ if and only if:
+w.r.t $f$ if and only if it satisfies binary calibration check w.r.t $f$.
+
+
+**Proof:** First let us explore how $q_{\phi,f}(x|y)$ looks when we restrict the image of $f$ to $\{0,1\}$. Directly from definitions we get:
 
 $$
-\forall p: \text{Pr}\left(f(\theta, y) = 1 | \right) = p
+C_{\phi, f}(s | y) = \begin{cases}
+   0 & s < 0 \\
+   D_{\phi, f}(0 | y) & 0 \leq s < 1 \\
+   1 & 1 \leq s
+\end{cases} 
+\\
+D_{\phi, f}(0 | y) = 1 - D_{\phi, f}(1 | y)
 $$
 
-Proof bin calibration equivalent SBC for binary vars.
+$$
+\mbox{Pr}\left(C_{\phi,f} \left(f \left(\left.\tilde\theta, y \right) \right| y \right) - U D_{\phi,f} \left(f \left(\left.\tilde\theta, y \right) \right| y \right) \leq x \right) \\
+=\begin{cases}
+\mbox{Pr}\left((1 - U)D_{\phi, f}(0 | y) \leq x\right) & f(\tilde\theta, y) = 0 \\
+\mbox{Pr}\left(1 - UD_{\phi, f}(1 | y) \leq x\right) & f(\tilde\theta, y) = 1 \\
+\end{cases} \\
+=\begin{cases}
+F_u(x |0, D_{\phi, f}(0 | y)) & f(\tilde\theta, y) = 0 \\
+F_u(x |D_{\phi, f}(0 | y), 1) & f(\tilde\theta, y) = 1 \\
 
-Outline:
+\end{cases}\\
 
-Explore how $q$ looks when calibrated and not calibrated.
 
-Lebesgue measure > 0
+$$
+
+where $F_u(x | a, b)$ is the CDF of the continuous uniform distribution on the interval $[a,b]$ evaluated at $x$.
+We will denote 
+
+$$
+F_0(x | y) = F_u(x |0, D_{\phi, f}(0 | y)) \\
+F_1(x | y) = F_u(x |D_{\phi, f}(0 | y), 1) 
+$$
+
+$$
+q_{\phi,f}(x | y) = \sum_{i = 0}^1 \int_{\tilde\theta:f(\tilde\theta, y) = i} \mathrm{d} \tilde\theta \: \pi_\text{post}(\tilde\theta | y) F_i(x | y) = \sum_{i = 0}^1 D_{\pi, f}(i | y) F_i(x | y)
+$$
+
+For $i \in \{0,1\}$ we denote:
+
+$$
+F_i(x) = \int_Y \mathrm{d} y \: \pi_\text{marg}(y)D_{\pi, f}(i | y) F_i(x | y) \\
+= \int_Y \mathrm{d} y \int_{\tilde\theta:f(\tilde\theta, y) = i} \mathrm{d} \tilde\theta \: \pi_\text{post}(\tilde\theta | y) F_i(x | y)
+$$
+
+Note that $F_i(x)$ can be interpreted as the probability of obtaining expected $f$ of at most $x$ in a simulation.
+
+And the SBC condition for $f$ becomes:
+
+$$
+F_0(x) + F_1(x) = x
+$$
+
+$$
+F_i(x) = \mbox{Pr}(f(\theta, y) \leq x | f(\tilde\theta,y) = i)
+$$
+
+
+
+Assume we have a binary variable $M \in \{1,2 \}$ and $R \in [0,1]$ is the posterior probability that $M = 1$ averaging over data
+
+The $q$ function given $M, R$ is then:
+
+$$
+q(x | M, R) = \begin{cases}
+\frac{x}{R} & M = 1, x < R \\
+1 & M = 1, x \geq R \\
+0 & M = 2, x < R \\
+\frac{x - R}{1 - R} & M = 2, x\geq R
+\end{cases}
+$$
+
+Now let us take the prior probability $\mbox{Pr}(M = 1) = 1 - \mbox{Pr}(M = 2) = m$
+
+Treating $q(x)$ as a random variable, we obtain for $0 < s < 1$:
+
+$$
+\mbox{Pr}(q(x) \leq s) = \mbox{Pr}\left(M = 1 \wedge x \leq R \wedge \frac{x}{r} \leq s \right) + \mbox{Pr}\left(M = 2 \wedge x \leq R \right) + \mbox{Pr}\left(M = 2 \wedge x \geq R \wedge \frac{x-R}{1-R} \leq s \right) = \\ = \mbox{Pr}\left(M = 1 \wedge x \leq Rs \right) + \mbox{Pr}\left(M = 2 \wedge \frac{x-R}{1-R} \leq s \right) = \\
+= \mbox{Pr}\left(M = 1 \wedge R \geq \frac{x}{s} \right) + \mbox{Pr}\left(M = 2 \wedge R \geq \frac{x-s}{1-s} \right) 
+$$
+
+We now define the CDFs $F^R_i(x) = \mbox{Pr}(R \leq x | M = i)$
+
+TODO: below holds only fo continuous distributions (for continuous P(X >= y) != 1 - F(y))
+
+$$
+\mbox{Pr}(q(x) \leq s) 
+= \mbox{Pr}\left(M = 1 \wedge R \geq \frac{x}{s} \right) + \mbox{Pr}\left(M = 2 \wedge R \geq \frac{x-s}{1-s} \right) =\\
+m \left(1 - F^R_1 \left(\frac{x}{s}\right) \right) + (1 - m) \left(1 - F^R_2\left(\frac{x-s}{1-s}\right) +   \right) = \\
+1 - m F^R_1 \left(\frac{x}{s}\right)    - (1 - m) F^R_2\left(\frac{x-s}{1-s}\right)  \\
+$$
+
+
+Side check:
+
+$$
+\frac{x-R}{1-R} \leq s \\
+x-R \leq s (1-R) \\
+x - s \leq R(1 -s)\\
+\frac{x - s}{1-s} \leq R\\
+$$
+
+For a positive rv $X$ we have
+
+$$
+E(X) = \int_0^\infty (1 - F^X(t)) \text{d}t
+$$
+We now define the cCDFs $C^R_i(x) = \mbox{Pr}(R \geq x | M = i)$
+
+$$
+\mbox{Pr}(q(x) \leq s) 
+= \mbox{Pr}\left(M = 1 \wedge R \geq \frac{x}{s} \right) + \mbox{Pr}\left(M = 2 \wedge R \geq \frac{x-s}{1-s} \right) =\\
+m C^R_1 \left(\frac{x}{s}\right) + (1 - m) C^R_2\left(\frac{x-s}{1-s}\right)
+$$
+
+$$
+E(q(x)) = \int_0^1 1 - m C^R_1 \left(\frac{x}{s}\right)  - (1 - m) C^R_2\left(\frac{x-s}{1-s}\right) \text{d}s = \\
+1 - m\int_0^1 C^R_1 \left(\frac{x}{s}\right) \text{d}s  - (1 - m) \int_0^1 C^R_2\left(\frac{x-s}{1-s}\right) \text{d}s = \\
+1 - m\int_x^1 C^R_1 \left(\frac{x}{s}\right) \text{d}s  - (1 - m)(1-x) - (1 - m) \int_0^x C^R_2\left(\frac{x-s}{1-s}\right) \text{d}s = \\
+m + x -mx - m\int_x^1 C^R_1 \left(\frac{x}{s}\right) \text{d}s  - (1 - m) \int_0^x C^R_2\left(\frac{x-s}{1-s}\right) \text{d}s = \\
+$$
+
+Lebesgue measure > 0???
 
 Binary calibration means that for each subset of $Y$ with a given $p$ the $q$ function is diagonal, so it is diagonal on average over whole $Y$ -> SBC.
 
 If continous SBC then no point masses can be miscalibrated. If it was, there has to be a ball near the "kinks" where SBC doesn't hold where there is no point mass (TODO, maybe incorrect)
 
-When fully continous - use the StackOverflow proof
+
+This equivalence implies that all limitations of SBC directly apply to binary calibration. Notably,
+following Theorem 7 of Modrák et al., if $f$ ignores data (e.g. when we do binary calibration for the model index), it will be satisfied when $\phi = \pi_{\text{prior}}.
+
 
 Proof binary calibration OK -> DAP OK.
 
