@@ -102,6 +102,7 @@ res_bin_correct <- compute_SBC(ds_bin, SBC_backend_bin_example(compute_correct_p
                                cache_mode = "results", cache_location = file.path(cache_dir, "binary_correct.rds"))
 ```
 
+
 ```{r}
 plot_ecdf_diff(res_bin_correct)
 plot_binary_calibration_diff(res_bin_correct$stats)

@@ -220,14 +220,14 @@ sim_turtles_post_sbc <- function(model, N_per_old_clutch, N_per_new_clutch = 5, 
 ```{r shared-config}
 N <- NULL
 C <- NULL
-N_sims <- 2
+N_sims <- 2000
 iter <- 15500
 warmup <- 500
 init <- 0
 
-N_per_old_clutch <- 1
-N_per_new_clutch <- 5
-C_new <- 20
+N_per_old_clutch <- 0
+N_per_new_clutch <- 4
+C_new <- 25
 ```
 
 
@@ -258,7 +258,8 @@ res_turtles_post <- compute_SBC(ds_turtles, backend_turtles,
 
 ```{r}
 plot_ecdf_diff(res_turtles_post, combine_variables = combine_array_elements)
-#plot_rank_hist(res_turtles_post$stats |> mutate(variable = "all", sim_id = 1:n()), bins = 20)
+# plot_ecdf_diff(res_turtles_post$stats |> mutate(variable = "all", sim_id = 1:n()))
+# plot_rank_hist(res_turtles_post$stats |> mutate(variable = "all", sim_id = 1:n()), bins = 20)
 
 ```
 
