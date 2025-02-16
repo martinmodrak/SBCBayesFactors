@@ -56,3 +56,4 @@ _SBC_cache/
 
 *.exe
 *.rds
+process.sh

@@ -1,0 +1,271 @@
+---
+title: "Turtles - posterior SBC"
+format: html
+---
+
+Let's setup the environment (bridgesampling currently works only with rstan):
+
+```{r setup, message=FALSE,warning=FALSE, results="hide"}
+library(SBC)
+library(ggplot2)
+library(bridgesampling)
+library(dplyr)
+library(tidyr)
+library(calibrationband)
+
+use_cmdstanr <- FALSE
+library(rstan)
+rstan_options(auto_write = TRUE)
+
+library(future)
+
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir)) {
+  dir.create(cache_dir)
+}
+
+do_tests <- TRUE
+
+theme_set(theme_minimal())
+devtools::load_all()
+```
+
+```{r cluster}
+setup_cluster()
+```
+
+
+```{r compile-models}
+m_H0 <- stan_model("stan/turtles_H0.stan")
+m_H1 <- stan_model("stan/turtles_H1.stan")
+```
+
+## Compute BF for original data
+
+```{r}
+data("turtles", package = "bridgesampling")
+
+m0_cache_file <- file.path(cache_dir, paste0("turtles_H0_fit_", rlang::hash(m_H0@model_code), ".rds"))
+m1_cache_file <- file.path(cache_dir, paste0("turtles_H1_fit_", rlang::hash(m_H1@model_code), ".rds"))
+
+stanfit_to_prior_draws <- function(fit) {
+  fit |> 
+    posterior::as_draws() |> 
+    posterior::thin_draws(thin = 10) |> 
+    posterior::merge_chains() |> 
+    posterior::as_draws_rvars()
+}
+# Directly copying the settings from the `turtles` page in the manual
+if(!file.exists(m0_cache_file)) {
+  stanfit_H0 <- sampling(m_H0,
+                     data = list(y = turtles$y, x = turtles$x, N = nrow(turtles), prior_width = sqrt(10.0), link = 0),
+                     iter = 15500, warmup = 500, chains = 10, cores = 10, refresh = 4000, seed = 456622342)
+  
+  draws_prior_H0 <- stanfit_to_prior_draws(stanfit_H0)
+  set.seed(321987524)
+  bs_prior_H0 <- bridgesampling::bridge_sampler(stanfit_H0)
+  saveRDS(list(draws = draws_prior_H0, bs = bs_prior_H0), file = m0_cache_file)
+} else {
+  h0_cache <- readRDS(m0_cache_file)
+  draws_prior_H0 <- h0_cache$draws
+  bs_prior_H0 <- h0_cache$bs
+}
+
+if(!file.exists(m0_cache_file)) {
+  stanfit_H1 <- sampling(m_H1,
+                   data = list(y = turtles$y, x = turtles$x, N = nrow(turtles),
+                               C = max(turtles$clutch), clutch = turtles$clutch, prior_width = sqrt(10.0), link = 0),
+                   iter = 15500, warmup = 500, chains = 10, cores = 10, refresh = 4000, seed = 846522143)
+
+  draws_prior_H1 <- stanfit_to_prior_draws(stanfit_H1)
+  set.seed(3452365)
+  bs_prior_H1 <- bridgesampling::bridge_sampler(stanfit_H1)
+  saveRDS(list(draws = draws_prior_H1, bs = bs_prior_H1), file = m1_cache_file)
+} else {
+  h1_cache <- readRDS(m1_cache_file)
+  draws_prior_H1 <- h1_cache$draws
+  bs_prior_H1 <- h1_cache$bs
+  
+}
+bf_prior_bs <- bridgesampling::bayes_factor(bs_prior_H1, bs_prior_H0)
+prob1_uniform_prior <- exp(bf_prior_bs$bf) / (1 + exp(bf_prior_bs$bf))
+
+# Tweak the prior assumed wihtout any data to have Pr(M1 | turtles) = target = 0.5
+# I want: target = pi_marg(y | M1) * prob1_tweaked / (pi_marg(y | M1) * prob1_tweaked + pi_marg(y | M0) * (1 - prob1_tweaked))
+prob1_target <- 0.5
+marg_m0 <- exp(bs_prior_H0$logml)
+marg_m1 <- exp(bs_prior_H1$logml)
+prob1_tweaked_prior <- (marg_m0 * prob1_target) / (marg_m1 + marg_m0 * prob1_target - marg_m1 * prob1_target)
+
+```
+
+
+
+## Simulator
+
+```{r}
+invisible(force(turtles))
+
+gen_globals <- c("r_inv_one_plus_sq", "turtles", "draws_prior_H0", "draws_prior_H1")
+
+sim_turtles_post_sbc <- function(model, N_per_old_clutch, N_per_new_clutch = 5, C_new = 0, sigma2_prior = "default", prior_width = sqrt(10.0), link = "probit") {
+  if(model == 0) {
+    prior_draw <- posterior::subset_draws(draws_prior_H0, draw = sample.int(posterior::ndraws(draws_prior_H0), size = 1))
+  } else {
+    prior_draw <- posterior::subset_draws(draws_prior_H1, draw = sample.int(posterior::ndraws(draws_prior_H1), size = 1))
+  }
+  
+    alpha0_raw <- posterior::draws_of(prior_draw$alpha0_raw)[1]
+    alpha1_raw <- posterior::draws_of(prior_draw$alpha1_raw)[1]
+    alpha0 <- prior_width * alpha0_raw
+    alpha1 <- prior_width * alpha1_raw
+
+    old_clutch_ids <- unique(turtles$clutch)
+    new_clutch_ids <- seq(from = max(old_clutch_ids) + 1, length.out = C_new)
+    clutch_new <- c(rep(old_clutch_ids, each = N_per_old_clutch),
+                    rep(new_clutch_ids, each = N_per_new_clutch))     
+
+    x_new <- sample(turtles$x, size = length(clutch_new), replace = TRUE)
+
+    
+    log_lik_shared <- dnorm(alpha0_raw, log = TRUE) +
+      dnorm(alpha1_raw, log = TRUE)
+    
+    if(model == 0) {
+      predictor <- alpha0 + alpha1 * turtles$x
+      predictor_new <- alpha0 + alpha1 * x_new
+      log_lik_spec <- 0
+    } else {
+      if(sigma2_prior == "default") {
+        sigma2_clutch <- posterior::draws_of(prior_draw$sigma2)[1]
+        sigma_clutch <- sqrt(sigma2_clutch)      
+        
+        sigma2_log_lik <- log(sigma2_clutch)  +# Jacobian
+          (- 2 * log1p(sigma2_clutch))
+      } else if(sigma2_prior == "chisq") {
+        sigma2_clutch <- posterior::draws_of(prior_draw$sigma2)[1]
+        sigma_clutch <- sqrt(sigma2_clutch)      
+        
+        sigma2_log_lik <- log(sigma2_clutch)  +# Jacobian
+          dchisq(sigma2_clutch, df = 1, log = TRUE)
+      } else if(sigma2_prior == "sqrt_norm") {
+        sigma_clutch <- posterior::draws_of(prior_draw$sigma)[1]
+
+        sigma2_log_lik <- log(sigma_clutch)  +# Jacobian
+          log(2) + dnorm(sigma_clutch, sd = 1, log = TRUE)
+      } else {
+        stop("Invalid sigma2_prior")
+      }
+
+      b_clutch_raw <- c(
+        posterior::draws_of(prior_draw$b_raw)[1,], 
+        rnorm(C_new))
+      b_clutch <- b_clutch_raw * sigma_clutch
+      
+      predictor <- alpha0 + alpha1 * turtles$x + b_clutch[turtles$clutch]
+      predictor_new <- alpha0 + alpha1 * x_new + b_clutch[clutch_new]
+      
+      log_lik_spec <- 
+        sigma2_log_lik +
+        sum(dnorm(b_clutch_raw, log = TRUE))
+    }
+    
+    if(link == "probit") {
+      prob <- pnorm(predictor)
+      prob_new <- pnorm(predictor_new)
+      link_int <- 0
+    } else if(link == "logit") {
+      prob <- plogis(predictor) 
+      prob_new <- plogis(predictor_new) 
+      link_int <- 1
+    } else {
+      stop("Invalid link")
+    }
+    y_new <- rbinom(length(clutch_new), p = prob_new, size = 1)
+
+  log_lik_predictor <- sum(dbinom(turtles$y, size = 1, p = prob, log = TRUE)) +
+    sum(dbinom(y_new, size = 1, p = prob_new, log = TRUE))
+  
+  variables <- list(
+      alpha0 = alpha0,
+      alpha1 = alpha1,
+      lp__ = log_lik_shared + log_lik_spec + log_lik_predictor
+    )
+  
+  if(model == 1) {
+    variables$sigma <- sigma_clutch
+    variables$b <- b_clutch
+  } 
+
+  list(
+    generated = list(
+      N = nrow(turtles) + length(clutch_new),
+      y = c(turtles$y, y_new),
+      x = c(turtles$x, x_new),
+      C = max(c(turtles$clutch, clutch_new)),
+      clutch = c(turtles$clutch, clutch_new),
+      prior_width = prior_width,
+      link = link_int
+    ),
+    variables = variables
+  )
+}
+```
+
+
+
+## Original prior
+
+```{r shared-config}
+N <- NULL
+C <- NULL
+N_sims <- 2
+iter <- 15500
+warmup <- 500
+init <- 0
+
+N_per_old_clutch <- 1
+N_per_new_clutch <- 5
+C_new <- 20
+```
+
+
+```{r simulateds}
+set.seed(345852)
+ds_turtles_m0 <- generate_datasets(SBC_generator_function(sim_turtles_post_sbc, model = 0, N_per_old_clutch = N_per_old_clutch, N_per_new_clutch = N_per_new_clutch, C_new = C_new, future.globals = gen_globals), n_sims = N_sims)
+ds_turtles_m1 <- generate_datasets(SBC_generator_function(sim_turtles_post_sbc, model = 1, N_per_old_clutch = N_per_old_clutch, N_per_new_clutch = N_per_new_clutch, C_new = C_new, future.globals = gen_globals), n_sims = N_sims)
+
+set.seed(68234245)
+ds_turtles <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1, prob_H1 = prob1_target)
+```
+
+```{r turtles1}
+iter <- 15500
+warmup <- 500
+init <- 0
+backend_turtles <- SBC_backend_bridgesampling(
+  SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
+  SBC_backend_rstan_sample(m_H1, iter = iter, warmup = warmup, init = init),
+  prior_prob1 = prob1_tweaked_prior
+)
+res_turtles_post <- compute_SBC(ds_turtles, backend_turtles, 
+                           keep_fits = FALSE,
+                           cache_mode = "results",
+                           cache_location = file.path(cache_dir, "turtles_post.rds"))
+```
+
+
+```{r}
+plot_ecdf_diff(res_turtles_post, combine_variables = combine_array_elements)
+#plot_rank_hist(res_turtles_post$stats |> mutate(variable = "all", sim_id = 1:n()), bins = 20)
+
+```
+
+```{r}
+bp_turtles_post <- binary_probabilities_from_stats(res_turtles_post$stats)
+t.test(bp_turtles_post$prob, mu = 0.5)
+miscalibration_resampling_p(bp_turtles_post$prob, bp_turtles_post$simulated_value)
+my_reliability_diag(bp_turtles_post)
+```
+

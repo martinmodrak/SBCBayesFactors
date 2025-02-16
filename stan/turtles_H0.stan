@@ -3,6 +3,7 @@ data {
   array[N] int<lower = 0, upper = 1> y;
   vector[N] x;
   real<lower=0> prior_width;
+  int<lower=0,upper=1> link;
 }
 
 parameters {
@@ -22,6 +23,10 @@ model {
 
   // likelihood
   for (i in 1:N) {
-    target += bernoulli_lpmf(y[i] | Phi(alpha0 + alpha1 * x[i]));
+    if(link == 0) {
+      target += bernoulli_lpmf(y[i] | Phi(alpha0 + alpha1 * x[i]));
+    } else {
+      target += bernoulli_logit_lpmf(y[i] | alpha0 + alpha1 * x[i]);
+    }
   }
 }

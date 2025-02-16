@@ -418,9 +418,9 @@ $$
 \end{split}
 $$
 
-In this case, $\mathbb{Var}(BF_{0,1} | \mathcal{M}_1)$ is undefined. This is admittedly a bit extreme, most models do not feature Cauchy marginal data distributions. So let's assume that for a fixed, known $\mu$ we instead have $\mathcal{M}_1: y \sim \text{N}(\mu, 1)$. Then we have $\mathbb{Var}(BF_{0,1} | \mathcal{M}_1) = \mathbb{Var}(BF_{1,0} | \mathcal{M}_0) = \exp\left(\mu^2\right)$, so e.g. already for $\mu = 2$ we need over 5 000 simulations just to bring the standard error on the expectation below $0.1$. See appendix for full calculation.
+In this case, $\mathbb{Var}(BF_{0,1} | \mathcal{M}_1)$ is undefined. This is admittedly a bit extreme, most models do not feature Cauchy marginal data distributions. So let's assume that for a fixed, known $\mu$ we instead have $\mathcal{M}_1: y \sim \text{N}(\mu, 1)$. Then we have $\mathbb{Var}(BF_{0,1} | \mathcal{M}_1) = \mathbb{Var}(BF_{1,0} | \mathcal{M}_0) = \exp\left(\mu^2\right) - 1$, so e.g. already for $\mu = 2$ we need over 5 000 simulations just to bring the standard error on the expectation below $\frac{1}{10}$. See appendix for full calculation.
 
-The absence of any bound on variance of the estimate which explains the lack of convergence for some cases 
+The absence of any bound on variance of the estimate explains the lack of convergence for some cases 
 and slow convergence for others as reported by Sekulovski et al. It also prevents
 us from evaluating the remaining uncertainty we have about the expectations, as we cannot rule out very rare very large BF values.
 We note that the same cases presented above pose no problem for both SBC and
@@ -855,7 +855,7 @@ Using data-averaged posterior for validation of Bayes factor
 computation should thus be considered only as a supplement to SBC or prediction
 calibration. The recently proposed good check is in our view very rarely useful.
 
-In the examples we ran, prediction calibration checks tended to have higher power to detect discrepancies than SBC for the model index and sometimes even than SBC for the log likelihood.
+In the examples we ran, prediction calibration checks tended to have slightly higher power to detect discrepancies than SBC for the model index and sometimes even than SBC for the log likelihood. The reason is throwing away information via random tiebreaking --- increasing power of SBC in those settings is an ongoing research project of ours and we consider it out of scope of this paper.
 This speaks in favor of using prediction calibration for testing Bayes factor computations. However, there are issues that prediction calibration missed that were only visible when using data-dependent test quantities in SBC. So we argue that prediction calibration is useful as an _addition_ to SBC, not as a replacement.
 
 Another advantage of running SBC for the full BMA model is that we can use the same
@@ -1134,7 +1134,15 @@ $$
 = \exp\left(\mu^2\right) \int_{-\infty}^\infty \frac{\exp\left(-\frac{1}{2} (x - 2\mu)^2\right)}{\sqrt{2 \pi}} \text{d}y = \exp\left(\mu^2\right)
 $$
 
-where in the last step, the integral is over the PDF of a normal distribution with mean $2\mu$ and standard deviation $1$.
+where in the last step, the integral is over the PDF of a normal distribution with mean $2\mu$ and standard deviation $1$. Therefore the variance of the Bayes factor is 
+
+$$
+\text{Var}(BF_{0,1}|\mathcal{M}_1) = \mathbb{E}(BF_{0,1}^2|\mathcal{M}_1) - E(BF_{0,1}|\mathcal{M}_1)^2 = \exp\left(\mu^2\right)  - 1.
+$$ 
+
+We note that this situation is completely symmetric in the sense that $\mathbb{E}(BF_{0,1}^2 | \mathcal{M}_1) = \mathbb{E}(BF_{1,0}^2 | \mathcal{M}_0)$ so the problems are not specific to one "direction" of the Good check.
+
+Now assume that $\mu = 2$, then the standard error of the mean after $i$ iterations is $\sqrt{\frac{\exp(4) - 1}{n}}$ so we expect to need 5 360 simulations to keep the standard error belowe $\frac{1}{10}$ and 21 440 simulations to keep the standard error below $\frac{1}{20}$ and thus obtain estimates likely within $\frac{1}{10}$ of the correct value. 
 
 Empirically, we can see the lack of any convergence for the Cauchy case and very slow convergence for the normal case in @fig-good-convergence. It follows, that the Good check cannot reliably diagnose BF computation unless we know that the BF distribution is well behaved. 
 

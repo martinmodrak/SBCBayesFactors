@@ -25,7 +25,7 @@ if(!dir.exists(cache_dir)) {
   dir.create(cache_dir)
 }
 
-do_tests <- TRUE
+do_tests <- FALSE
 
 theme_set(theme_minimal())
 devtools::load_all()
@@ -98,7 +98,7 @@ force(turtles)
 
 gen_globals <- c("r_inv_one_plus_sq", "turtles")
 
-sim_turtles <- function(model, N = NULL, C = NULL, sigma2_prior = "default", prior_width = sqrt(10.0)) {
+sim_turtles <- function(model, N = NULL, C = NULL, sigma2_prior = "default", prior_width = sqrt(10.0), link = "probit") {
   if(is.null(N)) {
     stopifnot(is.null(C))
     fixed_predictors <- TRUE
@@ -166,8 +166,16 @@ sim_turtles <- function(model, N = NULL, C = NULL, sigma2_prior = "default", pri
         sum(dnorm(b_clutch_raw, log = TRUE))
     }
     
-    #prob <- plogis(predictor)
-    prob <- pnorm(predictor)
+    if(link == "probit") {
+      prob <- pnorm(predictor)
+      link_int <- 0
+    } else if(link == "logit") {
+      prob <- plogis(predictor) 
+      link_int <- 1
+    } else {
+      stop("Invalid link")
+    }
+    #
     y <- rbinom(N, p = prob, size = 1)
     if(mean(y == 0) < 0.9 && mean(y == 1) < 0.9) {
       break
@@ -197,7 +205,8 @@ sim_turtles <- function(model, N = NULL, C = NULL, sigma2_prior = "default", pri
       x = x,
       C = C,
       clutch = clutch,
-      prior_width = prior_width
+      prior_width = prior_width,
+      link = link_int
     ),
     variables = variables
   )
@@ -240,14 +249,22 @@ set.seed(5685432)
 }
 ```
 
+
+```{r shared-config}
+N <- NULL
+C <- NULL
+N_sims <- 2000
+iter <- 15500
+warmup <- 500
+init <- 0
+```
+
+
 ## Original prior
 
 ```{r simulateds}
-N <- NULL
-C <- NULL
 
 set.seed(3245822)
-N_sims <- 2000
 ds_turtles_m0 <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
 ds_turtles_m1 <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
 
@@ -256,9 +273,6 @@ ds_turtles <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1)
 ```
 
 ```{r turtles1}
-iter <- 15500
-warmup <- 500
-init <- 0
 backend_turtles <- SBC_backend_bridgesampling(
   SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
   SBC_backend_rstan_sample(m_H1, iter = iter, warmup = warmup, init = init)
@@ -325,6 +339,53 @@ plot_ecdf_diff(stats_split$stats_H1, combine_variables = combine_array_elements)
 ```
 
 Note: the error is detectable earlier with miscalibration (at around 400 sims)
+
+## Original prior + logit link
+
+```{r simulateds-logit}
+set.seed(321452333)
+ds_turtles_m1_logit <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = NULL, C = NULL, link = "logit",  future.globals = c("turtles", "r_inv_one_plus_sq")), n_sims = N_sims)
+
+ds_turtles_m0_logit <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = NULL, C = NULL, link = "logit", future.globals = "turtles"), n_sims = N_sims)
+                                              
+                                                                                      
+ds_turtles_logit <- SBC_datasets_for_bf(ds_turtles_m0_logit, ds_turtles_m1_logit)
+```
+
+
+```{r turtles-logit}
+backend_turtles_logit <- SBC_backend_bridgesampling(
+  SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
+  SBC_backend_rstan_sample(m_H1, iter = iter, warmup = warmup, init = init)
+)
+res_turtles_logit <- compute_SBC(ds_turtles_logit, backend_turtles_logit, 
+                           keep_fits = FALSE,
+                           cache_mode = "results",
+                           cache_location = file.path(cache_dir, "turtles_1_logit.rds"))
+```
+
+
+
+```{r}
+plot_ecdf_diff(res_turtles_logit, combine_variables = combine_array_elements)
+plot_rank_hist(res_turtles_logit, variables = "model", bins = 20)
+
+```
+
+```{r}
+bp_turtles_logit <- binary_probabilities_from_stats(res_turtles_logit$stats)
+t.test(bp_turtles_logit$prob, mu = 0.5)
+miscalibration_resampling_p(bp_turtles_logit$prob, bp_turtles_logit$simulated_value)
+my_reliability_diag(bp_turtles_logit)
+```
+
+
+```{r ecdf-split-logit}
+stats_split_logit <- split_SBC_results_for_bf(res_turtles_logit)
+plot_ecdf_diff(stats_split_logit$stats_H0)
+plot_ecdf_diff(stats_split_logit$stats_H1, combine_variables = combine_array_elements)
+```
+
 
 ## Chi-squared prior
 
@@ -444,6 +505,52 @@ res_turtles_m1_norm <- compute_SBC(ds_turtles_m1_norm_2, backend_H1_norm,
 ```{r}
 plot_ecdf_diff(res_turtles_m1_norm, combine_variables = combine_array_elements)
 ```
+
+## Normal prior + logit link
+
+```{r simulateds-norm-logit}
+set.seed(6685543)
+ds_turtles_m1_norm_logit <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = NULL, C = NULL, sigma2_prior = "sqrt_norm", link = "logit",  future.globals = "turtles"), n_sims = N_sims)
+
+
+                                                                                      
+ds_turtles_norm_logit <- SBC_datasets_for_bf(ds_turtles_m0_logit, ds_turtles_m1_norm_logit)
+```
+
+
+```{r turtles-norm-logit}
+backend_turtles_norm_logit <- SBC_backend_bridgesampling(
+  SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
+  SBC_backend_rstan_sample(m_H1_norm, iter = iter, warmup = warmup, init = init)
+)
+res_turtles_norm_logit <- compute_SBC(ds_turtles_norm_logit, backend_turtles_norm_logit, 
+                           keep_fits = FALSE,
+                           cache_mode = "results",
+                           cache_location = file.path(cache_dir, "turtles_1_norm_logit.rds"))
+```
+
+
+
+```{r}
+plot_ecdf_diff(res_turtles_norm_logit, combine_variables = combine_array_elements)
+plot_rank_hist(res_turtles_norm_logit, variables = "model", bins = 20)
+
+```
+
+```{r}
+bp_turtles_norm_logit <- binary_probabilities_from_stats(res_turtles_norm_logit$stats)
+t.test(bp_turtles_norm_logit$prob, mu = 0.5)
+miscalibration_resampling_p(bp_turtles_norm_logit$prob, bp_turtles_norm_logit$simulated_value)
+my_reliability_diag(bp_turtles_norm_logit)
+```
+
+
+```{r ecdf-split-norm-logit}
+stats_split_norm_logit <- split_SBC_results_for_bf(res_turtles_norm_logit)
+plot_ecdf_diff(stats_split_norm_logit$stats_H0)
+plot_ecdf_diff(stats_split_norm_logit$stats_H1, combine_variables = combine_array_elements)
+```
+
 
 ## Warp3
 
