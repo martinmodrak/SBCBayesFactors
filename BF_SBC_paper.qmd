@@ -64,16 +64,17 @@ Nice to have:
 
 ## Introduction
 
-Overall intro on Bayes factors/model selection... TODO
+Bayes factors (BFs), i.e. the ratio of marginal likelihoods are a commonly used quantity for
+model selection and hypothesis testing in the Bayesian paradigm --- this is despite some criticism (TODO reivew + cite). Possibly its main appeal is the close relationship between the Bayes factor and the posterior probability that a hypothesis is true.
 
-goals of the paper.
+In this paper, we set the discussion about the usefulness of Bayes factors aside, and simply assume we have a use case where Bayes factors are a useful quantity of interest. An important practical concern is how to compute Bayes factors and/or the marginal
+likelihoods of data as this typically involves difficult numerical integration.
 
+There are many approaches to compute Bayes factos. Savage-Dickey. A flexible method is bridgesampling, which can work with any set of samples. Specific families of models have also custom integration methods developed (cite lmBF) TODO a bit more review.
 
-Despite some criticism (cite), this is a commonly used method to compare models and do
-hypothesis testing in the Bayesian paradigm.
+Previously, Schad and co-authors have developed a workflow for validating this computation based on simulation-based calibration checking (SBC) and applied it to several problems (cite workflow, aggregate, biased). 
 
-An important practical concern is how to compute Bayes factors and/or the marginal
-densities of data as this typically involves difficult numerical integration.
+In this paper we show that the approach of Schad et al. uses simulation results inefficiently and is insensitive to large classes of potential problems. We note that the Schad et al. approach differes importantly from SBC as originally described (cite Talts) and is better understood as a check based on data-averaged posterior. We then employ an improved variant of SBC (Modrák et al.) and the accompanying theoretical progress for evaluation of Bayes factor computation. We shown an equivalence between SBC for binary variables (and hence Bayes factors) and binary prediction calibration. Using several toy models, we demonstrate how problems in Bayes factor computation not detectable by inspecting data-averaged posterior can easily be detected by SBC. Finally, we turn to real-world problems and demonstrate cases where bridgesampling over Stan models can have noticeable bias, we show that using posterior SBC (cite Vehtari) is necessary when checking Bayes factor computation under improper priors for some model parameters, we show that at least some of the conclusions of Schad (biased BF) are incorrect and compare efficiency of various checks in discovering errors in normalization constants.
 
 ## Theoretical background
 

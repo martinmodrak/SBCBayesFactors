@@ -358,12 +358,15 @@ backend_turtles_logit <- SBC_backend_bridgesampling(
   SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
   SBC_backend_rstan_sample(m_H1, iter = iter, warmup = warmup, init = init)
 )
-res_turtles_logit <- compute_SBC(ds_turtles_logit, backend_turtles_logit, 
+# res_turtles_logit <- compute_SBC(ds_turtles_logit, backend_turtles_logit, 
+#                            keep_fits = FALSE,
+#                            cache_mode = "results",
+#                            cache_location = file.path(cache_dir, "turtles_1_logit.rds"))
+res_turtles_logit <- compute_SBC_cache_blocks(ds_turtles_logit, backend_turtles_logit, 
                            keep_fits = FALSE,
-                           cache_mode = "results",
-                           cache_location = file.path(cache_dir, "turtles_1_logit.rds"))
+                           block_size = 200,
+                           cache_prefix = file.path(cache_dir, "turtles_logit_"))
 ```
-
 
 
 ```{r}
