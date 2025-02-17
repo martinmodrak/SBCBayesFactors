@@ -232,6 +232,20 @@ set.seed(9654224)
 }
 ```
 
+```{r}
+ysds <- purrr::map_dbl(ds_test_1$generated, \(x) sd(x$y))
+hist(ysds)
+
+x <- ds_test_1$generated[[1]]
+df <- data.frame(x = x$x, y = x$y, clutch = x$clutch)
+glm(y ~ x + (1 | clutch), family = "binomial", data = df)
+ysds <- purrr::map_dbl(ds_test_1$generated, \(x) sd(x$y))
+
+select <- ysds < 0.45
+plot_ecdf_diff(res_test1[select], combine_variables = combine_array_elements)
+plot_ecdf_diff(res_test1[!select], combine_variables = combine_array_elements)
+```
+
 
 ```{r test0}
 if(do_tests) {
@@ -532,10 +546,17 @@ res_turtles_norm_logit <- compute_SBC(ds_turtles_norm_logit, backend_turtles_nor
                            cache_location = file.path(cache_dir, "turtles_1_norm_logit.rds"))
 ```
 
+```{r}
+warning("Temproary")
+res_turtles_norm_logit <- get_partial_cache_blocks(ds_turtles_norm_logit, backend_turtles_norm_logit, 
+                           keep_fits = FALSE,
+                           cache_prefix = file.path(cache_dir, "turtles_norm_logit_"),
+                           block_size = 200)
+```
 
 
 ```{r}
-plot_ecdf_diff(res_turtles_norm_logit, combine_variables = combine_array_elements)
+plot_ecdf_diff(res_turtles_norm_logit$stats |> mutate(sim_id = 1:n()), combine_variables = combine_array_elements)
 plot_rank_hist(res_turtles_norm_logit, variables = "model", bins = 20)
 
 ```
