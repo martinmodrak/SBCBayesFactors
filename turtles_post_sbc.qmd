@@ -25,6 +25,7 @@ if(!dir.exists(cache_dir)) {
   dir.create(cache_dir)
 }
 
+
 do_tests <- TRUE
 
 theme_set(theme_minimal())
@@ -72,7 +73,7 @@ if(!file.exists(m0_cache_file)) {
   bs_prior_H0 <- h0_cache$bs
 }
 
-if(!file.exists(m0_cache_file)) {
+if(!file.exists(m1_cache_file)) {
   stanfit_H1 <- sampling(m_H1,
                    data = list(y = turtles$y, x = turtles$x, N = nrow(turtles),
                                C = max(turtles$clutch), clutch = turtles$clutch, prior_width = sqrt(10.0), link = 0),
@@ -107,9 +108,9 @@ prob1_tweaked_prior <- (marg_m0 * prob1_target) / (marg_m1 + marg_m0 * prob1_tar
 ```{r}
 invisible(force(turtles))
 
-gen_globals <- c("r_inv_one_plus_sq", "turtles", "draws_prior_H0", "draws_prior_H1")
+gen_globals <- c("r_inv_one_plus_sq", "turtles")
 
-sim_turtles_post_sbc <- function(model, N_per_old_clutch, N_per_new_clutch = 5, C_new = 0, sigma2_prior = "default", prior_width = sqrt(10.0), link = "probit") {
+sim_turtles_post_sbc <- function(model, draws_prior_H0, draws_prior_H1, N_per_old_clutch, N_per_new_clutch = 5, C_new = 0, sigma2_prior = "default", prior_width = sqrt(10.0), link = "probit") {
   if(model == 0) {
     prior_draw <- posterior::subset_draws(draws_prior_H0, draw = sample.int(posterior::ndraws(draws_prior_H0), size = 1))
   } else {
@@ -249,10 +250,10 @@ backend_turtles <- SBC_backend_bridgesampling(
   SBC_backend_rstan_sample(m_H1, iter = iter, warmup = warmup, init = init),
   prior_prob1 = prob1_tweaked_prior
 )
-res_turtles_post <- compute_SBC(ds_turtles, backend_turtles, 
+res_turtles_post <- compute_SBC_cache_blocks(ds_turtles, backend_turtles, 
                            keep_fits = FALSE,
-                           cache_mode = "results",
-                           cache_location = file.path(cache_dir, "turtles_post.rds"))
+                           cache_prefix = file.path(cache_dir, "turtles_post_"),
+                           block_size = 200)
 ```
 
 
