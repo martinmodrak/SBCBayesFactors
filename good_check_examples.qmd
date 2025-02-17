@@ -25,7 +25,7 @@ n_histories <- 100
 
 
 ```{r cluster}
-setup_cluster()
+setup_cluster(max_server_workers = 20)
 ```
 
 

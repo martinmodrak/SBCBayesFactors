@@ -1139,7 +1139,8 @@ where in the last step, the integral is over the PDF of a normal distribution wi
 Empirically, we can see the lack of any convergence for the Cauchy case and very slow convergence for the normal case in @fig-good-convergence. It follows, that the Good check cannot reliably diagnose BF computation unless we know that the BF distribution is well behaved. 
 
 ```{r fig-good-convergence}
-#| fig-cap: Convergence of the good check when a single datapoint is simulated from the standard normal and  A) $\mathcal{M}_0: y \sim \text{Cauchy}(0, 1)$ --- here the variance is infinite and we see no convergence at all or B) $\mathcal{M}_0: y \sim N(2, 1)$ where the average Bayes factor eventually converges, but 50 000 simulations are not enough for reliable convergence. Each line is the cumulative average from a single set of simulations. The highlighted area shows average BF 0.9 - 1.1. Means from first 1000 simulations are not shown.
+#| fig-cap: | 
+#|   Convergence of the good check when a single datapoint is simulated from the standard normal and  A) $\mathcal{M}_0: y \sim \text{Cauchy}(0, 1)$ --- here the variance is infinite and we see no convergence at all or B) $\mathcal{M}_0: y \sim N(2, 1)$ where the average Bayes factor eventually converges, but 50 000 simulations are not enough for reliable convergence. Each line is the cumulative average from a single set of simulations. The highlighted area shows average BF 0.9 - 1.1. Means from first 1000 simulations are not shown.
 #| fig-width: 7
 #| fig-height: 2.5
 plot_good_example <- function(n_sims, n_runs, m0, step = 10, start = 1, linealpha = 0.3) {
@@ -1185,7 +1186,8 @@ good_runs <- 20
 
 
 ```{r fig-good-sbc}
-#| fig-cap: ECDF difference plots from SBC (A) and calibration diagrams (B, C) for Bayes factors when $\mathcal{M}_1: y \sim N(0, 1)$ and either $\mathcal{M}_0: y \sim \text{Cauchy}(0, 1)$ or $\mathcal{M}_0: y \sim N(2, 1)$.
+#| fig-cap: |
+#|   ECDF difference plots from SBC (A) and calibration diagrams (B, C) for Bayes factors when $\mathcal{M}_1: y \sim N(0, 1)$ and either $\mathcal{M}_0: y \sim \text{Cauchy}(0, 1)$ or $\mathcal{M}_0: y \sim N(2, 1)$.
 #| fig-width: 7
 #| fig-height: 4
 res_good_cauchy <- load_precomputed_file(here::here("cache/good_cauchy.rds"), "good_check_examples.qmd")$result

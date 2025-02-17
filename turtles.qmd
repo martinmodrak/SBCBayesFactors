@@ -25,14 +25,14 @@ if(!dir.exists(cache_dir)) {
   dir.create(cache_dir)
 }
 
-do_tests <- TRUE
+do_tests <- FALSE
 
 theme_set(theme_minimal())
 devtools::load_all()
 ```
 
 ```{r cluster}
-setup_cluster()
+setup_cluster(max_server_workers = 110)
 ```
 
 
@@ -335,7 +335,7 @@ ds_turtles_chisq <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1_chisq)
 ```
 
 
-```{r turtles1}
+```{r turtles_chisq}
 backend_turtles_chisq <- SBC_backend_bridgesampling(
   SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
   SBC_backend_rstan_sample(m_H1_chisq, iter = iter, warmup = warmup, init = init)
@@ -377,7 +377,7 @@ ds_turtles_norm <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1_norm)
 ```
 
 
-```{r turtles1}
+```{r turtles-normal}
 backend_turtles_norm <- SBC_backend_bridgesampling(
   SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
   SBC_backend_rstan_sample(m_H1_norm, iter = iter, warmup = warmup, init = init)
@@ -458,6 +458,7 @@ backend_turtles_w <- SBC_backend_bridgesampling(
 res_turtles_w <- compute_SBC(ds_turtles, backend_turtles_w, 
                            keep_fits = FALSE,
                            cache_mode = "results",
+                           chunk_size = 30, # Hack to reduce threads usage just for Warp3
                            cache_location = file.path(cache_dir, "turtles_1_w.rds"))
 ```
 
@@ -503,7 +504,7 @@ my_reliability_diag(bp_turtles_more)
 
 ## More warmup and iterations
 
-```{r more-warmup}
+```{r more-warmup-iter}
 backend_turtles_more2 <- SBC_backend_bridgesampling(
   SBC_backend_rstan_sample(m_H0, iter = iter * 2, warmup = warmup + 1000, init = init),
   SBC_backend_rstan_sample(m_H1, iter = iter * 4, warmup = warmup + 2000, init = init)
