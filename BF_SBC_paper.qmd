@@ -67,14 +67,18 @@ Nice to have:
 Bayes factors (BFs), i.e. the ratio of marginal likelihoods are a commonly used quantity for
 model selection and hypothesis testing in the Bayesian paradigm --- this is despite some criticism (TODO reivew + cite). Possibly its main appeal is the close relationship between the Bayes factor and the posterior probability that a hypothesis is true.
 
-In this paper, we set the discussion about the usefulness of Bayes factors aside, and simply assume we have a use case where Bayes factors are a useful quantity of interest. An important practical concern is how to compute Bayes factors and/or the marginal
+In this paper, we set the discussion about the usefulness of Bayes factors aside, and simply assume we have a scenario where Bayes factors are a useful quantity of interest. An important practical concern is how to compute Bayes factors and/or the marginal
 likelihoods of data as this typically involves difficult numerical integration.
 
-There are many approaches to compute Bayes factos. Savage-Dickey. A flexible method is bridgesampling, which can work with any set of samples. Specific families of models have also custom integration methods developed (cite lmBF) TODO a bit more review.
+There are many approaches to compute Bayes factors. Savage-Dickey. 
+A flexible method is bridgesampling, which can work with any set of samples. Specific families of models have also custom integration methods developed (cite lmBF) TODO a bit more review.
 
-Previously, Schad and co-authors have developed a workflow for validating this computation based on simulation-based calibration checking (SBC) and applied it to several problems (cite workflow, aggregate, biased). 
+Our main contribution is to employ an improved variant simulation-based calibration checking  (SBC, Modrák et al.) and the accompanying theoretical progress for validating Bayes factor computation. We show a theoretical equivalence between SBC for Bayes factors and binary prediction calibration. Using several toy models, we demonstrate how problems in Bayes factor computation not detectable by inspecting data-averaged posterior can easily be detected by SBC. Finally, we turn to real-world problems and demonstrate cases where bridgesampling over Stan models can have noticeable bias, we show that using posterior SBC (cite Vehtari) is necessary when checking Bayes factor computation under improper priors for some model parameters,  and compare efficiency of various checks in discovering errors in normalization constants. 
 
-In this paper we show that the approach of Schad et al. uses simulation results inefficiently and is insensitive to large classes of potential problems. We note that the Schad et al. approach differes importantly from SBC as originally described (cite Talts) and is better understood as a check based on data-averaged posterior. We then employ an improved variant of SBC (Modrák et al.) and the accompanying theoretical progress for evaluation of Bayes factor computation. We shown an equivalence between SBC for binary variables (and hence Bayes factors) and binary prediction calibration. Using several toy models, we demonstrate how problems in Bayes factor computation not detectable by inspecting data-averaged posterior can easily be detected by SBC. Finally, we turn to real-world problems and demonstrate cases where bridgesampling over Stan models can have noticeable bias, we show that using posterior SBC (cite Vehtari) is necessary when checking Bayes factor computation under improper priors for some model parameters, we show that at least some of the conclusions of Schad (biased BF) are incorrect and compare efficiency of various checks in discovering errors in normalization constants.
+Previously, Schad and co-authors have developed a workflow for validating Bayes factor computation inspired by SBC and applied it to several problems (cite workflow, aggregate, biased). This paper is partially a reaction to Schad et al.:  we note that the Schad et al. approach differs importantly from SBC both as originally described (cite Talts) as well as its more recent variants. In fact the Schad et al. approach and is better understood as a check based on data-averaged posterior. We show that the approach of Schad et al. uses simulation results inefficiently and is insensitive to large classes of potential problems. Additionally, due to incorrect implementation at least some of the cases where Schad (biased BF) claim incorrect Bayes factor computations are false positives and we show that the resulting Bayes factors are in fact calibrated to high precision.
+
+
+We conclude the paper with recommendations for checking Bayes factor computation both when developing new statistical tools as well as a part of Bayesian workflow (following Gelman et al. workflow preprint)
 
 ## Theoretical background
 
@@ -275,6 +279,57 @@ $f(\theta, y) = \pi_\text{obs}(y | \theta)$ is often highly sensitive in that re
 Applying that to the BMA supermodel, SBC can in principle detect any problem in Bayes
 factor computation. [Yao & Domke (2023)](https://proceedings.neurips.cc/paper_files/paper/2023/hash/7103cd82de95a7b30983fcf74ba499ac-Abstract-Conference.html) show that we can instead train a classifier that tries to distinguish prior and posterior draws and this allows sensitivity to any type of problem without explicitly constructing a test quantity. Unfortunately, this comes at a price of requiring a potentially very large number of simulations.
 
+#### Posterior SBC
+
+Good choice of priors is important for practical success with SBC.
+There are at least three problems one can encounter in this regard:
+1) Some statistical packages use improper priors, which we cannot simulate from.
+2) Many priors are unrealistic --- notably using independent priors
+for all parameters often results in large prior probability on unrealistic datasets
+(TODO cite R2D2 + makemyprior). This both reduces relevance of our simulations
+for real datasets and may result in convergence problems even when the model works
+well enough for real datasets.
+3) If we aim to verify Bayes factor computation for a specific dataset, 
+even a very good prior will result in most simulated datasets being very unlike
+the dataset we are interested in, making us less likely to notice potential problems
+that manifest only in the particular region of data space.
+
+All three problems can be overcome with *posterior SBC* (cite Aki's new preprint).
+
+The overall idea of posterior SBC is to fit the model to a (usually small) dataset(s) and treat
+the resulting posterior(s) as the prior for simulations. More formally, if 
+we assume the data space partitions as $Y = Y_1 \times Y_2$, then given a fixed dataset $y_1 \in Y_1$
+we can construct a new model $\bar\pi$ such that:
+
+$$
+\begin{aligned}
+\bar\pi_\text{prior}(\theta) &=  \pi_\text{post}(\theta | y_1) \\
+\bar\pi_\text{post}(\theta | y_2) &= \pi_\text{post}(\theta | (y_1, y_2)) \\
+\end{aligned}
+$$
+
+We can then simulate from $\bar\pi_\text{prior}$ by fitting $\pi$ to $y_1$ and 
+taking draws from $\pi_\text{post}(\theta|y_1)$. We may then use this parameter draw
+to simulate $y_2$ from $\pi_\text{obs}$ and fit $\pi$ to the whole
+dataset $(y_1,y_2)$. 
+This setup can be generalized further by replacing the single fixed $y_1$ with a distribution $g$ over possible $y_1$, so we have $\bar\pi_\text{prior}(\theta) \int_{Y_1} \text{d}y_1 \: g(y_1)  \pi_\text{post}(\theta | y_1)$.
+
+To check computation for models with improper priors, we need to choose $y_1$ such that $\pi_\text{post}(\theta | y_1)$ is proper and amenable to sampling. 
+To provide a better prior, we take the distribution $g$ as representing prior beliefs about the data (which tend to be easier to elicit than
+priors on parameters - cite Paul)
+To target an SBC check
+to a specific dataset, we may take a suitable portion of the dataset as fixed $y_1$ or even take $g$ to be a suitable
+subsampling distribution of the dataset.
+
+To use posterior SBC with Bayes factors, we need to compute the implied prior for 
+the parameters of both models, but we also need the new prior for the model index $\bar\pi_\text{BMA}(i|y_1)$. 
+Another important factor in choosing $y_1$ thus needs to be that it does not produce too extreme implied prior probability for any 
+of the models under consideration.
+
+Alternatively, we can tweak the
+original prior probability, to get uniform distribution in the implied prior, i.e. $\bar\pi_\text{BMA}(i|y_1) = \frac{1}{K}$.
+
+
 #### Data-averaged posterior
 
 The data-averaged posterior criterion checks that:
@@ -337,55 +392,6 @@ almost never be computed as exactly zero, but a package may repeatedly assign ve
 probability to the correct model and still pass data-averaged posterior.
 
 
-#### Posterior SBC
-
-Good choice of priors is important for practical success with SBC.
-There are at least three problems one can encounter in this regard:
-1) Some statistical packages use improper priors, which we cannot simulate from.
-2) Many priors are unrealistic --- notably using independent priors
-for all parameters often results in large prior probability on unrealistic datasets
-(TODO cite R2D2 + makemyprior). This both reduces relevance of our simulations
-for real datasets and may result in convergence problems even when the model works
-well enough for real datasets.
-3) If we aim to verify Bayes factor computation for a specific dataset, 
-even a very good prior will result in most simulated datasets being very unlike
-the dataset we are interested in, making us less likely to notice potential problems
-that manifest only in the particular region of data space.
-
-All three problems can be overcome with *posterior SBC* (cite Aki's new preprint).
-
-The overall idea of posterior SBC is to fit the model to a (usually small) dataset(s) and treat
-the resulting posterior(s) as the prior for simulations. More formally, if 
-we assume the data space partitions as $Y = Y_1 \times Y_2$, then given a fixed dataset $y_1 \in Y_1$
-we can construct a new model $\bar\pi$ such that:
-
-$$
-\begin{aligned}
-\bar\pi_\text{prior}(\theta) &=  \pi_\text{post}(\theta | y_1) \\
-\bar\pi_\text{post}(\theta | y_2) &= \pi_\text{post}(\theta | (y_1, y_2)) \\
-\end{aligned}
-$$
-
-We can then simulate from $\bar\pi_\text{prior}$ by fitting $\pi$ to $y_1$ and 
-taking draws from $\pi_\text{post}(\theta|y_1)$. We may then use this parameter draw
-to simulate $y_2$ from $\pi_\text{obs}$ and fit $\pi$ to the whole
-dataset $(y_1,y_2)$. 
-This setup can be generalized further by replacing the single fixed $y_1$ with a distribution $g$ over possible $y_1$, so we have $\bar\pi_\text{prior}(\theta) \int_{Y_1} \text{d}y_1 \: g(y_1)  \pi_\text{post}(\theta | y_1)$.
-
-To check computation for models with improper priors, we need to choose $y_1$ such that $\pi_\text{post}(\theta | y_1)$ is proper and amenable to sampling. 
-To provide a better prior, we take the distribution $g$ as representing prior beliefs about the data (which tend to be easier to elicit than
-priors on parameters - cite Paul)
-To target an SBC check
-to a specific dataset, we may take a suitable portion of the dataset as fixed $y_1$ or even take $g$ to be a suitable
-subsampling distribution of the dataset.
-
-To use posterior SBC with Bayes factors, we need to compute the implied prior for 
-the parameters of both models, but we also need the new prior for the model index $\bar\pi_\text{BMA}(i|y_1)$. 
-Another important factor in choosing $y_1$ thus needs to be that it does not produce too extreme implied prior probability for any 
-of the models under consideration.
-
-Alternatively, we can tweak the
-original prior probability, to get uniform distribution in the implied prior, i.e. $\bar\pi_\text{BMA}(i|y_1) = \frac{1}{K}$.
 
 
 ### Good check
@@ -854,7 +860,7 @@ While there are cases where data-averaged posterior performs somewhat better tha
 it also fails catastrophically in many examples where SBC and prediction calibration work. 
 Using data-averaged posterior for validation of Bayes factor
 computation should thus be considered only as a supplement to SBC or prediction
-calibration. The recently proposed good check is in our view very rarely useful.
+calibration. The recently proposed Good check is in our view very rarely useful.
 
 In the examples we ran, prediction calibration checks tended to have slightly higher power to detect discrepancies than SBC for the model index and sometimes even than SBC for the log likelihood. The reason is throwing away information via random tiebreaking --- increasing power of SBC in those settings is an ongoing research project of ours and we consider it out of scope of this paper.
 This speaks in favor of using prediction calibration for testing Bayes factor computations. However, there are issues that prediction calibration missed that were only visible when using data-dependent test quantities in SBC. So we argue that prediction calibration is useful as an _addition_ to SBC, not as a replacement.
@@ -872,17 +878,26 @@ hundred simulations to be reliably uncovered (e.g. @fig-pnb-ignore-half).
 Using multiple test quantities or even multiple methods for checking the calibration of
 the model yields to multiple testing issues. However, here Type II error (false negatives)
 is the biggest problem. We can usually run more simulations to discerns flukes from real
-problems with little expense. Additionally, in a perfect world a failed calibration check
+problems with reasonable expense. Additionally, in a perfect world a failed calibration check
 is followed by investigation to get understanding why the computation failed.
 
-A practical problem we encountered with checking some of the off-the-shelf Bayes factors methods
-was that the priors in use are at best partially documented. In contrast, when `brms` or
+A practical problem we encountered with checking the methods in `BayesFactors` 
+was that the priors in use are described only in research papers and require non-trivial effort to fully trace. In contrast, when `brms` or
 a Stan program was used to compute the models the priors are transparently accessible.
 
-In our tests, both `bridgesampling` and the BayesFactors package provided mostly reliable
+Our recommendation for researchers wishing to implement and/or evaluate  tools that compute the Bayes factor where there is no good source of "correct" Bayes factors are to use SBC for the full BMA model accompanied with binary calibration check and data-averaged posterior check. 
+At least several hundred simulations per validation scenario should be run to have reasonable power to catch problems. If high precision is required, thousands of simulations should be run.
+
+
+In our tests, both `bridgesampling` and the `BayesFactors` package provided mostly reliable
 Bayes factor estimates. Bias previously reported by Schad & Vasishth was an artifact
 of invalid testing procedure. The only problem we have seen was in the
-`bridgesampling` package and testing the presence of random effect in TODO interpretation.
+Stan + `bridgesampling` combination and testing the presence of random effect in TODO interpretation.
+We therefore currently believe that for low-stakes statistical workflow involving Bayes factors and standard models, it is relatively safe to rely on those packages without further testing. However, when using a less standard model or when the costs of being wrong are non-trivial, we strongly encourage running at least several hundred simulations of SBC, preferably tailored to the dataset in question with posterior SBC. 
+
+All of the methods we discuss here and in our recommendations are available for easy use with the `SBC` R package.
+
+### Broader implication and future work
 
 We have also shown that the choice of priors for parameters shared across both compared
 models like the intercept or standard deviation (which is often given little thought) can
@@ -890,6 +905,8 @@ have non-negligible effect on Bayes factors, further highlighting the brittlenes
 factors.
 
 Recalibration with SBC does not work in general http://www.stat.columbia.edu/~gelman/research/unpublished/calibration_toy.pdf
+
+Improving SBC to match performance of miscalibration testing --- SBC throws away information by random tie-braking. When that information is kept, the variance of the eCDF decreases. However, there is no known way to evaluate the distribution of SBC outcomes under the correct model to make the test more stringent. 
 
 ## Appendix
 
@@ -1228,3 +1245,5 @@ On the contrary, SBC as well as prediction calibration and data-averaged posteri
 
 
 ### Miscalibration with surrogate distributions for variance in `ttestBF`
+
+TODO - paste results
