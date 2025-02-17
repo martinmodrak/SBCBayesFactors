@@ -33,7 +33,7 @@ rstan::rstan_options(auto_write = TRUE)
 ```
 
 ```{r cluster}
-#setup_cluster(max_local_workers = 6)
+setup_cluster(max_local_workers = 6, max_server_workers = 48)
 #future::plan(future::multisession(workers = 40))
 ```
 
@@ -188,15 +188,15 @@ backend_2step <- SBC_backend_bridgesampling(backend_2step_H0, backend_2step_H1)
 
 
 ```{r}
-generated <- ds_2step$generated[[1]]
-  args_with_data <- backend_2step_H0$args
-  args_with_data$data <- generated
-
-  standata <- do.call(brms::make_standata, args_with_data)
-  class(standata) <- NULL
-
-f0 <- rstan::sampling(backend_2step_H0$stan_backend$model, standata, cores = 8)
-f0_b <- SBC:::brmsfit_from_stanfit(f0, args_with_data)
+# generated <- ds_2step$generated[[1]]
+#   args_with_data <- backend_2step_H0$args
+#   args_with_data$data <- generated
+# 
+#   standata <- do.call(brms::make_standata, args_with_data)
+#   class(standata) <- NULL
+# 
+# f0 <- rstan::sampling(backend_2step_H0$stan_backend$model, standata, cores = 8)
+# f0_b <- SBC:::brmsfit_from_stanfit(f0, args_with_data)
 
 #   args_with_data <- backend_2step_H1$args
 #   args_with_data$data <- generated
@@ -214,8 +214,8 @@ f0_b <- SBC:::brmsfit_from_stanfit(f0, args_with_data)
 
 ```{r}
 #debugonce(bridgesampling:::.run.iterative.scheme)
-debugonce(bridgesampling:::.bridge.sampler.normal)
-bridgesampling::bridge_sampler(f0)
+# debugonce(bridgesampling:::.bridge.sampler.normal)
+# bridgesampling::bridge_sampler(f0)
 # bridge_H0 <- bridge_sampler(f0_b, verbose = TRUE)
 # bridge_H1 <- bridge_sampler(f1_b)
 ```
@@ -277,5 +277,26 @@ res_2_step_more <- purrr::imap(ds_2step_more, \(ds, id) {
 })
 ```
 
+```{r}
+res_2_step_all <- do.call(bind_results, c(list(res_2step), res_2_step_more))
+
+```
 
 
+```{r}
+res_2_step_all$stats
+```
+
+
+```{r}
+plot_ecdf_diff(res_2_step_all)
+
+bp_2_step_all <- binary_probabilities_from_stats(res_2_step_all$stats)
+t_res <- t.test(bp_2_step_all$prob, mu = 0.5)
+t_res
+miscalibration_p <- miscalibration_resampling_p(bp_2_step_all$prob, bp_2_step_all$simulated_value)
+miscalibration_p
+
+reliabilitydiag::reliabilitydiag(x = bp_2_step_all$prob, y = bp_2_step_all$simulated_value)
+
+```
