@@ -79,10 +79,6 @@ ggplot() + aes(x = x ,y = y) + geom_line(data = pdf_df, aes(y = y), color = "blu
 ```
 
 
-```{r, comment = ""}
-cat(readLines("stan/turtles_H0.stan"), sep = "\n")
-```
-
 ```{r compile-models}
 m_H0 <- stan_model("stan/turtles_H0.stan")
 m_H1 <- stan_model("stan/turtles_H1.stan")
@@ -346,6 +342,7 @@ res_turtles_norm_bad <- compute_SBC_cache_blocks(ds_turtles_norm, backend_turtle
 ```
 
 
+
 ```{r}
 plot_ecdf_diff(res_turtles_norm_bad, combine_variables = combine_array_elements)
 ```
@@ -356,6 +353,43 @@ bp_turtles_norm_bad <- binary_probabilities_from_stats(res_turtles_norm_bad$stat
 t.test(bp_turtles_norm_bad$prob, as.numeric(ds_turtles_norm$variables[,"model"]))
 miscalibration_resampling_p(bp_turtles_norm_bad$prob, bp_turtles_norm_bad$simulated_value)
 my_reliability_diag(bp_turtles_norm_bad)
+```
+
+```{r}
+hist_length_turtles_norm_bad <- 200
+invisible(get_precomputed_gamma_thresholds(unique(res_turtles_norm_bad$stats$max_rank) + 1,min_sims = 1, max_sims = max(1000,hist_length_turtles_norm_bad)))
+
+hist_step_turtles_norm_bad <- 10
+n_histories <- 10
+hist_turtles_norm_bad <- compute_bootstrapped_histories(res_turtles_norm_bad$stats |> filter(variable %in% c("model", "sigma", "lp__")), history_length = hist_length_turtles_norm_bad, n_histories = n_histories, step = hist_step_turtles_norm_bad,
+                                            compute_log_gamma_history)
+
+bp_turtles_norm_bad <- binary_probabilities_from_stats(res_turtles_norm_bad$stats)
+hist_turtles_norm_bad_schad <- compute_bootstrapped_histories(bp_turtles_norm_bad, history_length = hist_length_turtles_norm_bad, n_histories = n_histories, step = hist_step_turtles_norm_bad,
+                                            compute_schad_history)
+
+
+
+
+hist_turtles_norm_bad_brier <- compute_bootstrapped_histories(bp_turtles_norm_bad, history_length = hist_length_turtles_norm_bad, n_histories = n_histories, step = hist_step_turtles_norm_bad,
+                                            compute_brier_history, min_sim_id = 10)
+
+
+hist_turtles_norm_bad_miscalibration <- compute_bootstrapped_histories(bp_turtles_norm_bad, history_length = hist_length_turtles_norm_bad, n_histories = n_histories, step = hist_step_turtles_norm_bad,
+                                                           compute_miscalibration_history, min_sim_id = 10)
+
+
+
+
+plot_log_gamma_histories(hist_turtles_norm_bad)
+plot_log_p_histories(hist_turtles_norm_bad_brier, "Brier resampling")
+plot_log_p_histories(hist_turtles_norm_bad_schad, "Schad")
+plot_log_p_histories(hist_turtles_norm_bad_miscalibration, "Miscalibration resampling")
+
+save_histories("hist_turtles_norm_bad",
+               log_gamma = hist_turtles_norm_bad,
+               schad = hist_turtles_norm_bad_schad,
+               miscalibration = hist_turtles_norm_bad_miscalibration)
 ```
 
 
