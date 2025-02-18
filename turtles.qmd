@@ -353,7 +353,7 @@ plot_ecdf_diff(res_turtles_norm_bad, combine_variables = combine_array_elements)
 ```{r}
 bp_turtles_norm_bad <- binary_probabilities_from_stats(res_turtles_norm_bad$stats)
 
-t.test(bp_turtles_norm_bad$prob, as.numeric(ds_turtles_norm_bad$variables[,"model"]))
+t.test(bp_turtles_norm_bad$prob, as.numeric(ds_turtles_norm$variables[,"model"]))
 miscalibration_resampling_p(bp_turtles_norm_bad$prob, bp_turtles_norm_bad$simulated_value)
 my_reliability_diag(bp_turtles_norm_bad)
 ```
