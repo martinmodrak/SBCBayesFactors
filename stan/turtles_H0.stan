@@ -2,8 +2,6 @@ data {
   int<lower = 1> N;
   array[N] int<lower = 0, upper = 1> y;
   vector[N] x;
-  real<lower=0> prior_width;
-  int<lower=0,upper=1> link;
 }
 
 parameters {
@@ -12,8 +10,8 @@ parameters {
 }
 
 transformed parameters {
-  real alpha0 = prior_width * alpha0_raw;
-  real alpha1 = prior_width * alpha1_raw;
+  real alpha0 = sqrt(10) * alpha0_raw;
+  real alpha1 = sqrt(10) * alpha1_raw;
 }
 
 model {
@@ -23,10 +21,6 @@ model {
 
   // likelihood
   for (i in 1:N) {
-    if(link == 0) {
-      target += bernoulli_lpmf(y[i] | Phi(alpha0 + alpha1 * x[i]));
-    } else {
-      target += bernoulli_logit_lpmf(y[i] | alpha0 + alpha1 * x[i]);
-    }
+    target += bernoulli_lpmf(y[i] | Phi(alpha0 + alpha1 * x[i]));
   }
 }

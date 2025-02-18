@@ -33,7 +33,8 @@ rstan::rstan_options(auto_write = TRUE)
 ```
 
 ```{r cluster}
-setup_cluster(max_local_workers = 6, max_server_workers = 48)
+#setup_cluster(max_local_workers = 6, max_server_workers = 48)
+setup_cluster(max_local_workers = 6, max_server_workers = 30)
 #future::plan(future::multisession(workers = 40))
 ```
 
@@ -43,7 +44,7 @@ setup_cluster(max_local_workers = 6, max_server_workers = 48)
 Corresponds to the heading '2x2 repeated measures design with crossed random effects for subjects and
 items: bridgesampling/brms'
 
-```{r, echo=FALSE}
+```{r simulator, echo=FALSE}
 
 
 design <-
@@ -143,7 +144,7 @@ simulate_2step <- function(model) {
 }
 ```
 
-```{r}
+```{r ds-first}
 set.seed(32215252)
 n_sims <- 500
 ds_2step_H0 <- generate_datasets(SBC_generator_function(simulate_2step, model = 0, future.chunk.size = Inf), n_sims = n_sims)
@@ -151,7 +152,7 @@ ds_2step_H1 <- generate_datasets(SBC_generator_function(simulate_2step, model = 
 ```
 
 
-```{r}
+```{r backends}
 backend_2step_H1 <- 
   SBC_backend_brms(ysim ~ 1 + rew + trans + rew_trans + (1 + rew + trans + rew_trans | subj) + (1 + rew + trans + rew_trans | item),                   family=gaussian(), prior=priors2step, 
                   save_pars = save_pars(all = TRUE),
@@ -221,7 +222,7 @@ backend_2step <- SBC_backend_bridgesampling(backend_2step_H0, backend_2step_H1)
 ```
 
 
-```{r}
+```{r first-part}
 res_2step <- compute_SBC(
   ds_2step, 
   backend_2step,
@@ -232,7 +233,7 @@ res_2step <- compute_SBC(
 
 ```
 
-```{r}
+```{r plots}
 plot_ecdf_diff(res_2step)
 
 bp_2step <- binary_probabilities_from_stats(res_2step$stats)
@@ -254,7 +255,7 @@ saveRDS(list(t  = t_res,
 ```
 
 
-```{r}
+```{r extra-ds}
 ds_2step_more <- list()
 n_sims_per_step <- 500
 set.seed(3548552)
@@ -265,7 +266,7 @@ for(i in 1:9) {
 }
 ```
 
-```{r}
+```{r extra-sbc}
 res_2_step_more <- purrr::imap(ds_2step_more, \(ds, id) {
   compute_SBC(
     ds, 
@@ -298,5 +299,13 @@ miscalibration_p <- miscalibration_resampling_p(bp_2_step_all$prob, bp_2_step_al
 miscalibration_p
 
 reliabilitydiag::reliabilitydiag(x = bp_2_step_all$prob, y = bp_2_step_all$simulated_value)
+
+```
+
+
+```{r save-stats-more}
+saveRDS(list(t  = t_res,
+       miscalibration_p = miscalibration_p),
+  file.path(cache_dir, paste0("schad_fixed_stats.rds")))
 
 ```
