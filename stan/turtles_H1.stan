@@ -4,8 +4,6 @@ data {
   vector[N] x;
   int<lower = 1> C;
   array[N] int<lower = 1, upper = C> clutch;
-  real<lower=0> prior_width;
-  int<lower=0,upper=1> link;
 }
 
 parameters {
@@ -18,8 +16,8 @@ parameters {
 transformed parameters {
   vector[C] b;
   real<lower = 0> sigma = sqrt(sigma2);
-  real alpha0 = prior_width * alpha0_raw;
-  real alpha1 = prior_width * alpha1_raw;
+  real alpha0 = sqrt(10) * alpha0_raw;
+  real alpha1 = sqrt(10) * alpha1_raw;
   b = sigma * b_raw;
 }
 
@@ -34,10 +32,6 @@ model {
 
   // likelihood
   for (i in 1:N) {
-    if(link == 0) {
-      target += bernoulli_lpmf(y[i] | Phi(alpha0 + alpha1 * x[i] + b[clutch[i]]));
-    } else {
-      target += bernoulli_logit_lpmf(y[i] | alpha0 + alpha1 * x[i] + b[clutch[i]]);
-    }
+    target += bernoulli_lpmf(y[i] | Phi(alpha0 + alpha1 * x[i] + b[clutch[i]]));
   }
 }

@@ -86,8 +86,8 @@ cat(readLines("stan/turtles_H0.stan"), sep = "\n")
 ```{r compile-models}
 m_H0 <- stan_model("stan/turtles_H0.stan")
 m_H1 <- stan_model("stan/turtles_H1.stan")
-m_H1_chisq <- stan_model("stan/turtles_H1_chisq.stan")
 m_H1_norm <- stan_model("stan/turtles_H1_norm.stan")
+m_H1_norm_bad <- stan_model("stan/turtles_H1_norm_bad_normalization.stan")
 ```
 
 ## Simulator
@@ -98,7 +98,7 @@ force(turtles)
 
 gen_globals <- c("r_inv_one_plus_sq", "turtles")
 
-sim_turtles <- function(model, N = NULL, C = NULL, sigma2_prior = "default", prior_width = sqrt(10.0), link = "probit") {
+sim_turtles <- function(model, N = NULL, C = NULL, sigma2_prior = "default") {
   if(is.null(N)) {
     stopifnot(is.null(C))
     fixed_predictors <- TRUE
@@ -113,79 +113,53 @@ sim_turtles <- function(model, N = NULL, C = NULL, sigma2_prior = "default", pri
     fixed_predictors <- FALSE
   }
 
-  ## Rejection sampling to avoid low-variability datasets
-  for(i in 1:200) {
+  alpha0_raw <- rnorm(1) 
+  alpha1_raw <- rnorm(1) 
+  alpha0 <- sqrt(10) * alpha0_raw
+  alpha1 <- sqrt(10) * alpha1_raw
+  
+  if(!fixed_predictors) {
+    clutch <- rep(1:C, length.out = N)
 
-    alpha0_raw <- rnorm(1) 
-    alpha1_raw <- rnorm(1) 
-    alpha0 <- prior_width * alpha0_raw
-    alpha1 <- prior_width * alpha1_raw
-    
-    if(!fixed_predictors) {
-      clutch <- rep(1:C, length.out = N)
-
-      x <- rnorm(N) / 3  
-    }
-    
-    
-    log_lik_shared <- dnorm(alpha0_raw, log = TRUE) +
-      dnorm(alpha1_raw, log = TRUE)
-    
-    if(model == 0) {
-      predictor <- alpha0 + alpha1 * x
-      log_lik_spec <- 0
-    } else {
-      if(sigma2_prior == "default") {
-        sigma2_clutch <- r_inv_one_plus_sq(1)
-        sigma_clutch <- sqrt(sigma2_clutch)      
-        
-        sigma2_log_lik <- log(sigma2_clutch)  +# Jacobian
-          (- 2 * log1p(sigma2_clutch))
-      } else if(sigma2_prior == "chisq") {
-        sigma2_clutch <- rchisq(1, df = 1)
-        sigma_clutch <- sqrt(sigma2_clutch)      
-        
-        sigma2_log_lik <- log(sigma2_clutch)  +# Jacobian
-          dchisq(sigma2_clutch, df = 1, log = TRUE)
-      } else if(sigma2_prior == "sqrt_norm") {
-        sigma_clutch <- abs(rnorm(1, sd = 1))
-        
-        sigma2_log_lik <- log(sigma_clutch)  +# Jacobian
-          log(2) + dnorm(sigma_clutch, sd = 1, log = TRUE)
-      } else {
-        stop("Invalid sigma2_prior")
-      }
-
-      b_clutch_raw <- rnorm(C)
-      b_clutch <- b_clutch_raw * sigma_clutch
-      
-      predictor <- alpha0 + alpha1 * x + b_clutch[clutch]
-      
-      log_lik_spec <- 
-        sigma2_log_lik +
-        sum(dnorm(b_clutch_raw, log = TRUE))
-    }
-    
-    if(link == "probit") {
-      prob <- pnorm(predictor)
-      link_int <- 0
-    } else if(link == "logit") {
-      prob <- plogis(predictor) 
-      link_int <- 1
-    } else {
-      stop("Invalid link")
-    }
-    #
-    y <- rbinom(N, p = prob, size = 1)
-    break
-    # if(mean(y == 0) < 0.9 && mean(y == 1) < 0.9) {
-    #   break
-    # }
-  }
-  if(i >= 200) {
-    warning("Could not generate nice dataset")
+    x <- rnorm(N) / 3  
   }
   
+  
+  log_lik_shared <- dnorm(alpha0_raw, log = TRUE) +
+    dnorm(alpha1_raw, log = TRUE)
+  
+  if(model == 0) {
+    predictor <- alpha0 + alpha1 * x
+    log_lik_spec <- 0
+  } else {
+    if(sigma2_prior == "default") {
+      sigma2_clutch <- r_inv_one_plus_sq(1)
+      sigma_clutch <- sqrt(sigma2_clutch)      
+      
+      sigma2_log_lik <- log(sigma2_clutch)  +# Jacobian
+        (- 2 * log1p(sigma2_clutch))
+    } else if(sigma2_prior == "sqrt_norm") {
+      sigma_clutch <- abs(rnorm(1, sd = 1))
+      
+      sigma2_log_lik <- log(sigma_clutch)  +# Jacobian
+        log(2) + dnorm(sigma_clutch, sd = 1, log = TRUE)
+    } else {
+      stop("Invalid sigma2_prior")
+    }
+
+    b_clutch_raw <- rnorm(C)
+    b_clutch <- b_clutch_raw * sigma_clutch
+    
+    predictor <- alpha0 + alpha1 * x + b_clutch[clutch]
+    
+    log_lik_spec <- 
+      sigma2_log_lik +
+      sum(dnorm(b_clutch_raw, log = TRUE))
+  }
+  
+  prob <- pnorm(predictor)
+  y <- rbinom(N, p = prob, size = 1)
+
   log_lik_predictor <- sum(dbinom(y, size = 1, p = prob, log = TRUE))
   
   variables <- list(
@@ -205,9 +179,7 @@ sim_turtles <- function(model, N = NULL, C = NULL, sigma2_prior = "default", pri
       y = y,
       x = x,
       C = C,
-      clutch = clutch,
-      prior_width = prior_width,
-      link = link_int
+      clutch = clutch
     ),
     variables = variables
   )
@@ -233,20 +205,6 @@ set.seed(9654224)
 }
 ```
 
-```{r}
-ysds <- purrr::map_dbl(ds_test_1$generated, \(x) sd(x$y))
-hist(ysds)
-
-x <- ds_test_1$generated[[1]]
-df <- data.frame(x = x$x, y = x$y, clutch = x$clutch)
-glm(y ~ x + (1 | clutch), family = "binomial", data = df)
-ysds <- purrr::map_dbl(ds_test_1$generated, \(x) sd(x$y))
-
-select <- ysds < 0.45
-plot_ecdf_diff(res_test1[select], combine_variables = combine_array_elements)
-plot_ecdf_diff(res_test1[!select], combine_variables = combine_array_elements)
-```
-
 
 ```{r test0}
 if(do_tests) {
@@ -266,19 +224,19 @@ set.seed(5685432)
 
 
 ```{r shared-config}
-N <- NULL
-C <- NULL
+N <- 60
+C <- 10
 N_sims <- 2000
 iter <- 15500
 warmup <- 500
 init <- 0
 
-inflation_factor <- 20
-y_bound <- 0.1
+inflation_factor <- 3 # How many more dataset need to be simulated to have enough non-extreme ones
+y_bound <- 0.1 #Minimum proportion of 0s and 1s to consider the dataset usable
 ```
 
 
-## Original prior
+## Full original prior
 
 ```{r simulateds}
 
@@ -290,9 +248,11 @@ set.seed(68234245)
 ds_turtles_raw <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1)
 ```
 
+Subset the simulated dataset to gain `N_sims` usable datasets
+
 ```{r}
 y_means <- purrr::map_dbl(ds_turtles_raw$generated, \(x) { mean(x$y)})
-useful_ds <- y_means > 0.1 & y_means <0.9
+useful_ds <- y_means > y_bound & y_means < (1 - y_bound)
 stopifnot(sum(useful_ds) >= N_sims)
 ds_turtles <- (ds_turtles_raw[which(useful_ds)])[1:N_sims]
 ```
@@ -306,24 +266,12 @@ backend_turtles <- SBC_backend_bridgesampling(
 res_turtles <- compute_SBC(ds_turtles, backend_turtles, 
                            keep_fits = FALSE,
                            cache_mode = "results",
-                           cache_location = file.path(cache_dir, "turtles_1.rds"))
+                           cache_location = file.path(cache_dir, "turtles.rds"))
 ```
-
-```{r}
-res_turtles$errors[!purrr::map_lgl(res_turtles$errors, is.null)] %>% purrr::map_chr(as.character) %>% unique()
-```
-
-
-```{r}
-res_turtles$stats
-```
-
 
 
 ```{r}
 plot_ecdf_diff(res_turtles, combine_variables = combine_array_elements)
-plot_rank_hist(res_turtles, variables = "model", bins = 20)
-
 ```
 
 ```{r}
@@ -333,142 +281,30 @@ t.test(bp_turtles$prob, as.numeric(ds_turtles$variables[,"model"]))
 miscalibration_resampling_p(bp_turtles$prob, bp_turtles$simulated_value)
 my_reliability_diag(bp_turtles)
 ```
-Just those without error in BF
-
-```{r}
-table(res_turtles$backend_diagnostics$bs_error_H1)
-res_turtles$backend_diagnostics %>% mutate(errors = paste0("H0: ", bs_error_H0, ", H1: ", bs_error_H1)) %>% 
-  ggplot() + aes(x = errors, y = log_prob_H1)   + geom_point(position = position_jitter(width = 0.3), alpha = 0.5) + geom_boxplot(outlier.shape = NULL)
-```
 
 
-
-```{r}
-no_error_bool <- res_turtles$backend_diagnostics$bs_error_H0 == 0 & 
-  res_turtles$backend_diagnostics$bs_error_H1 == 0 &
-  res_turtles$backend_diagnostics$n_divergent_H0 == 0 &
-  res_turtles$backend_diagnostics$n_divergent_H1 == 0 
-
-no_error_index <- res_turtles$backend_diagnostics$sim_id[no_error_bool]
-
-plot_ecdf_diff(res_turtles[no_error_index], combine_variables = combine_array_elements)
-
-t.test(bp_turtles$prob[no_error_bool], ds_turtles$variables[no_error_index,"model"])
-my_reliability_diag(bp_turtles[no_error_bool,])
-```
-
-
-
-```{r ecdf-split}
-stats_split <- split_SBC_results_for_bf(res_turtles)
-plot_ecdf_diff(stats_split$stats_H0)
-plot_ecdf_diff(stats_split$stats_H1, combine_variables = combine_array_elements)
-```
-
-Note: the error is detectable earlier with miscalibration (at around 400 sims)
-
-## Original prior + logit link
-
-```{r simulateds-logit}
-set.seed(321452333)
-ds_turtles_m1_logit <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = NULL, C = NULL, link = "logit",  future.globals = c("turtles", "r_inv_one_plus_sq")), n_sims = N_sims)
-
-ds_turtles_m0_logit <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = NULL, C = NULL, link = "logit", future.globals = "turtles"), n_sims = N_sims)
-                                              
-                                                                                      
-ds_turtles_logit <- SBC_datasets_for_bf(ds_turtles_m0_logit, ds_turtles_m1_logit)
-```
-
-
-```{r turtles-logit}
-backend_turtles_logit <- SBC_backend_bridgesampling(
-  SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
-  SBC_backend_rstan_sample(m_H1, iter = iter, warmup = warmup, init = init)
-)
-# res_turtles_logit <- compute_SBC(ds_turtles_logit, backend_turtles_logit, 
-#                            keep_fits = FALSE,
-#                            cache_mode = "results",
-#                            cache_location = file.path(cache_dir, "turtles_1_logit.rds"))
-res_turtles_logit <- compute_SBC_cache_blocks(ds_turtles_logit, backend_turtles_logit, 
-                           keep_fits = FALSE,
-                           block_size = 200,
-                           cache_prefix = file.path(cache_dir, "turtles_logit_"))
-```
-
-
-```{r}
-plot_ecdf_diff(res_turtles_logit, combine_variables = combine_array_elements)
-plot_rank_hist(res_turtles_logit, variables = "model", bins = 20)
-
-```
-
-```{r}
-bp_turtles_logit <- binary_probabilities_from_stats(res_turtles_logit$stats)
-t.test(bp_turtles_logit$prob, mu = 0.5)
-miscalibration_resampling_p(bp_turtles_logit$prob, bp_turtles_logit$simulated_value)
-my_reliability_diag(bp_turtles_logit)
-```
-
-
-```{r ecdf-split-logit}
-stats_split_logit <- split_SBC_results_for_bf(res_turtles_logit)
-plot_ecdf_diff(stats_split_logit$stats_H0)
-plot_ecdf_diff(stats_split_logit$stats_H1, combine_variables = combine_array_elements)
-```
-
-
-## Chi-squared prior
-
-```{r simulateds-chisq}
-set.seed(325486524)
-ds_turtles_m1_chisq <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = NULL, C = NULL, sigma2_prior = "chisq", future.globals = "turtles"), n_sims = length(ds_turtles_m0))
-ds_turtles_chisq <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1_chisq)
-```
-
-
-```{r turtles_chisq}
-backend_turtles_chisq <- SBC_backend_bridgesampling(
-  SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
-  SBC_backend_rstan_sample(m_H1_chisq, iter = iter, warmup = warmup, init = init)
-)
-res_turtles_chisq <- compute_SBC(ds_turtles_chisq, backend_turtles_chisq, 
-                           keep_fits = FALSE,
-                           cache_mode = "results",
-                           cache_location = file.path(cache_dir, "turtles_1_chisq.rds"))
-```
-
-
-
-```{r}
-plot_ecdf_diff(res_turtles_chisq, combine_variables = combine_array_elements)
-plot_rank_hist(res_turtles_chisq, variables = "model", bins = 20)
-
-```
-
-```{r}
-bp_turtles_chisq <- binary_probabilities_from_stats(res_turtles_chisq$stats)
-t.test(bp_turtles_chisq$prob, mu = 0.5)
-miscalibration_resampling_p(bp_turtles_chisq$prob, bp_turtles_chisq$simulated_value)
-my_reliability_diag(bp_turtles_chisq)
-```
-
-```{r ecdf-split-chisq}
-stats_split_chisq <- split_SBC_results_for_bf(res_turtles_chisq)
-plot_ecdf_diff(stats_split_chisq$stats_H0)
-plot_ecdf_diff(stats_split_chisq$stats_H1, combine_variables = combine_array_elements)
-```
-
-## Normal prior
+## Normal prior on sigma
 
 ```{r simulateds-norm}
-set.seed(3126854)
-ds_turtles_m1_norm <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = NULL, C = NULL, sigma2_prior = "sqrt_norm", future.globals = "turtles"), n_sims = length(ds_turtles_m0)
-                                        )
-ds_turtles_norm <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1_norm)
+
+set.seed(14565231)
+ds_turtles_m1_norm <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C, sigma2_prior = "sqrt_norm", future.globals = gen_globals), n_sims = N_sims * inflation_factor)
+
+set.seed(8451234)
+ds_turtles_raw_norm <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1_norm)
+```
+
+Subset the simulated dataset to gain `N_sims` usable datasets
+
+```{r}
+y_means <- purrr::map_dbl(ds_turtles_raw_norm$generated, \(x) { mean(x$y)})
+useful_ds <- y_means > y_bound & y_means < (1 - y_bound)
+stopifnot(sum(useful_ds) >= N_sims)
+ds_turtles_norm <- (ds_turtles_raw_norm[which(useful_ds)])[1:N_sims]
 ```
 
 
-```{r turtles-normal}
+```{r turtles-norm}
 backend_turtles_norm <- SBC_backend_bridgesampling(
   SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
   SBC_backend_rstan_sample(m_H1_norm, iter = iter, warmup = warmup, init = init)
@@ -476,335 +312,416 @@ backend_turtles_norm <- SBC_backend_bridgesampling(
 res_turtles_norm <- compute_SBC(ds_turtles_norm, backend_turtles_norm, 
                            keep_fits = FALSE,
                            cache_mode = "results",
-                           cache_location = file.path(cache_dir, "turtles_1_norm.rds"))
+                           cache_location = file.path(cache_dir, "turtles_norm.rds"))
 ```
-
 
 
 ```{r}
 plot_ecdf_diff(res_turtles_norm, combine_variables = combine_array_elements)
-plot_rank_hist(res_turtles_norm, variables = "model", bins = 20)
-
 ```
 
 ```{r}
 bp_turtles_norm <- binary_probabilities_from_stats(res_turtles_norm$stats)
-t.test(bp_turtles_norm$prob, mu = 0.5)
+
+t.test(bp_turtles_norm$prob, as.numeric(ds_turtles_norm$variables[,"model"]))
 miscalibration_resampling_p(bp_turtles_norm$prob, bp_turtles_norm$simulated_value)
 my_reliability_diag(bp_turtles_norm)
 ```
 
 
-```{r ecdf-split-norm}
-stats_split_norm <- split_SBC_results_for_bf(res_turtles_norm)
-plot_ecdf_diff(stats_split_norm$stats_H0)
-plot_ecdf_diff(stats_split_norm$stats_H1, combine_variables = combine_array_elements)
-```
+## Normal prior, bad normalization
 
-```{r}
-plot_sim_estimated(stats_split_norm$stats_H1 %>% filter(!is.na(simulated_value)), variables = "lp__")
-
-stats_split_norm$stats_H1 %>% filter(variable == "lp__")
-stats_split_chisq$stats_H1 %>% filter(variable == "lp__")
-stats_split$stats_H1 %>% filter(variable == "lp__")
-```
-
-```{r}
-ds_turtles_m1_norm$variables
-```
-
-### Check norm model 
-
-```{r simulateds-norm2}
-set.seed(4655223)
-ds_turtles_m1_norm_2 <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = NULL, C = NULL, sigma2_prior = "sqrt_norm", future.globals = "turtles"), n_sims = 2000
-                                        )
-
-```
+Using the same datasets as in the previous section, but the backend is bad.
 
 
-```{r turtles2-test}
-backend_H1_norm = SBC_backend_rstan_sample(m_H1_norm, iter = iter, warmup = warmup, init = init)
-res_turtles_m1_norm <- compute_SBC(ds_turtles_m1_norm_2, backend_H1_norm, 
-                           keep_fits = FALSE,
-                           cache_mode = "results",
-                           cache_location = file.path(cache_dir, "turtles_norm_test.rds"))
-```
-
-
-```{r}
-plot_ecdf_diff(res_turtles_m1_norm, combine_variables = combine_array_elements)
-```
-
-## Normal prior + logit link
-
-```{r simulateds-norm-logit}
-set.seed(6685543)
-ds_turtles_m1_norm_logit <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = NULL, C = NULL, sigma2_prior = "sqrt_norm", link = "logit",  future.globals = "turtles"), n_sims = N_sims)
-
-
-                                                                                      
-ds_turtles_norm_logit <- SBC_datasets_for_bf(ds_turtles_m0_logit, ds_turtles_m1_norm_logit)
-```
-
-
-```{r turtles-norm-logit}
-backend_turtles_norm_logit <- SBC_backend_bridgesampling(
+```{r turtles-norm-bad}
+backend_turtles_norm_bad <- SBC_backend_bridgesampling(
   SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
-  SBC_backend_rstan_sample(m_H1_norm, iter = iter, warmup = warmup, init = init)
+  SBC_backend_rstan_sample(m_H1_norm_bad, iter = iter, warmup = warmup, init = init)
 )
-# res_turtles_norm_logit <- compute_SBC(ds_turtles_norm_logit, backend_turtles_norm_logit, 
-#                            keep_fits = FALSE,
-#                            cache_mode = "results",
-#                            cache_location = file.path(cache_dir, "turtles_1_norm_logit.rds"))
-res_turtles_norm_logit <- compute_SBC_cache_blocks(ds_turtles_norm_logit, backend_turtles_norm_logit, 
+res_turtles_norm_bad <- compute_SBC_cache_blocks(ds_turtles_norm, backend_turtles_norm_bad, 
                            keep_fits = FALSE,
-                           cache_prefix = file.path(cache_dir, "turtles_norm_logit_"),
-                           block_size = 200)
-```
-
-```{r}
-warning("Temproary")
-res_turtles_norm_logit <- get_partial_cache_blocks(ds_turtles_norm_logit, backend_turtles_norm_logit, 
-                           keep_fits = FALSE,
-                           cache_prefix = file.path(cache_dir, "turtles_norm_logit_"),
-                           block_size = 200)
+                           cache_prefix = file.path(cache_dir, "turtles_norm_bad_"),
+                           block_size = 400)
 ```
 
 
 ```{r}
-plot_ecdf_diff(res_turtles_norm_logit$stats |> mutate(sim_id = 1:n()), combine_variables = combine_array_elements)
-plot_rank_hist(res_turtles_norm_logit, variables = "model", bins = 20)
-
+plot_ecdf_diff(res_turtles_norm_bad, combine_variables = combine_array_elements)
 ```
 
 ```{r}
-bp_turtles_norm_logit <- binary_probabilities_from_stats(res_turtles_norm_logit$stats)
-t.test(bp_turtles_norm_logit$prob, mu = 0.5)
-miscalibration_resampling_p(bp_turtles_norm_logit$prob, bp_turtles_norm_logit$simulated_value)
-my_reliability_diag(bp_turtles_norm_logit)
+bp_turtles_norm_bad <- binary_probabilities_from_stats(res_turtles_norm_bad$stats)
+
+t.test(bp_turtles_norm_bad$prob, as.numeric(ds_turtles_norm_bad$variables[,"model"]))
+miscalibration_resampling_p(bp_turtles_norm_bad$prob, bp_turtles_norm_bad$simulated_value)
+my_reliability_diag(bp_turtles_norm_bad)
 ```
 
 
-```{r ecdf-split-norm-logit}
-stats_split_norm_logit <- split_SBC_results_for_bf(res_turtles_norm_logit)
-plot_ecdf_diff(stats_split_norm_logit$stats_H0)
-plot_ecdf_diff(stats_split_norm_logit$stats_H1, combine_variables = combine_array_elements)
+## Posterior SBC - half dataset
+
+Fit the first half of the dataset and compute BF.
+
+```{r}
+set.seed(6846523)
+clutches_to_keep <- sample(unique(turtles$clutch), size = floor(length(unique(turtles$clutch)) / 2))
+clutch_dict <- 1:length(clutches_to_keep)
+names(clutch_dict) <- clutches_to_keep
+turtles_half <- turtles %>% filter(clutch %in% clutches_to_keep) %>% mutate(clutch = clutch_dict[as.character(clutch)])
+
+m0_cache_file <- file.path(cache_dir, paste0("turtles_H0_half_fit_", rlang::hash(m_H0@model_code),"_",rlang::hash(turtles_half), ".rds"))
+m1_cache_file <- file.path(cache_dir, paste0("turtles_H1_half_fit_", rlang::hash(m_H1@model_code),"_",rlang::hash(turtles_half), ".rds"))
+
+stanfit_to_prior_draws <- function(fit) {
+  fit |> 
+    posterior::as_draws() |> 
+    posterior::thin_draws(thin = 10) |> 
+    posterior::merge_chains() |> 
+    posterior::as_draws_rvars()
+}
+
+
+# Directly copying the settings from the `turtles` page in the manual
+if(!file.exists(m0_cache_file)) {
+  stanfit_H0_half <- sampling(m_H0,
+                     data = list(y = turtles_half$y, x = turtles_half$x, N = nrow(turtles_half)),
+                     iter = 15500, warmup = 500, chains = 10, cores = 10, refresh = 4000, seed = 456622342)
+  
+  draws_prior_H0_half <- stanfit_to_prior_draws(stanfit_H0_half)
+  set.seed(321987524)
+  bs_prior_H0_half <- bridgesampling::bridge_sampler(stanfit_H0_half)
+  saveRDS(list(draws = draws_prior_H0_half, bs = bs_prior_H0_half), file = m0_cache_file)
+} else {
+  H0_half_cache <- readRDS(m0_cache_file)
+  draws_prior_H0_half <- H0_half_cache$draws
+  bs_prior_H0_half <- H0_half_cache$bs
+}
+
+if(!file.exists(m1_cache_file)) {
+  stanfit_H1_half <- sampling(m_H1,
+                   data = list(y = turtles_half$y, x = turtles_half$x, N = nrow(turtles_half),
+                               C = max(turtles_half$clutch), clutch = turtles_half$clutch),
+                   iter = 15500, warmup = 500, chains = 10, cores = 10, refresh = 4000, seed = 846522143)
+
+  draws_prior_H1_half <- stanfit_to_prior_draws(stanfit_H1_half)
+  set.seed(3452365)
+  bs_prior_H1_half <- bridgesampling::bridge_sampler(stanfit_H1_half)
+  saveRDS(list(draws = draws_prior_H1_half, bs = bs_prior_H1_half), file = m1_cache_file)
+} else {
+  H1_half_cache <- readRDS(m1_cache_file)
+  draws_prior_H1_half <- H1_half_cache$draws
+  bs_prior_H1_half <- H1_half_cache$bs
+  
+}
+bf_prior_bs_half <- bridgesampling::bayes_factor(bs_prior_H1_half, bs_prior_H0_half)
+#prob1_uniform_prior_half <- exp(bf_prior_bs_half$bf) / (1 + exp(bf_prior_bs_half$bf))
+bf_prior_bs_half$bf / (1 + bf_prior_bs_half$bf)
+
+# Tweak the prior assumed wihtout any data to have Pr(M1 | turtles) = target = 0.5
+# I want: target = pi_marg(y | M1) * prob1_tweaked / (pi_marg(y | M1) * prob1_tweaked + pi_marg(y | M0) * (1 - prob1_tweaked))
+prob1_target_half <- 0.5
+marg_m0_half <- exp(bs_prior_H0_half$logml)
+marg_m1_half <- exp(bs_prior_H1_half$logml)
+prob1_tweaked_prior_half <- (marg_m0_half * prob1_target_half) / (marg_m1_half + marg_m0_half * prob1_target_half - marg_m1_half * prob1_target_half)
+
 ```
 
 
-## Warp3
+```{r simulateds-half}
+N_per_old_clutch <- 0
+C_new <- length(unique(turtles$clutch)) - length(clutches_to_keep)
+N_per_new_clutch <- floor((nrow(turtles) - nrow(turtles_half)) / C_new)
 
+set.seed(6846523)
+ds_turtles_m0_half <- generate_datasets(
+  SBC_generator_function(
+    sim_turtles_post_sbc,
+    data_prior = turtles_half,
+    draws_prior_H0 = draws_prior_H0_half,
+    draws_prior_H1 = draws_prior_H1_half,
+    model = 0,
+    N_per_old_clutch = N_per_old_clutch,
+    N_per_new_clutch = N_per_new_clutch,
+    C_new = C_new,
+    future.globals = gen_globals
+  ),
+  n_sims = N_sims
+)
+ds_turtles_m1_half <- generate_datasets(
+  SBC_generator_function(
+    sim_turtles_post_sbc,
+    data_prior = turtles_half,
+    draws_prior_H0 = draws_prior_H0_half,
+    draws_prior_H1 = draws_prior_H1_half,
+    model = 1,
+    N_per_old_clutch = N_per_old_clutch,
+    N_per_new_clutch = N_per_new_clutch,
+    C_new = C_new,
+    future.globals = gen_globals
+  ),
+  n_sims = N_sims
+)
 
+set.seed(985243245)
+ds_turtles_half <- SBC_datasets_for_bf(ds_turtles_m0_half, ds_turtles_m1_half, prob_H1 = prob1_target)
+```
 
-```{r warp3}
-backend_turtles_w <- SBC_backend_bridgesampling(
+```{r turtles-post-half}
+backend_turtles_half <- SBC_backend_bridgesampling(
   SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
   SBC_backend_rstan_sample(m_H1, iter = iter, warmup = warmup, init = init),
-  method = "warp3", repetitions = 5
+  prior_prob1 = prob1_tweaked_prior_half
 )
-res_turtles_w <- compute_SBC(ds_turtles, backend_turtles_w, 
+res_turtles_post_half <- compute_SBC_cache_blocks(ds_turtles_half, backend_turtles_half, 
                            keep_fits = FALSE,
-                           cache_mode = "results",
-                           chunk_size = 30, # Hack to reduce threads usage just for Warp3
-                           cache_location = file.path(cache_dir, "turtles_1_w.rds"))
+                           cache_prefix = file.path(cache_dir, "turtles_post_half_"),
+                           block_size = 500)
 ```
 
 
 ```{r}
-plot_ecdf_diff(res_turtles_w, combine_variables = combine_array_elements)
-plot_binary_calibration_diff(res_turtles_w$stats)
-plot_rank_hist(res_turtles_w, variables = "model", bins = 20)
+plot_ecdf_diff(res_turtles_post_half, combine_variables = combine_array_elements)
+# plot_ecdf_diff(res_turtles_post$stats |> mutate(variable = "all", sim_id = 1:n()))
+# plot_rank_hist(res_turtles_post$stats |> mutate(variable = "all", sim_id = 1:n()), bins = 20)
 
 ```
 
 ```{r}
-res_turtles_w$backend_diagnostics$prob_H1 %>% hist()
-res_turtles_w$backend_diagnostics$prob_H1 %>% mean()
+bp_turtles_post_half <- binary_probabilities_from_stats(res_turtles_post_half$stats)
+t.test(bp_turtles_post_half$prob, mu = 0.5)
+miscalibration_resampling_p(bp_turtles_post_half$prob, bp_turtles_post_half$simulated_value)
+my_reliability_diag(bp_turtles_post_half)
 ```
 
 
-## More warmup
+## Posterior SBC - full dataset
 
-```{r more-warmup}
-backend_turtles_more <- SBC_backend_bridgesampling(
-  SBC_backend_rstan_sample(m_H0, iter = iter + 1000, warmup = warmup + 1000, init = init),
-  SBC_backend_rstan_sample(m_H1, iter = iter + 1000, warmup = warmup + 1000, init = init)
+```{r}
+data("turtles", package = "bridgesampling")
+
+m0_cache_file <- file.path(cache_dir, paste0("turtles_H0_fit_", rlang::hash(m_H0@model_code), ".rds"))
+m1_cache_file <- file.path(cache_dir, paste0("turtles_H1_fit_", rlang::hash(m_H1@model_code), ".rds"))
+
+# Directly copying the settings from the `turtles` page in the manual
+if(!file.exists(m0_cache_file)) {
+  stanfit_H0 <- sampling(m_H0,
+                     data = list(y = turtles$y, x = turtles$x, N = nrow(turtles)),
+                     iter = 15500, warmup = 500, chains = 10, cores = 10, refresh = 4000, seed = 456622342)
+  
+  draws_prior_H0 <- stanfit_to_prior_draws(stanfit_H0)
+  set.seed(321987524)
+  bs_prior_H0 <- bridgesampling::bridge_sampler(stanfit_H0)
+  saveRDS(list(draws = draws_prior_H0, bs = bs_prior_H0), file = m0_cache_file)
+} else {
+  h0_cache <- readRDS(m0_cache_file)
+  draws_prior_H0 <- h0_cache$draws
+  bs_prior_H0 <- h0_cache$bs
+}
+
+if(!file.exists(m1_cache_file)) {
+  stanfit_H1 <- sampling(m_H1,
+                   data = list(y = turtles$y, x = turtles$x, N = nrow(turtles),
+                               C = max(turtles$clutch), clutch = turtles$clutch),
+                   iter = 15500, warmup = 500, chains = 10, cores = 10, refresh = 4000, seed = 846522143)
+
+  draws_prior_H1 <- stanfit_to_prior_draws(stanfit_H1)
+  set.seed(3452365)
+  bs_prior_H1 <- bridgesampling::bridge_sampler(stanfit_H1)
+  saveRDS(list(draws = draws_prior_H1, bs = bs_prior_H1), file = m1_cache_file)
+} else {
+  h1_cache <- readRDS(m1_cache_file)
+  draws_prior_H1 <- h1_cache$draws
+  bs_prior_H1 <- h1_cache$bs
+  
+}
+bf_prior_bs <- bridgesampling::bayes_factor(bs_prior_H1, bs_prior_H0)
+prob1_uniform_prior <- bf_prior_bs$bf / (1 + bf_prior_bs$bf)
+
+# Tweak the prior assumed wihtout any data to have Pr(M1 | turtles) = target = 0.5
+# I want: target = pi_marg(y | M1) * prob1_tweaked / (pi_marg(y | M1) * prob1_tweaked + pi_marg(y | M0) * (1 - prob1_tweaked))
+prob1_target <- 0.5
+marg_m0 <- exp(bs_prior_H0$logml)
+marg_m1 <- exp(bs_prior_H1$logml)
+prob1_tweaked_prior <- (marg_m0 * prob1_target) / (marg_m1 + marg_m0 * prob1_target - marg_m1 * prob1_target)
+
+```
+
+
+
+## Simulator
+
+```{r}
+invisible(force(turtles))
+
+gen_globals <- c("r_inv_one_plus_sq")
+
+sim_turtles_post_sbc <- function(model, data_prior, draws_prior_H0, draws_prior_H1, N_per_old_clutch, N_per_new_clutch = 5, C_new = 0, sigma2_prior = "default") {
+  if(model == 0) {
+    prior_draw <- posterior::subset_draws(draws_prior_H0, draw = sample.int(posterior::ndraws(draws_prior_H0), size = 1))
+  } else {
+    prior_draw <- posterior::subset_draws(draws_prior_H1, draw = sample.int(posterior::ndraws(draws_prior_H1), size = 1))
+  }
+  
+    alpha0_raw <- posterior::draws_of(prior_draw$alpha0_raw)[1]
+    alpha1_raw <- posterior::draws_of(prior_draw$alpha1_raw)[1]
+    alpha0 <- sqrt(10) * alpha0_raw
+    alpha1 <- sqrt(10) * alpha1_raw
+
+    old_clutch_ids <- unique(data_prior$clutch)
+    new_clutch_ids <- seq(from = max(old_clutch_ids) + 1, length.out = C_new)
+    clutch_new <- c(rep(old_clutch_ids, each = N_per_old_clutch),
+                    rep(new_clutch_ids, each = N_per_new_clutch))     
+
+    x_new <- sample(data_prior$x, size = length(clutch_new), replace = TRUE)
+
+    
+    log_lik_shared <- dnorm(alpha0_raw, log = TRUE) +
+      dnorm(alpha1_raw, log = TRUE)
+    
+    if(model == 0) {
+      predictor <- alpha0 + alpha1 * data_prior$x
+      predictor_new <- alpha0 + alpha1 * x_new
+      log_lik_spec <- 0
+    } else {
+      if(sigma2_prior == "default") {
+        sigma2_clutch <- posterior::draws_of(prior_draw$sigma2)[1]
+        sigma_clutch <- sqrt(sigma2_clutch)      
+        
+        sigma2_log_lik <- log(sigma2_clutch)  +# Jacobian
+          (- 2 * log1p(sigma2_clutch))
+      } else if(sigma2_prior == "sqrt_norm") {
+        sigma_clutch <- posterior::draws_of(prior_draw$sigma)[1]
+
+        sigma2_log_lik <- log(sigma_clutch)  +# Jacobian
+          log(2) + dnorm(sigma_clutch, sd = 1, log = TRUE)
+      } else {
+        stop("Invalid sigma2_prior")
+      }
+
+      b_clutch_raw <- c(
+        posterior::draws_of(prior_draw$b_raw)[1,], 
+        rnorm(C_new))
+      b_clutch <- b_clutch_raw * sigma_clutch
+      
+      predictor <- alpha0 + alpha1 * data_prior$x + b_clutch[data_prior$clutch]
+      predictor_new <- alpha0 + alpha1 * x_new + b_clutch[clutch_new]
+      
+      log_lik_spec <- 
+        sigma2_log_lik +
+        sum(dnorm(b_clutch_raw, log = TRUE))
+    }
+    
+    prob <- pnorm(predictor)
+    prob_new <- pnorm(predictor_new)
+    y_new <- rbinom(length(clutch_new), p = prob_new, size = 1)
+
+  log_lik_predictor <- sum(dbinom(data_prior$y, size = 1, p = prob, log = TRUE)) +
+    sum(dbinom(y_new, size = 1, p = prob_new, log = TRUE))
+  
+  variables <- list(
+      alpha0 = alpha0,
+      alpha1 = alpha1,
+      lp__ = log_lik_shared + log_lik_spec + log_lik_predictor
+    )
+  
+  if(model == 1) {
+    variables$sigma <- sigma_clutch
+    variables$b <- b_clutch
+  } 
+
+  list(
+    generated = list(
+      N = nrow(data_prior) + length(clutch_new),
+      y = c(data_prior$y, y_new),
+      x = c(data_prior$x, x_new),
+      C = max(c(data_prior$clutch, clutch_new)),
+      clutch = c(data_prior$clutch, clutch_new)
+    ),
+    variables = variables
+  )
+}
+```
+
+
+
+## Original prior
+
+```{r shared-config}
+N <- NULL
+C <- NULL
+N_sims <- 2000
+iter <- 15500
+warmup <- 500
+init <- 0
+```
+
+
+```{r simulateds}
+N_per_old_clutch <- 0
+N_per_new_clutch <- 4
+C_new <- 25
+
+set.seed(345852)
+ds_turtles_m0 <- generate_datasets(
+  SBC_generator_function(
+    sim_turtles_post_sbc,
+    data_prior = turtles,
+    draws_prior_H0 = draws_prior_H0,
+    draws_prior_H1 = draws_prior_H1,
+    model = 0,
+    N_per_old_clutch = N_per_old_clutch,
+    N_per_new_clutch = N_per_new_clutch,
+    C_new = C_new,
+    future.globals = gen_globals
+  ),
+  n_sims = N_sims
 )
-res_turtles_more <- compute_SBC(ds_turtles, backend_turtles_more, 
-                           keep_fits = FALSE,
-                           cache_mode = "results",
-                           cache_location = file.path(cache_dir, "turtles_1_more.rds"))
-```
-
-
-```{r}
-plot_ecdf_diff(res_turtles_more, combine_variables = combine_array_elements)
-plot_rank_hist(res_turtles_more, variables = "model", bins = 20)
-
-```
-```{r}
-bp_turtles_more <- binary_probabilities_from_stats(res_turtles_more$stats)
-t.test(bp_turtles_more$prob, mu = 0.5)
-miscalibration_resampling_p(bp_turtles_more$prob, bp_turtles_more$simulated_value)
-my_reliability_diag(bp_turtles_more)
-```
-
-## More warmup and iterations
-
-```{r more-warmup-iter}
-backend_turtles_more2 <- SBC_backend_bridgesampling(
-  SBC_backend_rstan_sample(m_H0, iter = iter * 2, warmup = warmup + 1000, init = init),
-  SBC_backend_rstan_sample(m_H1, iter = iter * 4, warmup = warmup + 2000, init = init)
+ds_turtles_m1 <- generate_datasets(
+  SBC_generator_function(
+    sim_turtles_post_sbc,
+    data_prior = turtles,
+    draws_prior_H0 = draws_prior_H0,
+    draws_prior_H1 = draws_prior_H1,
+    model = 1,
+    N_per_old_clutch = N_per_old_clutch,
+    N_per_new_clutch = N_per_new_clutch,
+    C_new = C_new,
+    future.globals = gen_globals
+  ),
+  n_sims = N_sims
 )
-res_turtles_more2 <- compute_SBC(ds_turtles, backend_turtles_more2, 
+
+set.seed(68234245)
+ds_turtles <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1, prob_H1 = prob1_target)
+```
+
+```{r turtles1}
+backend_turtles <- SBC_backend_bridgesampling(
+  SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
+  SBC_backend_rstan_sample(m_H1, iter = iter, warmup = warmup, init = init),
+  prior_prob1 = prob1_tweaked_prior
+)
+res_turtles_post <- compute_SBC_cache_blocks(ds_turtles, backend_turtles, 
                            keep_fits = FALSE,
-                           cache_mode = "results",
-                           cache_location = file.path(cache_dir, "turtles_1_more2.rds"))
+                           cache_prefix = file.path(cache_dir, "turtles_post_"),
+                           block_size = 200)
 ```
 
 
 ```{r}
-plot_ecdf_diff(res_turtles_more2, combine_variables = combine_array_elements)
-plot_rank_hist(res_turtles_more2, variables = "model", bins = 20)
-
-```
-```{r}
-bp_turtles_more2 <- binary_probabilities_from_stats(res_turtles_more2$stats)
-t.test(bp_turtles_more2$prob, mu = 0.5)
-miscalibration_resampling_p(bp_turtles_more2$prob, bp_turtles_more2$simulated_value)
-my_reliability_diag(bp_turtles_more2)
-```
-
-```{r}
-table(res_turtles_more2$backend_diagnostics$bs_error_H1)
-true_model <- res_turtles_more2$stats %>% filter(variable == "model") %>% pull(simulated_value)
-res_turtles_more2$backend_diagnostics %>% mutate(errors = paste0("H0: ", bs_error_H0, ", H1: ", bs_error_H1), true_model = true_model) %>% 
-  ggplot() + aes(x = errors, y = log_prob_H1)  + geom_boxplot(outlier.shape = NA) + geom_point(position = position_jitter(width = 0.3), alpha = 0.5)  + facet_wrap(~true_model)
-```
-
-## Free predictors, fewer data
-
-```{r turtles_free_fewer}
-set.seed(22248348)
-N_sims <- 2000
-N <- 80
-C <- 10
-ds_turtles_m0_free_fewer <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
-ds_turtles_m1_free_fewer <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
-ds_turtles_free_fewer <- SBC_datasets_for_bf(ds_turtles_m0_free_fewer, ds_turtles_m1_free_fewer)
-
-res_turtles_free_fewer <- compute_SBC(ds_turtles_free_fewer, backend_turtles, 
-                           keep_fits = FALSE,
-                           cache_mode = "results",
-                           cache_location = file.path(cache_dir, paste0("turtles_N", N, "_C",C,"_", length(ds_turtles_free_fewer), ".rds")))
+plot_ecdf_diff(res_turtles_post, combine_variables = combine_array_elements)
+# plot_ecdf_diff(res_turtles_post$stats |> mutate(variable = "all", sim_id = 1:n()))
+# plot_rank_hist(res_turtles_post$stats |> mutate(variable = "all", sim_id = 1:n()), bins = 20)
 
 ```
 
 ```{r}
-res_turtles_free_fewer$backend_diagnostics$prob_H1 %>% hist() 
-plot_ecdf_diff(res_turtles_free_fewer, combine_variables = combine_array_elements)
-```
-
-
-```{r}
-bp_turtles_free_fewer <- binary_probabilities_from_stats(res_turtles_free_fewer$stats)
-t.test(bp_turtles_free_fewer$prob, mu = 0.5)
-miscalibration_resampling_p(bp_turtles_free_fewer$prob, bp_turtles_free_fewer$simulated_value)
-my_reliability_diag(bp_turtles_free_fewer)
+bp_turtles_post <- binary_probabilities_from_stats(res_turtles_post$stats)
+t.test(bp_turtles_post$prob, mu = 0.5)
+miscalibration_resampling_p(bp_turtles_post$prob, bp_turtles_post$simulated_value)
+my_reliability_diag(bp_turtles_post)
 ```
 
 
 
-## Free predictors, same data size
-
-```{r turtles_free_same}
-set.seed(86233248)
-N_sims <- 2000
-N <- nrow(turtles)
-C <- max(turtles$clutch)
-ds_turtles_m0_free_same <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
-ds_turtles_m1_free_same <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
-ds_turtles_free_same <- SBC_datasets_for_bf(ds_turtles_m0_free_same, ds_turtles_m1_free_same)
-
-res_turtles_free_same <- compute_SBC(ds_turtles_free_same, backend_turtles, 
-                           keep_fits = FALSE,
-                           cache_mode = "results",
-                           cache_location = file.path(cache_dir, paste0("turtles_N", N, "_C",C,"_", length(ds_turtles_free_same), ".rds")))
-
-```
-
-```{r}
-res_turtles_free_same$backend_diagnostics$prob_H1 %>% hist() 
-plot_ecdf_diff(res_turtles_free_same, combine_variables = combine_array_elements)
-```
-
-
-```{r}
-bp_turtles_free_same <- binary_probabilities_from_stats(res_turtles_free_same$stats)
-t.test(bp_turtles_free_same$prob, mu = 0.5)
-miscalibration_resampling_p(bp_turtles_free_same$prob, bp_turtles_free_same$simulated_value)
-my_reliability_diag(bp_turtles_free_same)
-```
-
-Add more sims
-
-```{r turtles_free_same2}
-set.seed(4865526)
-N_sims <- 2000
-N <- nrow(turtles)
-C <- max(turtles$clutch)
-ds_turtles_m0_free_same2 <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
-ds_turtles_m1_free_same2 <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
-ds_turtles_free_same2 <- SBC_datasets_for_bf(ds_turtles_m0_free_same2, ds_turtles_m1_free_same2)
-
-res_turtles_free_same2 <- compute_SBC(ds_turtles_free_same2, backend_turtles, 
-                           keep_fits = FALSE,
-                           cache_mode = "results",
-                           cache_location = file.path(cache_dir, paste0("turtles_N", N, "_C",C,"_", length(ds_turtles_free_same2), "_2.rds")))
-
-```
-
-```{r}
-res_turtles_free_same_all <- bind_results(res_turtles_free_same, res_turtles_free_same2)
-plot_ecdf_diff(res_turtles_free_same_all, combine_variables = combine_array_elements)
-```
-
-
-```{r}
-bp_turtles_free_same_all <- binary_probabilities_from_stats(res_turtles_free_same_all$stats)
-t.test(bp_turtles_free_same_all$prob, mu = 0.5)
-miscalibration_resampling_p(bp_turtles_free_same_all$prob, bp_turtles_free_same_all$simulated_value)
-my_reliability_diag(bp_turtles_free_same_all)
-```
-
-## Free predictors, larger dataset
-
-```{r turtles_free_larger}
-set.seed(32148553)
-N_sims <- 2000
-N <- 3 * nrow(turtles)
-C <- 2 * max(turtles$clutch)
-ds_turtles_m0_free_larger <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
-ds_turtles_m1_free_larger <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
-ds_turtles_free_larger <- SBC_datasets_for_bf(ds_turtles_m0_free_larger, ds_turtles_m1_free_larger)
-
-res_turtles_free_larger <- compute_SBC(ds_turtles_free_larger, backend_turtles, 
-                           keep_fits = FALSE,
-                           cache_mode = "results",
-                           cache_location = file.path(cache_dir, paste0("turtles_N", N, "_C",C,"_", length(ds_turtles_free_larger), ".rds")))
-
-```
-
-```{r}
-res_turtles_free_larger$backend_diagnostics$prob_H1 %>% hist() 
-plot_ecdf_diff(res_turtles_free_larger, combine_variables = combine_array_elements)
-```
-
-
-```{r}
-bp_turtles_free_larger <- binary_probabilities_from_stats(res_turtles_free_larger$stats)
-t.test(bp_turtles_free_larger$prob, mu = 0.5)
-miscalibration_resampling_p(bp_turtles_free_larger$prob, bp_turtles_free_larger$simulated_value)
-my_reliability_diag(bp_turtles_free_larger)
-```
