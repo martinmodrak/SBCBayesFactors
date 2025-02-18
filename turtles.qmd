@@ -35,7 +35,7 @@ devtools::load_all()
 setup_cluster(max_server_workers = 110)
 ```
 
-
+TODO: implement full bridgesampling workflow with brms (sampling from prior, posterior SBC via posterior_predict...)
 
 There's a weird $(1 + \sigma)^{-2}$ prior on sigma, sampling with an inverse CDF scheme:
 
@@ -177,9 +177,10 @@ sim_turtles <- function(model, N = NULL, C = NULL, sigma2_prior = "default", pri
     }
     #
     y <- rbinom(N, p = prob, size = 1)
-    if(mean(y == 0) < 0.9 && mean(y == 1) < 0.9) {
-      break
-    }
+    break
+    # if(mean(y == 0) < 0.9 && mean(y == 1) < 0.9) {
+    #   break
+    # }
   }
   if(i >= 200) {
     warning("Could not generate nice dataset")
@@ -271,6 +272,9 @@ N_sims <- 2000
 iter <- 15500
 warmup <- 500
 init <- 0
+
+inflation_factor <- 20
+y_bound <- 0.1
 ```
 
 
@@ -279,12 +283,20 @@ init <- 0
 ```{r simulateds}
 
 set.seed(3245822)
-ds_turtles_m0 <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
-ds_turtles_m1 <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C, future.globals = gen_globals), n_sims = N_sims)
+ds_turtles_m0 <- generate_datasets(SBC_generator_function(sim_turtles, model = 0, N = N, C = C, future.globals = gen_globals), n_sims = N_sims * inflation_factor)
+ds_turtles_m1 <- generate_datasets(SBC_generator_function(sim_turtles, model = 1, N = N, C = C, future.globals = gen_globals), n_sims = N_sims * inflation_factor)
 
 set.seed(68234245)
-ds_turtles <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1)
+ds_turtles_raw <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1)
 ```
+
+```{r}
+y_means <- purrr::map_dbl(ds_turtles_raw$generated, \(x) { mean(x$y)})
+useful_ds <- y_means > 0.1 & y_means <0.9
+stopifnot(sum(useful_ds) >= N_sims)
+ds_turtles <- (ds_turtles_raw[which(useful_ds)])[1:N_sims]
+```
+
 
 ```{r turtles1}
 backend_turtles <- SBC_backend_bridgesampling(
@@ -316,7 +328,8 @@ plot_rank_hist(res_turtles, variables = "model", bins = 20)
 
 ```{r}
 bp_turtles <- binary_probabilities_from_stats(res_turtles$stats)
-t.test(bp_turtles$prob, mu = 0.5)
+
+t.test(bp_turtles$prob, as.numeric(ds_turtles$variables[,"model"]))
 miscalibration_resampling_p(bp_turtles$prob, bp_turtles$simulated_value)
 my_reliability_diag(bp_turtles)
 ```
