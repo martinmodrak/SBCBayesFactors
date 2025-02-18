@@ -5,7 +5,11 @@ compute_SBC_cache_blocks <- function(datasets, ..., block_size, cache_prefix, ca
   for(i in 1:length(starts)) {
     res_list[[i]] <- compute_SBC(datasets[starts[i]:ends[i]], ..., cache_mode = "results", cache_location = paste0(cache_prefix, i, cache_suffix))
   }
-  do.call(bind_results, res_list)
+  if(length(res_list) == 1) {
+    return(res_list[[1]])
+  } else {
+    return(do.call(bind_results, res_list))
+  }
 }
 
 get_partial_cache_blocks <- function(datasets, backend, ..., block_size, cache_prefix, cache_suffix = ".rds") {
@@ -40,6 +44,10 @@ get_partial_cache_blocks <- function(datasets, backend, ..., block_size, cache_p
       }
     }
   }
-  do.call(bind_results, res_list)
+  if(length(res_list) == 1) {
+    return(res_list[[1]])
+  } else {
+    return(do.call(bind_results, res_list))
+  }
 
 }

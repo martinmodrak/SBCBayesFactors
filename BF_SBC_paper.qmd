@@ -65,18 +65,17 @@ Nice to have:
 ## Introduction
 
 Bayes factors (BFs), i.e. the ratio of marginal likelihoods are a commonly used quantity for
-model selection and hypothesis testing in the Bayesian paradigm --- this is despite some criticism (TODO reivew + cite). Possibly its main appeal is the close relationship between the Bayes factor and the posterior probability that a hypothesis is true.
+model selection and hypothesis testing in the Bayesian paradigm --- this is despite some criticism (TODO review + cite). Possibly its main appeal is the close relationship between the Bayes factor and the posterior probability that a hypothesis is true.
 
 In this paper, we set the discussion about the usefulness of Bayes factors aside, and simply assume we have a scenario where Bayes factors are a useful quantity of interest. An important practical concern is how to compute Bayes factors and/or the marginal
 likelihoods of data as this typically involves difficult numerical integration.
 
-There are many approaches to compute Bayes factors. Savage-Dickey. 
+There are many approaches to compute Bayes factors. Savage-Dickey TODO. 
 A flexible method is bridgesampling, which can work with any set of samples. Specific families of models have also custom integration methods developed (cite lmBF) TODO a bit more review.
 
-Our main contribution is to employ an improved variant simulation-based calibration checking  (SBC, Modrák et al.) and the accompanying theoretical progress for validating Bayes factor computation. We show a theoretical equivalence between SBC for Bayes factors and binary prediction calibration. Using several toy models, we demonstrate how problems in Bayes factor computation not detectable by inspecting data-averaged posterior can easily be detected by SBC. Finally, we turn to real-world problems and demonstrate cases where bridgesampling over Stan models can have noticeable bias, we show that using posterior SBC (cite Vehtari) is necessary when checking Bayes factor computation under improper priors for some model parameters,  and compare efficiency of various checks in discovering errors in normalization constants. 
+Our main contribution is to employ an improved variant simulation-based calibration checking  (SBC, Modrák et al.) and the accompanying theoretical progress for validating Bayes factor computation. We show a theoretical equivalence between SBC for Bayes factors and binary prediction calibration. Using several toy models, we demonstrate how problems in Bayes factor computation not detectable by inspecting data-averaged posterior can easily be detected by SBC. Finally, we turn to real-world problems and validate some uses of bridgesampling over Stan models, compare efficiency of various checks in discovering errors in normalization constants and show that using posterior SBC (cite Vehtari) is necessary when checking Bayes factor computation under improper priors for some model parameters.
 
-Previously, Schad and co-authors have developed a workflow for validating Bayes factor computation inspired by SBC and applied it to several problems (cite workflow, aggregate, biased). This paper is partially a reaction to Schad et al.:  we note that the Schad et al. approach differs importantly from SBC both as originally described (cite Talts) as well as its more recent variants. In fact the Schad et al. approach and is better understood as a check based on data-averaged posterior. We show that the approach of Schad et al. uses simulation results inefficiently and is insensitive to large classes of potential problems. Additionally, due to incorrect implementation at least some of the cases where Schad (biased BF) claim incorrect Bayes factor computations are false positives and we show that the resulting Bayes factors are in fact calibrated to high precision.
-
+Previously, Schad and co-authors have developed a workflow for validating Bayes factor computation inspired by SBC and applied it to several problems (cite workflow, aggregate, biased). Both the theoretical and practical contributions of this paper are partially a reaction to Schad et al.: from the theoretical side, we note that the Schad et al. approach differs importantly from SBC both as originally described (cite Talts) as well as our improved variant. In fact the Schad et al. approach and is better understood as a check based on data-averaged posterior. Therefore the approach of Schad et al. uses simulation results inefficiently and is insensitive to large classes of potential problems. Additionally, due to incorrect implementation at least some of the cases where Schad (biased BF) claim incorrect Bayes factor computations are false positives and we show that the resulting Bayes factors are in fact calibrated to high precision.
 
 We conclude the paper with recommendations for checking Bayes factor computation both when developing new statistical tools as well as a part of Bayesian workflow (following Gelman et al. workflow preprint)
 
@@ -667,7 +666,7 @@ $$
 where $\Phi$ is the normal cumulative distribution function. The $H_0$ model is then the same but with the 
 varying intercept removed, i.e. we set $\tau = 0$.
 
-We perform two checks --- for one we use standard SBC $N = 80, G = 10$ and simulate the $x_i \sim N(0, \frac{1}{3})$.
+We perform two checks --- for one we use standard SBC and $N = 70, G = 10$ (this keeps the distribuion of observed BFs reasonably wide) and simulate the $x_i \sim N(0, \frac{1}{3})$.
 Due to the relatively wide priors on parameters, this tends to produce a substantial number of datasets where $y_i$ has zero or very little variance.
 This can be overcome by rejection sampling --- as in any other Bayesian inference, selectively removing datasets based on properties of $y$ does not change the posterior at all. So we remove all datasets where $\text{Avg}(y) < \frac{1}{10}$ or $\text{Avg}(y) > \frac{9}{10}$.
 We note that to keep SBC valid those rejections must be done for the whole BMA model, not when simulating each model individually^[The first author of this paper has spent an embarrassing amount of time tracking down the source apparent miscalibration in this model when the problem actually stemmed from rejecting datasets from each submodel separately. This illustrates the importance of trying to understand _why_ a model is calibrated and not blindly reporting SBC results.]. 
@@ -675,21 +674,24 @@ While rejections don't impact the posterior, they change the implied prior and s
 
 
 For the second check, we focus the simulations to the neighbourhood of the actual data. 
-To this end, we pick half of the groups and fit both models to this smaller dataset,
-and calculate the Bayes factor (TODO result). We could use the implied model probability 
+To this end, we pick data for half of the groups as $y_1$, fit both models to this smaller dataset,
+and calculate the Bayes factor (TODO result). We then use the fitted parameters to simulate
+data for the remaining groups.
+
+We could use the implied model probability 
 as prior for the model index, but to show an alternative, we can also choose $P(M_1) = $ (TODO value),
 which results in $P(M_1|y_1) = \frac{1}{2}$ and so our simulations will be more balanced --- this new $P(M_1)$
-is then used when converting the computed Bayes factor into posterior model probability.
+is then used when converting the computed Bayes factor into posterior model probability for calibration checks.
 
 
 ### Discovering bad normalization constants
 
 Recently https://link.springer.com/article/10.1007/s41237-024-00232-7 have examined
 the prevalence of missing or incorrect normalizing constants for posterior densities.
-The authors note that 9 out of 21 investigated Stan models using a truncated distribution neglected the normalizing constant, leading to possibly biased Bayes factors. Here we test how efficiently do our checks discover this problem using the
+The authors note that 9 out of 21 investigated Stan models using a truncated distribution neglected the normalizing constant, which would lead to biased Bayes factors obtained with `bridgesampling`, if those models were used to compute them. Here we test how efficiently do our checks discover this problem using the
 example from the previous section, but modifying the prior so that $\tau \sim \text{HalfN}(0, 1)$, but we neglect the normalization constant and so the  density is wrong by a factor of 2.
 
-TODO - evals
+TODO - show evals
 
 ### Posterior SBC and the importance of using correct priors
 
@@ -777,7 +779,8 @@ ttest_fixed <- load_precomputed_file(here::here("cache/ttest_fixed_stats.rds"), 
 ```
 
 
-One example is the `ttestBF` in BayesFactor package, representing the JZS test, we focus on the one-sample variant, specifically the $\mathcal{M}_1$ model is:
+One example is the `ttestBF` in BayesFactor package, representing the JZS test, we focus on the one-sample variant. 
+Here, the $\mathcal{M}_1$ model is:
 
 $$
 \begin{aligned}
@@ -826,7 +829,7 @@ the model.
 ### Schad & Vasishth 2024
 
 [Schad & Vasishth (2024)](https://arxiv.org/pdf/2406.08022) apply their
-previously published method to show that in some settings Bayes factors from
+method based on data-averaged posterior to show that in some settings Bayes factors from
 popular packages are biased. In particular, they claim there is bias in "2x2 repeated 
 measures design with crossed random effects for subjects and items" using both the BayesFactors
 as well as bridgesampling with brms fits. Their method is using the data-averaged posterior check 
@@ -851,7 +854,7 @@ schad_ci_diff <- format_t_test_diff(schad$t)
 
 
 Using their simulation code for the bridgesampling case, fixing the bugs
-and matching the model to the simulation code we obtain calibrated Bayes factors. We have run `r format(n_schad_sim, big.mark  = " ")` simulations and obtained miscalibration p `r format_p(schad$miscalibration_p)`, 95% CI for data-averaged posterior difference from expected mean `r schad_ci_diff`.
+and matching the model to the simulation code we obtain calibrated Bayes factors. We have run `r format(n_schad_sim, big.mark  = " ")` simulations (some were removed due to problems sampling) and obtained miscalibration p `r format_p(schad$miscalibration_p)`, 95% CI for data-averaged posterior difference from expected mean `r schad_ci_diff`.
 
 Similar problems affect also the situations where they claim the Bayes factors are calibrated.
 Further
