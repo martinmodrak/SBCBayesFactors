@@ -652,9 +652,6 @@ approximations (increased variance, but no bias).
 
 ### Turtles example in the `bridgesampling` package
 
-Interestingly enough, the first example in the documentation of the bridgesampling
-package produces slightly miscalibrated Bayes factors.
-
 The model for $H_1$ is a probit regression model with a single varying intercept, specifically:
 
 $$
@@ -670,6 +667,29 @@ $$
 where $\Phi$ is the normal cumulative distribution function. The $H_0$ model is then the same but with the 
 varying intercept removed, i.e. we set $\tau = 0$.
 
+We perform two checks --- for one we use standard SBC $N = 80, G = 10$ and simulate the $x_i \sim N(0, \frac{1}{3})$.
+Due to the relatively wide priors on parameters, this tends to produce a substantial number of datasets where $y_i$ has zero or very little variance.
+This can be overcome by rejection sampling --- as in any other Bayesian inference, selectively removing datasets based on properties of $y$ does not change the posterior at all. So we remove all datasets where $\text{Avg}(y) < \frac{1}{10}$ or $\text{Avg}(y) > \frac{9}{10}$.
+We note that to keep SBC valid those rejections must be done for the whole BMA model, not when simulating each model individually^[The first author of this paper has spent an embarrassing amount of time tracking down the source apparent miscalibration in this model when the problem actually stemmed from rejecting datasets from each submodel separately. This illustrates the importance of trying to understand _why_ a model is calibrated and not blindly reporting SBC results.]. 
+While rejections don't impact the posterior, they change the implied prior and since we now no longer have a known prior distribution, we must change the data-averaged posterior check to a two-sample test for equality of means between the true values for the non-rejected datasets. In this example, this changes the implied prior to TODO.
+
+
+For the second check, we focus the simulations to the neighbourhood of the actual data. 
+To this end, we pick half of the groups and fit both models to this smaller dataset,
+and calculate the Bayes factor (TODO result). We could use the implied model probability 
+as prior for the model index, but to show an alternative, we can also choose $P(M_1) = $ (TODO value),
+which results in $P(M_1|y_1) = \frac{1}{2}$ and so our simulations will be more balanced --- this new $P(M_1)$
+is then used when converting the computed Bayes factor into posterior model probability.
+
+
+### Discovering bad normalization constants
+
+Recently https://link.springer.com/article/10.1007/s41237-024-00232-7 have examined
+the prevalence of missing or incorrect normalizing constants for posterior densities.
+The authors note that 9 out of 21 investigated Stan models using a truncated distribution neglected the normalizing constant, leading to possibly biased Bayes factors. Here we test how efficiently do our checks discover this problem using the
+example from the previous section, but modifying the prior so that $\tau \sim \text{HalfN}(0, 1)$, but we neglect the normalization constant and so the  density is wrong by a factor of 2.
+
+TODO - evals
 
 ### Posterior SBC and the importance of using correct priors
 
@@ -845,14 +865,7 @@ data-averaged posterior is equal to the prior mean, which can be invalid
 in the same settings as a classical t-test, but can additionally have computational
 issues even for cases when classical t-test would perform well.
 
-### Discovering bad normalization constants
 
-Neglecting vectorization https://link.springer.com/article/10.1007/s41237-024-00232-7 
-The authors note that 9 out of 21 investigated Stan models neglected the normalizing constant for
-truncated distribution, leading to possibly biased Bayes factors.
- - reuse the turtle models
- 
-TODO
 
 ## Discussion
 
@@ -889,11 +902,12 @@ Our recommendation for researchers wishing to implement and/or evaluate  tools t
 At least several hundred simulations per validation scenario should be run to have reasonable power to catch problems. If high precision is required, thousands of simulations should be run.
 
 
-In our tests, both `bridgesampling` and the `BayesFactors` package provided mostly reliable
-Bayes factor estimates. Bias previously reported by Schad & Vasishth was an artifact
-of invalid testing procedure. The only problem we have seen was in the
-Stan + `bridgesampling` combination and testing the presence of random effect in TODO interpretation.
-We therefore currently believe that for low-stakes statistical workflow involving Bayes factors and standard models, it is relatively safe to rely on those packages without further testing. However, when using a less standard model or when the costs of being wrong are non-trivial, we strongly encourage running at least several hundred simulations of SBC, preferably tailored to the dataset in question with posterior SBC. 
+In our tests, both `bridgesampling` and the `BayesFactors` package provided reliable
+Bayes factor estimates in all tests we ran. Bias previously reported by Schad & Vasishth was an artifact
+of invalid testing procedure. 
+We therefore currently believe that for low-stakes statistical workflow involving Bayes factors and standard models, it is safe to rely on those packages without further testing. However, when using a less standard model or when the costs of being wrong are non-trivial, we encourage running at least several hundred simulations of SBC, preferably tailored to the dataset in question with posterior SBC. 
+
+By far the most common source of apparent miscalibration we have seen while developing this paper stemmed from mismatches between simulation code and the model, not from failure of computation. It follows that packages that allow us to use the same model formulation for simulation, fitting and (for posterior SBC) prediction, like `brms` make checking Bayes factor computations much easier as this source of problems can be ruled out.
 
 All of the methods we discuss here and in our recommendations are available for easy use with the `SBC` R package.
 
@@ -906,7 +920,7 @@ factors.
 
 Recalibration with SBC does not work in general http://www.stat.columbia.edu/~gelman/research/unpublished/calibration_toy.pdf
 
-Improving SBC to match performance of miscalibration testing --- SBC throws away information by random tie-braking. When that information is kept, the variance of the eCDF decreases. However, there is no known way to evaluate the distribution of SBC outcomes under the correct model to make the test more stringent. 
+A possible future work is improving SBC to match performance of miscalibration testing --- SBC throws away information by random tie-braking. When that information is kept, the variance of the eCDF decreases. However, there is no known way to evaluate the distribution of SBC outcomes under the correct model to make the test more stringent. 
 
 ## Appendix
 
