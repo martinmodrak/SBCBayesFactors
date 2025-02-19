@@ -125,8 +125,6 @@ hist_correct <- compute_bootstrapped_histories(res_bin_correct$stats, history_le
                                             compute_log_gamma_history)
 
 bp_correct <- binary_probabilities_from_stats(res_bin_correct$stats)
-hist_correct_ttest <- compute_bootstrapped_histories(bp_correct, history_length = hist_length_correct, n_histories = n_histories, step = hist_step_correct,
-                                            compute_ttest_history)
 
 hist_correct_schad <- compute_bootstrapped_histories(bp_correct, history_length = hist_length_correct, n_histories = n_histories, step = hist_step_correct,
                                             compute_schad_history)
@@ -146,13 +144,11 @@ hist_correct_miscalibration <- compute_bootstrapped_histories(bp_correct, histor
 plot_log_gamma_histories(hist_correct)
 plot_log_p_histories(hist_correct_brier, "Brier resampling")
 plot_log_p_histories(hist_correct_schad, "P - Schad")
-plot_log_p_histories(hist_correct_ttest, "DAP t-test")
 plot_log_p_histories(hist_correct_miscalibration, "Miscalibration resampling")
 
 save_histories("binary_correct",
                log_gamma = hist_correct,
                brier = hist_correct_brier,
-               ttest = hist_correct_ttest,
                schad = hist_correct_schad,
                miscalibration = hist_correct_miscalibration)
 ```
@@ -177,8 +173,6 @@ hist_flip <- compute_bootstrapped_histories(res_bin_flip$stats, history_length =
 
 bp_flip <- binary_probabilities_from_stats(res_bin_flip$stats)
 
-hist_flip_ttest <- compute_bootstrapped_histories(bp_flip, history_length = 50, n_histories = 100,
-                                            compute_ttest_history, min_sim_id = 10)
 
 hist_flip_schad <- compute_bootstrapped_histories(bp_flip, history_length = 50, n_histories = 100,
                                             compute_schad_history, min_sim_id = 10)
@@ -191,14 +185,12 @@ hist_flip_brier <- compute_bootstrapped_histories(bp_flip, history_length = 50, 
                                             compute_brier_history)
 
 plot_log_gamma_histories(hist_flip)
-plot_log_p_histories(hist_flip_ttest, "DAP t-test")
 plot_log_p_histories(hist_flip_schad, "P Schad")
 plot_log_p_histories(hist_flip_brier, "Brier")
 plot_log_p_histories(hist_flip_miscalib, "Miscalibration resampling")
 
 save_histories("binary_flip",
                log_gamma = hist_flip,
-               ttest = hist_flip_ttest,
                schad = hist_flip_schad,
                brier = hist_flip_brier,
                miscalibration = hist_flip_miscalib)
@@ -274,8 +266,6 @@ plot_binary_calibration_diff(res_bin_bad$stats)
 hist_bad <- compute_bootstrapped_histories(res_bin_bad$stats, history_length = 100, n_histories = 100,
                                             compute_log_gamma_history, min_sim_id = 5)
 
-hist_bad_ttest <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
-                                            compute_ttest_history, min_sim_id = 5)
 
 
 hist_bad_schad <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
@@ -290,7 +280,6 @@ hist_bad_miscalibration <- compute_bootstrapped_histories(binary_probabilities_f
 
 
 plot_log_gamma_histories(hist_bad)
-plot_log_p_histories(hist_bad_ttest, "DAP t-test")
 plot_log_p_histories(hist_bad_schad, "P - Schad")
 plot_log_p_histories(hist_bad_brier, "Brier")
 plot_log_p_histories(hist_bad_miscalibration, "Miscalibration")

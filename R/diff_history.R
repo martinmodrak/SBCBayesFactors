@@ -135,7 +135,7 @@ compute_log_gamma_history <- function(stats, step = step, min_sim_id = 1) {
     inner_join(gamma_thresholds_df, by = c("sim_id" = "N_sims"))
 }
 
-compute_schad_history_single <- function(probs, true_model, step = 1) {
+compute_schad_history_single <- function(probs, true_model, step = 1, expected = 0.5) {
   steps_to_include <- include_step(1:length(probs), step)
   sums <- cumsum(probs)[steps_to_include]
   ns <- (1:length(probs))[steps_to_include]
@@ -144,10 +144,15 @@ compute_schad_history_single <- function(probs, true_model, step = 1) {
   for(i in which(steps_to_include)) {
     sds[step_id(i,step)] <- sd(probs[1:i])
   }
-  t_stat <- ((sums/ns) - 0.5) / (sds / sqrt(ns))
+  means <- sums/ns
+  t_stat <- (means - expected) / (sds / sqrt(ns))
 
   dfs <- ns - 1
-  log_ps <- log(2) + pt(-abs(t_stat), dfs, log.p = TRUE)
+  log_ps <- case_when(
+    sds == 0 & (abs(means - expected) < 1e-8) ~ 1,
+    sds == 0 ~ NA_real_,
+    TRUE ~ log(2) + pt(-abs(t_stat), dfs, log.p = TRUE)
+  )
 
   return(log_ps)
 }
@@ -179,7 +184,7 @@ compute_schad_bf_history_single <- function(probs, true_model, step = 1, expecte
       if(abs(mean(probs_to_test) - expected) < 0.001) {
         log_ps[out_i] <- 0
       } else {
-        log_ps[out_i] <- pnorm(-abs(mean(probs_to_test) - expected, 0, 0.001), log.p = TRUE) + log(2)
+        log_ps[out_i] <- pnorm(-abs(mean(probs_to_test) - expected), 0, 0.001, log.p = TRUE) + log(2)
       }
     } else {
       bf <- tryCatch(BayesFactor::ttestBF(probs_to_test, mu = expected, rscale = uniform_sd),
@@ -209,11 +214,11 @@ compute_ttest_history_single <- function(probs, true_model, step = 1, expected =
     if(i < 2) {
       log_ps[out_i] <- 0
     } else if(sd(probs_to_test) == 0 && expected != "avg_true") {
-        if(abs(mean(probs_to_test) - expected) < 1e-8) {
-          log_ps[out_i] <- 0
-        } else {
-          log_ps[out_i] <- NA_real_
-        }
+      if(abs(mean(probs_to_test) - expected) < 1e-8) {
+        log_ps[out_i] <- 0
+      } else {
+        log_ps[out_i] <- NA_real_
+      }
     } else if(sd(probs_to_test) == 0 && expected == "avg_true" && sd(true_model[1:i]) == 0) {
       if(abs(mean(probs_to_test) - mean(true_model[1:i])) < 1e-8) {
         log_ps[out_i] <- 0

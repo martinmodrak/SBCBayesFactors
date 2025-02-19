@@ -150,6 +150,7 @@ CEP_bins <- function(x, y) {
 gaffke_m <- function(probs, B = 10000, alpha = 0.05) {
   u_diff <- MCMCpack::rdirichlet(B, alpha = rep(1, length(probs) + 1))
 
+  probs_sort <- sort(probs)
   z_upr <- c(probs_sort, 1)
   m_matrix_upr <- sweep(u_diff, MARGIN = 2, STATS = z_upr, FUN = "*")
   m_upr <- rowSums(m_matrix_upr)
@@ -162,8 +163,7 @@ gaffke_m <- function(probs, B = 10000, alpha = 0.05) {
   list(lwr = m_lwr, upr = m_upr)
 }
 
-gaffke_ci <- function(probs, B = 10000, alpha = 0.05) {
-  m <- gaffke_m(probs, B, alpha)
+gaffke_ci_from_m <- function(m, alpha = 0.05) {
   m_lwr <- m$lwr
   m_upr <- m$upr
 
@@ -173,10 +173,14 @@ gaffke_ci <- function(probs, B = 10000, alpha = 0.05) {
   ))
 }
 
-gaffke_p <- function(probs, mu = 0.5, B = 10000, alternative = c("two.sided", "less", "greater")) {
+gaffke_ci <- function(probs, B = 10000, alpha = 0.05) {
+  m <- gaffke_m(probs, B, alpha)
+  gaffke_ci_from_m(m, alpha)
+}
+
+gaffke_p_from_m <- function(m, mu, B, alternative = c("two.sided", "less", "greater")) {
   alternative <- match.arg(alternative)
 
-  m <- gaffke_m(probs, B, alpha)
   m_lwr <- m$lwr
   m_upr <- m$upr
 
@@ -197,6 +201,13 @@ gaffke_p <- function(probs, mu = 0.5, B = 10000, alternative = c("two.sided", "l
   } else {
     stop("Invalid alternative")
   }
+}
+
+gaffke_p <- function(probs, mu = 0.5, B = 10000, alternative = c("two.sided", "less", "greater")) {
+  alternative <- match.arg(alternative)
+
+  m <- gaffke_m(probs, B, alpha)
+  gaffke_p_from_m(m, mu, B, alternative)
 }
 
 
