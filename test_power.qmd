@@ -1,0 +1,23 @@
+---
+title: "Test power"
+format: html
+---
+
+```{r setup}
+#| include: FALSE
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(SBC)
+devtools::load_all()
+
+cache_dir <- here::here("cache")
+
+theme_set(theme_minimal())
+```
+
+
+```{r}
+test_DAP_power(rbeta(1000, 15, 10), size = 10, test_func_DAP_t)
+```
+

@@ -273,11 +273,20 @@ plot_ecdf_diff(res_turtles, combine_variables = combine_array_elements)
 ```{r}
 bp_turtles <- binary_probabilities_from_stats(res_turtles$stats)
 
-t.test(bp_turtles$prob, as.numeric(ds_turtles$variables[,"model"]))
-miscalibration_resampling_p(bp_turtles$prob, bp_turtles$simulated_value)
+t_res_orig <- t.test(bp_turtles$prob, as.numeric(ds_turtles$variables[,"model"]))
+t_res_orig
+miscalibration_p_orig <- miscalibration_resampling_p(bp_turtles$prob, bp_turtles$simulated_value)
+miscalibration_p_orig
 my_reliability_diag(bp_turtles)
 ```
 
+
+```{r save-stats}
+saveRDS(list(t  = t_res_orig,
+       miscalibration_p = miscalibration_p_orig),
+  file.path(cache_dir, paste0("turtles_stats.rds")))
+
+```
 
 ## Normal prior on sigma
 
@@ -356,18 +365,17 @@ my_reliability_diag(bp_turtles_norm_bad)
 ```
 
 ```{r}
-hist_length_turtles_norm_bad <- 200
+hist_length_turtles_norm_bad <- 400
 invisible(get_precomputed_gamma_thresholds(unique(res_turtles_norm_bad$stats$max_rank) + 1,min_sims = 1, max_sims = max(1000,hist_length_turtles_norm_bad)))
 
-hist_step_turtles_norm_bad <- 10
-n_histories <- 10
+hist_step_turtles_norm_bad <- 2
+n_histories <- 100
 hist_turtles_norm_bad <- compute_bootstrapped_histories(res_turtles_norm_bad$stats |> filter(variable %in% c("model", "sigma", "lp__")), history_length = hist_length_turtles_norm_bad, n_histories = n_histories, step = hist_step_turtles_norm_bad,
                                             compute_log_gamma_history)
 
 bp_turtles_norm_bad <- binary_probabilities_from_stats(res_turtles_norm_bad$stats)
-hist_turtles_norm_bad_schad <- compute_bootstrapped_histories(bp_turtles_norm_bad, history_length = hist_length_turtles_norm_bad, n_histories = n_histories, step = hist_step_turtles_norm_bad,
-                                            compute_schad_history)
-
+hist_turtles_norm_bad_ttest <- compute_bootstrapped_histories(bp_turtles_norm_bad, history_length = hist_length_turtles_norm_bad, n_histories = n_histories, step = hist_step_turtles_norm_bad,
+                                            compute_ttest_history, expected = "avg_true")
 
 
 
@@ -383,12 +391,12 @@ hist_turtles_norm_bad_miscalibration <- compute_bootstrapped_histories(bp_turtle
 
 plot_log_gamma_histories(hist_turtles_norm_bad)
 plot_log_p_histories(hist_turtles_norm_bad_brier, "Brier resampling")
-plot_log_p_histories(hist_turtles_norm_bad_schad, "Schad")
+plot_log_p_histories(hist_turtles_norm_bad_ttest, "DAP - t-test")
 plot_log_p_histories(hist_turtles_norm_bad_miscalibration, "Miscalibration resampling")
 
 save_histories("hist_turtles_norm_bad",
                log_gamma = hist_turtles_norm_bad,
-               schad = hist_turtles_norm_bad_schad,
+               ttest = hist_turtles_norm_bad_ttest,
                miscalibration = hist_turtles_norm_bad_miscalibration)
 ```
 
@@ -523,9 +531,20 @@ plot_ecdf_diff(res_turtles_post_half, combine_variables = combine_array_elements
 
 ```{r}
 bp_turtles_post_half <- binary_probabilities_from_stats(res_turtles_post_half$stats)
-t.test(bp_turtles_post_half$prob, mu = 0.5)
-miscalibration_resampling_p(bp_turtles_post_half$prob, bp_turtles_post_half$simulated_value)
+t_res <- t.test(bp_turtles_post_half$prob, mu = prob1_target_half)
+t_res
+miscalibration_p <- miscalibration_resampling_p(bp_turtles_post_half$prob, bp_turtles_post_half$simulated_value)
+miscalibration_p
 my_reliability_diag(bp_turtles_post_half)
+```
+
+
+```{r save-stats-post-half}
+saveRDS(list(t  = t_res,
+       miscalibration_p = miscalibration_p,
+       prob1_tweaked_prior = prob1_tweaked_prior_half),
+  file.path(cache_dir, paste0("turtles_post_half_stats.rds")))
+
 ```
 
 

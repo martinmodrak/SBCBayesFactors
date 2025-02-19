@@ -345,7 +345,28 @@ data-averaged posterior (cite).
 The method of Schad et al. is to check the data-averaged posterior criterion for the model
 index in the BMA supermodel (i.e. with $f: \Theta_\text{BMA} \to \{0, \ldots K - 1\}$ and
 $\forall (i, \theta_i) \in \Theta_\text{BMA}: f((i, \theta_i)) = i$), although they always
-look at just two model comparisons, making the response actually binary.
+look at just two model comparisons, making the response actually binary. The situation is
+simplified by the fact that both the prior
+and average posterior are Bernoulli distribution and can thus be fully described by their mean.
+We therefore require a test for the
+mean of bounded variable with unknown distribution. In most practical cases,
+the posterior model probabilities are well-behaved enough for a classical t-test
+to work well.
+
+Schad et al. use a Bayesian
+t-test for the mean comparison, though we would argue that this provides little advantage over
+a standard t-test while requiring us to set a free parameter (the prior sd of the alternative model). 
+In fact, we consider frequentist properties to be
+important for a calibration check. 
+
+When the t-test approximation is problematic (e.g. when all observed posterior probabilities are identical, 
+or with bimodal distribution and low number of simulations), 
+we would recommend using non-parametric tests for mean of 
+bounded distribution of which we've found the test of Gaffke 2005 to work best. The test is more
+thoroughly investigated in Learned-Miller and Thomas 2019 [A new confidence interval for
+the mean of a bounded random variable](https://arxiv.org/pdf/1905.06208) --- this test has
+been proven valid only in special circumstances, but no counterexample is known and it
+provides much larger power than the alternatives.
 
 Data-averaged posterior is repeatedly confused with SBC in the literature on model
 validation, but it is a fundamentally different check. In full generality, data-averaged
@@ -449,22 +470,10 @@ statistics evolve over time, we randomly sample 100 histories of the same length
 simulations (there are always at least 10 times more simulations than the length of a
 single history under investigation).
 
-For Bayes factors, checking the data-averaged posterior requires a test for the
-mean of bounded variable with unknown distribution. In most practical cases,
-the posterior model probabilities are well-behaved enough for a classical t-test
-to work well, but there are cases where it fails or provides inadequate coverage --- 
-for example when all posterior probabilities are identical. 
-Here we complement the t-test with the test of Gaffke 2005, which is more
-thoroughly investigated in Learned-Miller and Thomas 2019 [A new confidence interval for
-the mean of a bounded random variable](https://arxiv.org/pdf/1905.06208) --- this test has
-been proven valid only in special circumstances, but no counterexample is known and it
-provides much larger power than the alternatives.
-
-<!-- To check the data-averaged posterior following Schad et al. we use a one-sample t-test -->
-<!-- against the null of mean $\frac{1}{2}$ (alternatively: log posterior probability of -->
-<!-- $\mu = \frac{1}{2}$ from a Bayesian t-test with prior scale of the alternative matching -->
-<!-- the sd of uniform distribution over $[0,1]$, but this is computationally less stable and -->
-<!-- makes data-averaged posterior look even worse). -->
+For the data-averaged posterior we use the standard t-test and --- to compare to
+the work of Schad et al. --- we also used the Bayesian t-test. We set the scale parameter for the 
+alternative hypothesis to the sd of uniform distribution over $[0,1]$.
+We complement the t-test with the test of Gaffke 2005.
 
 For prediction calibration, we use the bootstrap-based miscalibration test based on
 [Dimitriadis, Gneiting, Jordan (2021)](https://doi.org/10.1073/pnas.2016191118).
@@ -666,11 +675,22 @@ $$
 where $\Phi$ is the normal cumulative distribution function. The $H_0$ model is then the same but with the 
 varying intercept removed, i.e. we set $\tau = 0$.
 
-We perform two checks --- for one we use standard SBC and $N = 70, G = 10$ (this keeps the distribuion of observed BFs reasonably wide) and simulate the $x_i \sim N(0, \frac{1}{3})$.
+```{r}
+turtles_test <- load_precomputed_file(here::here("cache/turtles_stats.rds"), "turtles.qmd")
+turtles_ci_diff <- format_t_test_diff(turtles_test$t)
+implied_prior_rejection <- turtles_test$t$estimate[2]
+
+turtles_post_half_test <- load_precomputed_file(here::here("cache/turtles_post_half_stats.rds"), "turtles.qmd")
+turtles_post_half_ci_diff <- format_t_test_diff(turtles_post_half_test$t)
+turtles_post_half_test$prob1_tweaked_prior
+```
+
+
+We perform two checks --- for one we use standard SBC and $N = 70, G = 10$ (this keeps the distribution of observed BFs reasonably wide) and simulate the $x_i \sim N(0, \frac{1}{3})$.
 Due to the relatively wide priors on parameters, this tends to produce a substantial number of datasets where $y_i$ has zero or very little variance.
 This can be overcome by rejection sampling --- as in any other Bayesian inference, selectively removing datasets based on properties of $y$ does not change the posterior at all. So we remove all datasets where $\text{Avg}(y) < \frac{1}{10}$ or $\text{Avg}(y) > \frac{9}{10}$.
 We note that to keep SBC valid those rejections must be done for the whole BMA model, not when simulating each model individually^[The first author of this paper has spent an embarrassing amount of time tracking down the source apparent miscalibration in this model when the problem actually stemmed from rejecting datasets from each submodel separately. This illustrates the importance of trying to understand _why_ a model is calibrated and not blindly reporting SBC results.]. 
-While rejections don't impact the posterior, they change the implied prior and since we now no longer have a known prior distribution, we must change the data-averaged posterior check to a two-sample test for equality of means between the true values for the non-rejected datasets. In this example, this changes the implied prior to TODO.
+While rejections don't impact the posterior, they change the implied prior and since we now no longer have a known prior distribution, we must change the data-averaged posterior check to a two-sample test for equality of means between the true values for the non-rejected datasets. In this example, rejections change the implied prior to $P(\mathcal{M}_1) \simeq `r round(implied_prior_rejection, 2)`$.
 
 
 For the second check, we focus the simulations to the neighbourhood of the actual data. 
@@ -679,7 +699,7 @@ and calculate the Bayes factor (TODO result). We then use the fitted parameters 
 data for the remaining groups.
 
 We could use the implied model probability 
-as prior for the model index, but to show an alternative, we can also choose $P(M_1) = $ (TODO value),
+as prior for the model index, but to show an alternative, we can also choose $P(M_1) \simeq `round(turtles_post_half_test$prob1_tweaked_prior,2)`$,
 which results in $P(M_1|y_1) = \frac{1}{2}$ and so our simulations will be more balanced --- this new $P(M_1)$
 is then used when converting the computed Bayes factor into posterior model probability for calibration checks.
 

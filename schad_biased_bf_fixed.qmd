@@ -285,6 +285,14 @@ res_2_step_all <- do.call(bind_results, c(list(res_2step), res_2_step_more))
 
 
 ```{r}
+# Read partial results
+files <- file.path(cache_dir, c("SBC_2step_fixed.rds", paste0("SBC_2step_fixed_more_", 1:4, ".rds")))
+res_list <- purrr::map(files, \(x) readRDS(x)$result)
+res_2_step_all <- do.call(bind_results, res_list)
+```
+
+
+```{r}
 res_2_step_all$stats
 ```
 
@@ -308,4 +316,8 @@ saveRDS(list(t  = t_res,
        miscalibration_p = miscalibration_p),
   file.path(cache_dir, paste0("schad_fixed_stats.rds")))
 
+```
+
+```{r}
+hist(bp_2_step_all$prob, breaks = 100)
 ```

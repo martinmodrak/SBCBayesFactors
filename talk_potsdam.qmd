@@ -1,0 +1,152 @@
+---
+title: "Talk Potsdam"
+html-math-method: mathjax
+format: 
+  revealjs
+---
+
+```{r setup}
+devtools::load_all()
+library(dplyr)
+library(patchwork)
+library(ggplot2)
+
+theme_set(theme_minimal())
+```
+
+
+# BMA model
+
+$$
+\begin{aligned}
+i &\sim \text{Categorical}(\text{Pr}(\mathcal{M}_0), \dots, \text{Pr}(\mathcal{M}_{K - 1}) )\\
+\theta_i &\sim \pi^i_\text{prior} \\
+y &\sim \pi_\text{obs}^i(\theta_i)
+\end{aligned}
+$$
+
+::: {.fragment}
+$$
+\text{Pr}(\mathcal{M}_i | y) = \pi_\text{BMA}(i | y) = \frac{\pi^i_\text{marg}(y)\text{Pr}(\mathcal{M}_i)}{\sum_{j=0}^{K - 1} \pi^j_\text{marg}(y)\text{Pr}(\mathcal{M}_j)}
+$$
+
+:::
+
+
+# Posterior calibration - Binary
+
+Among the cases where $\text{Pr}(\mathcal{M}_i | y) = x\%$ the
+true model should be $i$ in $x\%$ of the cases.
+
+# Posterior calibration - Continous
+
+"In 95% of simulations, the true variable lies within the central 95% posterior credible interval."
+
+
+  - Variable = parameter or a function of parameter(s) and data
+
+
+::: {.fragment}
+"In x% of simulations, the true variable lies within the x% posterior credible interval (of any kind)"
+:::
+
+# SBC
+
+For each simulation take the rank of the true value within the samples
+  - Rank: no. of samples < true value
+
+Across simulations, this rank should be uniformly distributed between $0$ and $S$
+
+::: {.fragment}
+This is _exactly_ continuous posterior calibration!
+:::
+
+::: {.fragment}
+With random tie-breaking, this is _exactly_ binary posterior calibration
+
+High-powered tests for binary calibration available, current implementation of SBC loses power when ties are present
+:::
+
+# SBC and DAP
+
+"Data-averaged posterior = prior"
+
+Doesn't care about ordering!
+
+Calibration cares about ordering
+
+SBC $\neq$ DAP
+
+# Counterexamples for DAP
+
+ - Flip probabilities
+
+# Counterexamples for both
+
+ - Ignoring data
+ - Derived quantities FTW!
+
+# SBC and DAP theory
+
+- DAP w.r.t. $f \;\not\!\!\!\implies$ SBC w.r.t. $f$
+- SBC w.r.t. $f \;\not\!\!\!\implies$ DAP w.r.t. $f$
+
+::: {.fragment}
+- SBC w.r.t. all data-independent $f \implies$ DAP w.r.t. all data-independent $f$
+- DAP w.r.t. all data-independent $f \;\not\!\!\!\implies$ SBC w.r.t. all data-independent $f$
+::: 
+
+::: {.fragment}
+- SBC w.r.t. all $f \implies$ model is correct
+- DAP w.r.t. all $f \implies$ model is correct (likely)
+:::
+
+::: {.fragment}
+   - But this requires "simulating SBC with DAP", so not practical
+:::
+
+# Example - binary
+
+$$
+Y = \{0,1\}, \: \text{Pr}(y = 1 | \mathcal{M}_0) = \frac{1}{3}, \: \text{Pr}(y = 1 | \mathcal{M}_1) = \frac{2}{3}\\
+\text{Pr}(\mathcal{M}_0) = \text{Pr}(\mathcal{M}_1) = \frac{1}{2}
+$$
+
+# Example - binary - flipped probabilities
+
+```{r}
+#| fig-width: 7
+#| fig-height: 2.5
+hist_binary_flip <- load_histories("binary_flip", "binary_example.qmd")
+(plot_log_gamma_histories(hist_binary_flip$log_gamma) | 
+plot_log_p_histories(hist_binary_flip$miscalibration, "Miscalibration") | 
+plot_log_p_histories(hist_binary_flip$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A") + plot_layout(widths = c(2,1,1), axis_titles = "collect_x")
+```
+
+# Example - Poisson vs. NB
+
+# SBC and DAP summary
+
+- Counterexamples for SBC/calibration hard to construct
+- Counterexamples for DAP easy to construct and plausible
+- In some (but not most) cases DAP more sensitive
+
+
+# Posterior SBC
+ - Aki’s paper!
+ - Targeting
+ - Component-wise priors unrealistic
+ - Improper priors
+ - Related to prequenial definition of Bayes factors / sequential updating
+ - Need to compute BF and use that as a new prior (or tweak prior)
+
+# Rejection sampling
+ - Another way to overcome bad prior
+ - Show proof?!
+ - Needs to be done on the whole model, not the submodels!
+
+# Random effects presence and the prior on shared parameters
+
+# Minor quibbles
+ - Bayes t-test vs. normal t-test vs. non-parametric test
+

@@ -147,34 +147,125 @@ CEP_bins <- function(x, y) {
   return(x[break_locations])
 }
 
-
-
-gaffke_p <- function(probs, mu = 0.5, B = 10000, alpha = 0.05) {
+gaffke_m <- function(probs, B = 10000, alpha = 0.05) {
   u_diff <- MCMCpack::rdirichlet(B, alpha = rep(1, length(probs) + 1))
 
-  z_upr <- c(sort(probs), 1)
+  z_upr <- c(probs_sort, 1)
   m_matrix_upr <- sweep(u_diff, MARGIN = 2, STATS = z_upr, FUN = "*")
   m_upr <- rowSums(m_matrix_upr)
 
-  z_lwr <- c(sort(1 - probs), 1)
+  #stopifnot(identical(sort(1 - probs), rev(1 - probs_sort)))
+  z_lwr <- c(rev(1 - probs_sort), 1)
   m_matrix_lwr <- sweep(u_diff, MARGIN = 2, STATS = z_lwr, FUN = "*")
   m_lwr <- rowSums(m_matrix_lwr)
 
-  mean(1-m_lwr <= mu)
+  list(lwr = m_lwr, upr = m_upr)
 }
 
-gaffke_p_history <- function(probs, mu = 0.5, B = 10000, alpha = 0.05) {
-  u_diff <- MCMCpack::rdirichlet(B, alpha = rep(1, length(probs) + 1))
+gaffke_ci <- function(probs, B = 10000, alpha = 0.05) {
+  m <- gaffke_m(probs, B, alpha)
+  m_lwr <- m$lwr
+  m_upr <- m$upr
 
-  probs_ord <- order(probs)
-  z_upr <- c(probs[probs_ord], 1)
-  stop("TODO figure this out")
-  m_matrix_upr <- sweep(u_diff, MARGIN = 2, STATS = z_upr, FUN = "*")
-  m_upr <- rowSums(m_matrix_upr)
-
-  z_lwr <- c(sort(1 - probs), 1)
-  m_matrix_lwr <- sweep(u_diff, MARGIN = 2, STATS = z_lwr, FUN = "*")
-  m_lwr <- rowSums(m_matrix_lwr)
-
-  mean(1-m_lwr <= mu)
+  as.numeric(c(
+    1 - quantile(m_lwr, probs = 1 - alpha / 2),
+    quantile(m_upr, probs = 1 - alpha / 2)
+  ))
 }
+
+gaffke_p <- function(probs, mu = 0.5, B = 10000, alternative = c("two.sided", "less", "greater")) {
+  alternative <- match.arg(alternative)
+
+  m <- gaffke_m(probs, B, alpha)
+  m_lwr <- m$lwr
+  m_upr <- m$upr
+
+  prob_low <- mean(1-m_lwr <= mu)
+  if(prob_low == 0) {
+    prob_low <- 0.5/B
+  }
+  prob_high <- mean(m_upr >= mu)
+  if(prob_high == 0) {
+    prob_high <- 0.5/B
+  }
+  if(alternative == "two.sided") {
+    return(min(prob_low, prob_high, 0.5) * 2)
+  } else if(alternative == "less") {
+    return(prob_high)
+  } else if(alternative == "greater") {
+    return(prob_low)
+  } else {
+    stop("Invalid alternative")
+  }
+}
+
+
+# Currently handling only two-sided alternative
+# gaffke_p_history <- function(probs, mu = 0.5, B = 10000) {
+#   # u_diff <- MCMCpack::rdirichlet(B, alpha = rep(1, length(probs) + 1))
+#   #
+#   # z_upr <- c(sort(probs), 1)
+#   # m_matrix_upr <- sweep(u_diff, MARGIN = 2, STATS = z_upr, FUN = "*")
+#   # m_upr <- rowSums(m_matrix_upr)
+#   #
+#   # z_lwr <- c(rev(1 - probs_sort), 1)
+#   # m_matrix_lwr <- sweep(u_diff, MARGIN = 2, STATS = z_lwr, FUN = "*")
+#   # m_lwr <- rowSums(m_matrix_lwr)
+#   #
+#
+#   # Use the property of Dirichlet as normalized gammas
+#   # Normalize as we go
+#   u_gamma <- matrix(data = rexp(B * length(probs)), nrow = B, ncol = length(probs))
+#   u_gamma_last <- rexp(B)
+#   u_gamma_norm <- t(apply(u_gamma, MARGIN = 1, cumsum))
+#
+#   stopifnot(u_gamma_norm[1,] == cumsum(u_gamma[1,]))
+#   stopifnot(u_gamma_norm[2,] == cumsum(u_gamma[2,]))
+#
+#   probs_rank <- rank(probs, ties.method = "first")
+#   probs_ord <- order(probs)
+#   probs_sort <- sort(probs)
+#
+#   m_gamma_matrix_upr <- sweep(u_gamma, MARGIN = 2, STATS = c(probs_sort, 1), FUN = "*")
+#   m_gamma_matrix_lwr <- sweep(u_gamma, MARGIN = 2, STATS = c(1 - probs_sort, 1), FUN = "*")
+#
+#   p_hist <- numeric(length(probs))
+#   all_cols <- 1:length(probs)
+#   for(i in 1:length(probs)) {
+#     # Select the indices so far
+#     indices <- (1:length(probs))[(1:length(probs)) %in% probs_rank[1:i]]
+#     stopifnot(identical(probs_sort[indices], sort(probs[1:i])))
+#     m_upr <- (rowSums(m_gamma_matrix_upr[, indices, drop = FALSE]) + u_gamma_last) / (u_gamma_norm[,i] + u_gamma_last)
+#     m_lwr <- (rowSums(m_gamma_matrix_lwr[, rev(indices), drop = FALSE]) + u_gamma_last) / (u_gamma_norm[,i] + u_gamma_last)
+#
+#     prob_low <- mean(1-m_lwr <= mu)
+#     if(prob_low == 0) {
+#       prob_low <- 0.5/B
+#     }
+#     prob_high <- mean(m_upr >= mu)
+#     if(prob_high == 0) {
+#       prob_high <- 0.5/B
+#     }
+#
+#     m <- gaffke_m(probs[1:i])
+#     mean(1-m$lwr <= mu)
+#     mean(m$upr >= mu)
+#
+#     p_hist[i] <- min(prob_low, prob_high, 0.5) * 2
+#
+#   }
+#   return(p_hist)
+# }
+#
+# test_gaffke_history <- function(probs, mu = 0.5, B = 10000) {
+#   hist <- gaffke_p_history(probs, mu, B)
+#   orig <- numeric(length(probs))
+#   for(i in 1:length(probs)) {
+#     orig[i] <- gaffke_p(probs[1:i], mu, B)
+#   }
+#   orig - hist
+# }
+#
+# if(FALSE) {
+#   test_gaffke_history(rbeta(10, 2, 1))
+# }
