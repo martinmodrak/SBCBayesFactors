@@ -1,5 +1,6 @@
 ---
-title: "Talk Potsdam"
+title: "SBC for Bayes Factors"
+subtitle: "Potsdam, 2025-02-20"
 html-math-method: mathjax
 format: 
   revealjs
@@ -108,8 +109,10 @@ SBC $\neq$ DAP
 # Example - binary
 
 $$
-Y = \{0,1\}, \: \text{Pr}(y = 1 | \mathcal{M}_0) = \frac{1}{3}, \: \text{Pr}(y = 1 | \mathcal{M}_1) = \frac{2}{3}\\
-\text{Pr}(\mathcal{M}_0) = \text{Pr}(\mathcal{M}_1) = \frac{1}{2}
+\begin{aligned}
+Y = \{0,1\}, \: \text{Pr}(y = 1 | \mathcal{M}_0) &= \frac{1}{3}, \: \text{Pr}(y = 1 | \mathcal{M}_1) = \frac{2}{3} \\
+\text{Pr}(\mathcal{M}_0) = \text{Pr}(\mathcal{M}_1) &= \frac{1}{2}
+\end{aligned}
 $$
 
 # Example - binary - flipped probabilities
@@ -120,10 +123,36 @@ $$
 hist_binary_flip <- load_histories("binary_flip", "binary_example.qmd")
 (plot_log_gamma_histories(hist_binary_flip$log_gamma) | 
 plot_log_p_histories(hist_binary_flip$miscalibration, "Miscalibration") | 
-plot_log_p_histories(hist_binary_flip$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A") + plot_layout(widths = c(2,1,1), axis_titles = "collect_x")
+plot_log_p_histories(hist_binary_flip$schad, "DAP - t-test")) + plot_annotation(tag_levels = "A") + plot_layout(widths = c(2,1,1), axis_titles = "collect_x")
 ```
 
-# Example - Poisson vs. NB
+# Example - Poisson vs. NB 
+
+$$
+\begin{aligned}
+\mathcal{M}_0: y_1,\dots,y_N &\sim \text{Poisson}(\lambda)\\
+\mathcal{M}_1: y_1,\dots,y_N &\sim \text{NB}_2(\lambda, \phi)\\
+\text{Pr}(\mathcal{M}_0) &= \text{Pr}(\mathcal{M}_1) = \frac{1}{2}
+\end{aligned}
+$$
+
+
+# Poisson vs. NB
+## ignoring all data
+
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+hist_pnb_ignore_all <- load_histories("pnb_ignore_all", "poisson_nb_example.qmd")
+plot_log_gamma_histories(hist_pnb_ignore_all$log_gamma) / (
+plot_log_p_histories(hist_pnb_ignore_all$miscalibration, "Miscalibration") +
+  plot_spacer()
+) +
+#plot_log_p_histories(hist_pnb_ignore_all$schad, "DAP - t-test")) + 
+  plot_annotation(tag_levels = "A")
+```
+
 
 # SBC and DAP summary
 
@@ -140,12 +169,36 @@ plot_log_p_histories(hist_binary_flip$schad, "DAP - Schad et al.")) + plot_annot
  - Related to prequenial definition of Bayes factors / sequential updating
  - Need to compute BF and use that as a new prior (or tweak prior)
 
+# Example - ranef/lmbf
+
+$$
+\begin{aligned}
+y_i &\sim  N(\alpha + \beta x_{i} + \gamma_{g_i}, \sigma),  &i = 1,2,\ldots,N\\
+\gamma_j &\sim N\left(0, \frac{\sqrt{2}}{4}\sigma \sqrt{\tau} \right), &j = 1,2,\ldots, G \\
+\tau &\sim \text{InvGamma}\left(\frac{1}{2},\frac{1}{2} \right), &
+\beta \sim N\left(0, \frac{\sqrt{2}}{4} \sigma \right), \\  
+\pi_\text{prior}(\alpha_0, \sigma^2) &= \frac{1}{\sigma^2}  & 
+\mathcal{M}_0 : \tau = 0
+\end{aligned}
+$$
+
+# With constant prior
+
+
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+hist_ranef_constant <- load_histories("ranef_constant", "lmbf_ranef_presence_post_sbc.qmd")
+plot_log_gamma_histories(hist_ranef_constant$log_gamma) / (
+plot_log_p_histories(hist_ranef_constant$miscalibration, "Miscalibration") + 
+plot_log_p_histories(hist_ranef_constant$schad, "DAP - t-test")) + plot_annotation(tag_levels = "A")
+```
+
+
 # Rejection sampling
  - Another way to overcome bad prior
- - Show proof?!
  - Needs to be done on the whole model, not the submodels!
-
-# Random effects presence and the prior on shared parameters
 
 # Minor quibbles
  - Bayes t-test vs. normal t-test vs. non-parametric test

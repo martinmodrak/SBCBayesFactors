@@ -47,9 +47,13 @@ test_func_DAP_gaffke <- function(probs, mu, B = 4000) {
 }
 
 test_DAP_power <- function(probs, size, test_func, mu = 0.5, B = 5000) {
-   res_list <- future.apply::future_replicate(B, simplify = FALSE, {
-     p_to_test <- sample(probs, size = size)
-     test_func(probs = p_to_test, mu = mu)
+   res_list <- future.apply::future_replicate(
+     B,
+     simplify = FALSE,
+     future.globals = c("probs", "size", "mu", "test_func"),
+     expr = {
+       p_to_test <- sample(probs, size = size)
+       test_func(probs = p_to_test, mu = mu)
    })
    res_df <- do.call(rbind, res_list)
    res_df |> mutate(ci_low = pmax(ci_low, 0), ci_high = pmin(ci_high, 1),

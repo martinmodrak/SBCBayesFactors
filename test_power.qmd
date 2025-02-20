@@ -12,7 +12,7 @@ library(SBC)
 devtools::load_all()
 
 cache_dir_top <- here::here("cache")
-cache_dir <- file.path(cache_dir, "test_power")
+cache_dir <- file.path(cache_dir_top, "test_power")
 if(!dir.exists(cache_dir)) {
   dir.create(cache_dir)
 }
@@ -23,24 +23,29 @@ setup_cluster()
 
 
 ```{r}
-test_scenario <- function(probs, name, size) {
+test_scenario <- function(probs, name, size, mu) {
   rbind(
-   test_DAP_power(probs, size = size, test_func_DAP_t) |> mutate(type = "t"),
-   test_DAP_power(probs, size = size, test_func_DAP_bayesT) |> mutate(type = "bayesT"),
-    test_DAP_power(probs, size = size, test_func_DAP_gaffke) |> mutate(type = "gaffke")
+   test_DAP_power(probs, size = size, test_func = SBCBayesFactors:::test_func_DAP_t, mu = mu) |> mutate(type = "t"),
+   test_DAP_power(probs, size = size, test_func = SBCBayesFactors:::test_func_DAP_bayesT, mu = mu) |> mutate(type = "bayesT"),
+    test_DAP_power(probs, size = size, test_func = SBCBayesFactors:::test_func_DAP_gaffke, mu = mu) |> mutate(type = "gaffke")
   ) |> 
     mutate(scenario = name, size = size)
 }
 
-test_all_sizes <- function(probs, name) {
+test_all_sizes <- function(probs, name, mu = 0.5) {
   sizes <- c(10,50,100)
   sanitized_name <- gsub("[/\\.,]", "", name)
-  cache_file <- file.path(cache_dir, paste0(sanitized_name, "_", rlang::hash(probs), ".rds"))
+  if(mu == 0.5) {
+    mu_text = ""
+  } else {
+    mu_text = paste0("_", round(mu, 4))
+  }
+  cache_file <- file.path(cache_dir, paste0(sanitized_name, mu_text, "_", rlang::hash(probs), ".rds"))
   if(file.exists(cache_file)) {
     message("Reading from cache ", cache_file)
     return(readRDS(cache_file))
   } else {
-    res <- purrr::map_df(sizes, \(size) test_scenario(probs, name, size))
+    res <- purrr::map_df(sizes, \(size) test_scenario(probs, name, size, mu = mu))
     saveRDS(res, cache_file)
     return(res)
   }
@@ -111,21 +116,24 @@ warning("Expand to full results")
 res_turtles_norm_bad <- do.call(bind_results,
                             purrr::map(1:3, \(id) load_precomputed_file(paste0("cache/turtles_norm_bad_", id, ".rds"), "turtles_norm_bad.qmd")$result))
 probs_turtles_norm_bad <- binary_probabilities_from_stats(res_turtles_norm_bad$stats)$prob
-df_turtles_norm_bad <- test_all_sizes(probs_turtles_norm_bad, "Turtles - posterior SBC")
+df_turtles_norm_bad <- test_all_sizes(probs_turtles_norm_bad, "Turtles - bad normalization") |> mutate(scenario = "Turtles - bad normalization")
 df_turtles_norm_bad
 ```
 
 ```{r}
+ranef_test <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100_tests.rds"), "lmbf_ranef_presence_post_sbc.qmd")
+
+
 res_ranef_post <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100.rds"), "lmbf_ranef_presence_post_sbc.qmd")$result
-probs_ranef_post <- binary_probabilities_from_stats(res_ranef_post$result$stats)$prob
-df_ranef_post <- test_all_sizes(probs_ranef_post, "Ranef presence - posterior SBC")
+probs_ranef_post <- binary_probabilities_from_stats(res_ranef_post$stats)$prob
+df_ranef_post <- test_all_sizes(probs_ranef_post, "Ranef presence - posterior SBC", mu = ranef_test$t$null.value)
 df_ranef_post
 ```
 
 ```{r}
 res_ranef_post_constant <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_constant_100_7500.rds"), "lmbf_ranef_presence_post_constant_sbc.qmd")$result
-probs_ranef_post_constant <- binary_probabilities_from_stats(res_ranef_post_constant$result$stats)$prob
-df_ranef_post_constant <- test_all_sizes(probs_ranef_post_constant, "Ranef presence - posterior SBC")
+probs_ranef_post_constant <- binary_probabilities_from_stats(res_ranef_post_constant$stats)$prob
+df_ranef_post_constant <- test_all_sizes(probs_ranef_post_constant, "Ranef presence - constant")
 df_ranef_post_constant
 ```
 
@@ -137,35 +145,72 @@ res_schad_fixed <- do.call(bind_results,
                             purrr::map(1:4, \(id) load_precomputed_file(paste0("cache/SBC_2step_fixed_more_", id, ".rds"), "schad_biased_bf_fixed.qmd")$result)))
 
 probs_schad_fixed <- binary_probabilities_from_stats(res_schad_fixed$stats)$prob
-df_schad_fixed <- test_all_sizes(probs_schad_fixed, "Ranef presence - posterior SBC")
+df_schad_fixed <- test_all_sizes(probs_schad_fixed, "Schad - 2step fixed")
 df_schad_fixed
 ```
 
 
 
 ```{r}
-probs <- rbeta(1000, 15, 10)
-size <- 100
-df_test <- 
+order_factors <- function(df) {
+  df |> mutate(scenario = forcats::fct_reorder(factor(scenario), 1:n()),
+               type = factor(type, levels = c("bayesT", "t", "gaffke")))
+}
 
-df_test
+all_correct <- rbind(
+  df_binary_correct,
+  df_poisson_nb_correct,
+  #df_turtles, # Requires two-sample version...
+  df_turtles_post,
+  df_ranef_post,
+  df_schad_fixed
+)  |> order_factors()
+
+all_bad <- rbind(
+  df_poisson_nb_bias,
+  df_poisson_nb_vari,
+  df_poisson_nb_bias_vari,
+  df_turtles_norm_bad,
+  df_ranef_post_constant
+) |> order_factors()
+
+all <- rbind(all_correct, all_bad)  |> order_factors()
+shared_theme <- NULL#theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+
+
+```{r}
+#| fig-width: 7
+#| fig-height: 7
+all |> ggplot() + aes(
+  x = scenario,
+  y = mean_ci_width,
+  ymin = mean_ci_width - sd_ci_width,
+  ymax = mean_ci_width + sd_ci_width,
+  color = type
+) +
+  geom_pointrange(position = position_dodge(width = 0.7), fatten = 1.5)  + 
+  shared_theme + 
+  scale_y_continuous("Mean 95% CI width +/- SD") +
+  facet_wrap( ~ size, ncol = 1) + coord_flip()
 ```
 
 ```{r}
-probs <- rbeta(1000, 15, 10)
-test_DAP_power(probs, size = size, test_func_DAP_gaffke)
+all_correct |> ggplot(aes(x = scenario, y = power, ymin = power_low, ymax = power_high, color = type)) +
+  geom_hline(color = "orangered", yintercept = 0.05) +
+  geom_pointrange(position = position_dodge(width = 0.7), fatten = 1.5)  + 
+  scale_y_continuous(labels = scales::percent) + shared_theme + facet_wrap(~size) + coord_flip() +
+  theme(legend.position = "bottom")
 ```
-
 
 ```{r}
-probs <- rbeta(10,15,10)
-rbind(
-  test_func_DAP_t(probs, mu = 0.5) |> mutate(type = "t"),
-  test_func_DAP_bayesT(probs, mu = 0.5) |> mutate(type = "bayesT"),
-  test_func_DAP_gaffke(probs, mu = 0.5) |> mutate(type = "gaffke")
-)
+all_bad |> ggplot(aes(x = scenario, y = power, ymin = power_low, ymax = power_high, color = type)) +
+  geom_pointrange(position = position_dodge(width = 0.7), fatten = 1.5)  + 
+  scale_y_continuous(labels = scales::percent) + shared_theme + facet_wrap(~size) + coord_flip() +
+  theme(legend.position = "bottom")
 
 ```
+
 
 
 

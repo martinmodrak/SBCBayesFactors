@@ -741,7 +741,7 @@ y_i &\sim  N(\alpha + \beta x_{i} + \gamma_{g_i}, \sigma),  &i = 1,2,\ldots,N\\
 \end{aligned}
 $$
 
-Where $x_i = \pm \frac{\sqrt{2}}{2}$ is a binary predictor coded following the standard BayesFactor encoding. Note that the implied prior on $\gamma_j$ is multivariate Cauchy and the prior on $\alpha, \sigma^2$ is improper. 
+Where $x_i = \pm \frac{\sqrt{2}}{2}$ is a binary predictor coded following the standard BayesFactor encoding. We compared this to a model without random effect, i.e. $\tau = 0$. Note that the implied prior on $\gamma_j$ is multivariate Cauchy and the prior on $\alpha, \sigma^2$ is improper. 
 Without modifications, we therefore cannot sample from the prior on $\alpha, \sigma^2$.
 
 ```{r}
