@@ -17,7 +17,7 @@ if(!dir.exists(cache_dir)) {
   dir.create(cache_dir)
 }
 
-theme_set(theme_minimal())
+theme_set(theme_minimal() +  theme(strip.background = element_rect(fill = "#e0e0e0", colour = "white")))
 setup_cluster()
 ```
 
@@ -43,12 +43,26 @@ test_all_sizes <- function(probs, name, mu = 0.5) {
   cache_file <- file.path(cache_dir, paste0(sanitized_name, mu_text, "_", rlang::hash(probs), ".rds"))
   if(file.exists(cache_file)) {
     message("Reading from cache ", cache_file)
-    return(readRDS(cache_file))
+    res <- readRDS(cache_file)
   } else {
     res <- purrr::map_df(sizes, \(size) test_scenario(probs, name, size, mu = mu))
     saveRDS(res, cache_file)
-    return(res)
   }
+  res |> mutate(mu = !!mu)
+}
+
+summarise_power <- function(power_df, bayesT_p_limit = 0.05) {
+  power_df |> mutate(ci_low = pmax(ci_low, 0), ci_high = pmin(ci_high, 1),
+                    ci_width = ci_high - ci_low) |>
+  group_by(scenario, size, type) |> 
+     summarise(n_sims = n(),
+               n_valid = sum(!is.na(p)),
+               n_pos = sum(p <= if_else(type == "bayesT", bayesT_p_limit, 0.05), na.rm = TRUE),
+               power = n_pos / n_valid,
+               power_low = qbeta(0.025, n_pos, n_valid - n_pos + 1),
+               power_high = qbeta(0.025, n_pos + 1, n_valid - n_pos),
+               power_by_ci = mean(ci_low > mu | ci_high < mu),mean_ci_width = mean(ci_width), sd_ci_width = sd(ci_width),
+               .groups = "drop")
 }
 ```
 
@@ -57,7 +71,7 @@ test_all_sizes <- function(probs, name, mu = 0.5) {
 res_binary_correct <- load_precomputed_file("cache/binary_correct.rds", "binary_example.qmd")
 probs_binary_correct <- binary_probabilities_from_stats(res_binary_correct$result$stats)$prob
 df_binary_correct <- test_all_sizes(probs_binary_correct, "Binary - correct")
-df_binary_correct
+summarise_power(df_binary_correct)
 ```
 
 
@@ -66,7 +80,7 @@ df_binary_correct
 res_poisson_nb_correct <- load_precomputed_file("cache/poisson_nb_correct.rds", "poisson_nb_example.qmd")
 probs_poisson_nb_correct <- binary_probabilities_from_stats(res_poisson_nb_correct$result$stats)$prob
 df_poisson_nb_correct <- test_all_sizes(probs_poisson_nb_correct, "Poisson/NB - correct")
-df_poisson_nb_correct
+summarise_power(df_poisson_nb_correct)
 ```
 
 
@@ -74,28 +88,28 @@ df_poisson_nb_correct
 res_poisson_nb_bias <- load_precomputed_file("cache/poisson_nb_bias.rds", "poisson_nb_example.qmd")
 probs_poisson_nb_bias <- binary_probabilities_from_stats(res_poisson_nb_bias$result$stats)$prob
 df_poisson_nb_bias <- test_all_sizes(probs_poisson_nb_bias, "Poisson/NB - bias")
-df_poisson_nb_bias
+summarise_power(df_poisson_nb_bias)
 ```
 
 ```{r}
 res_poisson_nb_vari <- load_precomputed_file("cache/poisson_nb_vari.rds", "poisson_nb_example.qmd")
 probs_poisson_nb_vari <- binary_probabilities_from_stats(res_poisson_nb_vari$result$stats)$prob
 df_poisson_nb_vari <- test_all_sizes(probs_poisson_nb_vari, "Poisson/NB - variance")
-df_poisson_nb_vari
+summarise_power(df_poisson_nb_vari)
 ```
 
 ```{r}
 res_poisson_nb_bias_vari <- load_precomputed_file("cache/poisson_nb_bias_vari.rds", "poisson_nb_example.qmd")
 probs_poisson_nb_bias_vari <- binary_probabilities_from_stats(res_poisson_nb_bias_vari$result$stats)$prob
 df_poisson_nb_bias_vari <- test_all_sizes(probs_poisson_nb_bias_vari, "Poisson/NB - bias_vari")
-df_poisson_nb_bias_vari
+summarise_power(df_poisson_nb_bias_vari)
 ```
 
 ```{r}
 res_turtles <- load_precomputed_file("cache/turtles.rds", "turtles.qmd")
 probs_turtles <- binary_probabilities_from_stats(res_turtles$result$stats)$prob
 df_turtles <- test_all_sizes(probs_turtles, "Turtles")
-df_turtles
+summarise_power(df_turtles)
 ```
 
 
@@ -106,7 +120,7 @@ res_turtles_post <- do.call(bind_results,
 
 probs_turtles_post <- binary_probabilities_from_stats(res_turtles_post$stats)$prob
 df_turtles_post <- test_all_sizes(probs_turtles_post, "Turtles - posterior SBC")
-df_turtles_post
+summarise_power(df_turtles_post)
 ```
 
 
@@ -117,7 +131,7 @@ res_turtles_norm_bad <- do.call(bind_results,
                             purrr::map(1:3, \(id) load_precomputed_file(paste0("cache/turtles_norm_bad_", id, ".rds"), "turtles_norm_bad.qmd")$result))
 probs_turtles_norm_bad <- binary_probabilities_from_stats(res_turtles_norm_bad$stats)$prob
 df_turtles_norm_bad <- test_all_sizes(probs_turtles_norm_bad, "Turtles - bad normalization") |> mutate(scenario = "Turtles - bad normalization")
-df_turtles_norm_bad
+summarise_power(df_turtles_norm_bad)
 ```
 
 ```{r}
@@ -127,14 +141,14 @@ ranef_test <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_1
 res_ranef_post <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100.rds"), "lmbf_ranef_presence_post_sbc.qmd")$result
 probs_ranef_post <- binary_probabilities_from_stats(res_ranef_post$stats)$prob
 df_ranef_post <- test_all_sizes(probs_ranef_post, "Ranef presence - posterior SBC", mu = ranef_test$t$null.value)
-df_ranef_post
+summarise_power(df_ranef_post)
 ```
 
 ```{r}
 res_ranef_post_constant <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_constant_100_7500.rds"), "lmbf_ranef_presence_post_constant_sbc.qmd")$result
 probs_ranef_post_constant <- binary_probabilities_from_stats(res_ranef_post_constant$stats)$prob
 df_ranef_post_constant <- test_all_sizes(probs_ranef_post_constant, "Ranef presence - constant")
-df_ranef_post_constant
+summarise_power(df_ranef_post_constant)
 ```
 
 ```{r}
@@ -146,14 +160,14 @@ res_schad_fixed <- do.call(bind_results,
 
 probs_schad_fixed <- binary_probabilities_from_stats(res_schad_fixed$stats)$prob
 df_schad_fixed <- test_all_sizes(probs_schad_fixed, "Schad - 2step fixed")
-df_schad_fixed
+summarise_power(df_schad_fixed)
 ```
 
 
 
 ```{r}
 order_factors <- function(df) {
-  df |> mutate(scenario = forcats::fct_reorder(factor(scenario), 1:n()),
+  df |> mutate(scenario = forcats::fct_reorder(factor(scenario), n():1),
                type = factor(type, levels = c("bayesT", "t", "gaffke")))
 }
 
@@ -168,8 +182,8 @@ all_correct <- rbind(
 
 all_bad <- rbind(
   df_poisson_nb_bias,
-  df_poisson_nb_vari,
   df_poisson_nb_bias_vari,
+  df_poisson_nb_vari,
   df_turtles_norm_bad,
   df_ranef_post_constant
 ) |> order_factors()
@@ -182,7 +196,7 @@ shared_theme <- NULL#theme(axis.text.x = element_text(angle = 90, hjust = 1, vju
 ```{r}
 #| fig-width: 7
 #| fig-height: 7
-all |> ggplot() + aes(
+p_ci_width <- all |> summarise_power() |> ggplot() + aes(
   x = scenario,
   y = mean_ci_width,
   ymin = mean_ci_width - sd_ci_width,
@@ -193,22 +207,52 @@ all |> ggplot() + aes(
   shared_theme + 
   scale_y_continuous("Mean 95% CI width +/- SD") +
   facet_wrap( ~ size, ncol = 1) + coord_flip()
+p_ci_width
 ```
 
 ```{r}
-all_correct |> ggplot(aes(x = scenario, y = power, ymin = power_low, ymax = power_high, color = type)) +
-  geom_hline(color = "orangered", yintercept = 0.05) +
-  geom_pointrange(position = position_dodge(width = 0.7), fatten = 1.5)  + 
-  scale_y_continuous(labels = scales::percent) + shared_theme + facet_wrap(~size) + coord_flip() +
-  theme(legend.position = "bottom")
+power_plot <- function(data, highlight = NULL, bayesT_p_limit = 0.05) {
+  if(is.null(highlight)) {
+    highlight_geom <- NULL
+  } else {
+    highlight_geom <- geom_hline(color = "orangered", yintercept = highlight) 
+  }
+  data |> summarise_power(bayesT_p_limit = bayesT_p_limit) |> ggplot(aes(
+    x = scenario,
+    y = power,
+    ymin = power_low,
+    ymax = power_high,
+    color = type
+  )) +
+    highlight_geom +
+    geom_pointrange(position = position_dodge(width = 0.7), fatten = 1.5)  +
+    scale_y_continuous(labels = scales::percent) + shared_theme + 
+    facet_wrap( ~ size) + coord_flip() +
+    theme(legend.position = "bottom")  
+}
+
+all_correct |> power_plot(highlight = 0.05)
 ```
 
 ```{r}
-all_bad |> ggplot(aes(x = scenario, y = power, ymin = power_low, ymax = power_high, color = type)) +
-  geom_pointrange(position = position_dodge(width = 0.7), fatten = 1.5)  + 
-  scale_y_continuous(labels = scales::percent) + shared_theme + facet_wrap(~size) + coord_flip() +
-  theme(legend.position = "bottom")
+all_bad |> power_plot()
+```
 
+```{r}
+BF <- 3
+limit <- 1/(BF + 1)
+p_bad <- all_bad |> power_plot(bayesT_p_limit = limit) + ggtitle("Power for detect miscalib", paste0("bayesT: BF > ", BF))
+p_correct <- all_correct |> power_plot(bayesT_p_limit = limit, highlight = 0.05) + ggtitle("False positives", paste0("bayesT: BF > ", BF))
+
+p_bad 
+p_correct
+
+saveRDS(file = file.path(cache_dir_top, "figs_power.rds"),
+        list(
+          bad = p_bad,
+          correct = p_correct,
+          ci_width = p_ci_width
+        ))
 ```
 
 

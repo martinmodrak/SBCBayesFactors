@@ -293,7 +293,33 @@ res_2_step_all <- do.call(bind_results, res_list)
 
 
 ```{r}
+summary(res_2_step_all)
+bad_maxiter <- res_2_step_all$warnings |> purrr::map_lgl(\(x) any(grepl("maxiter", x)))
+bad_divergent <- res_2_step_all$backend_diagnostics$n_divergent_H1 > 0 | res_2_step_all$backend_diagnostics$n_divergent_H1 > 0
+bad <- bad_maxiter | bad_divergent
+any(bad)
+sum(bad)
 res_2_step_all$stats
+```
+
+
+```{r}
+plot_ecdf_diff(res_2_step_all[bad])
+plot_ecdf_diff(res_2_step_all[!bad])
+
+```
+
+Message: you should not ignore warnings
+
+```{r}
+bp_2_step_all_bad <- binary_probabilities_from_stats(res_2_step_all[bad]$stats)
+bp_2_step_all_notbad <- binary_probabilities_from_stats(res_2_step_all[!bad]$stats)
+
+miscalibration_resampling_p(bp_2_step_all_bad$prob, bp_2_step_all_bad$simulated_value)
+miscalibration_resampling_p(bp_2_step_all_notbad$prob, bp_2_step_all_notbad$simulated_value)
+
+my_reliability_diag(bp_2_step_all_bad)
+my_reliability_diag(bp_2_step_all_notbad)
 ```
 
 
@@ -308,6 +334,23 @@ miscalibration_p
 
 reliabilitydiag::reliabilitydiag(x = bp_2_step_all$prob, y = bp_2_step_all$simulated_value)
 
+```
+
+```{r}
+split <- split_SBC_results_for_bf(res_2_step_all)
+plot_ecdf_diff(split$stats_H0)
+plot_ecdf_diff(split$stats_H1)
+```
+
+```{r}
+split <- split_SBC_results_for_bf(res_2_step_all[!bad])
+plot_ecdf_diff(split$stats_H0)
+plot_ecdf_diff(split$stats_H1)
+```
+
+```{r}
+mean(res_2_step_all$backend_diagnostics$n_divergent_H1 > 0)
+mean(res_2_step_all$backend_diagnostics$n_divergent_H0 > 0)
 ```
 
 

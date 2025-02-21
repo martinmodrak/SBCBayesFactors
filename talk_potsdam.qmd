@@ -4,6 +4,7 @@ subtitle: "Potsdam, 2025-02-20"
 html-math-method: mathjax
 format: 
   revealjs
+    
 ---
 
 ```{r setup}
@@ -65,7 +66,7 @@ This is _exactly_ continuous posterior calibration!
 ::: {.fragment}
 With random tie-breaking, this is _exactly_ binary posterior calibration
 
-High-powered tests for binary calibration available, current implementation of SBC loses power when ties are present
+Power(SBC) $\neq$ Power(Calibration)
 :::
 
 # SBC and DAP
@@ -81,6 +82,8 @@ SBC $\neq$ DAP
 # Counterexamples for DAP
 
  - Flip probabilities
+ - $\mathcal{M}_0 = \mathcal{M}_1$
+ - Compute something different
 
 # Counterexamples for both
 
@@ -106,11 +109,13 @@ SBC $\neq$ DAP
    - But this requires "simulating SBC with DAP", so not practical
 :::
 
+
 # Example - binary
 
 $$
 \begin{aligned}
-Y = \{0,1\}, \: \text{Pr}(y = 1 | \mathcal{M}_0) &= \frac{1}{3}, \: \text{Pr}(y = 1 | \mathcal{M}_1) = \frac{2}{3} \\
+Y = \{0,1\} \\
+\text{Pr}(y = 1 | \mathcal{M}_0) &= \frac{1}{3}, \: \text{Pr}(y = 1 | \mathcal{M}_1) = \frac{2}{3} \\
 \text{Pr}(\mathcal{M}_0) = \text{Pr}(\mathcal{M}_1) &= \frac{1}{2}
 \end{aligned}
 $$
@@ -130,15 +135,16 @@ plot_log_p_histories(hist_binary_flip$schad, "DAP - t-test")) + plot_annotation(
 
 $$
 \begin{aligned}
-\mathcal{M}_0: y_1,\dots,y_N &\sim \text{Poisson}(\lambda)\\
-\mathcal{M}_1: y_1,\dots,y_N &\sim \text{NB}_2(\lambda, \phi)\\
+\mathcal{M}_0: y_1,\dots,y_N &\sim \text{Poisson}(3)\\
+\mathcal{M}_1: y_1,\dots,y_N &\sim \text{NB}_2(3, 5)\\
 \text{Pr}(\mathcal{M}_0) &= \text{Pr}(\mathcal{M}_1) = \frac{1}{2}
 \end{aligned}
 $$
 
 
 # Poisson vs. NB
-## ignoring all data
+
+ignoring all data
 
 ```{r}
 #| fig-width: 7
@@ -153,6 +159,61 @@ plot_log_p_histories(hist_pnb_ignore_all$miscalibration, "Miscalibration") +
   plot_annotation(tag_levels = "A")
 ```
 
+# Poisson vs. NB
+
+ignoring half data
+
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+hist_pnb_ignore_half <- load_histories("pnb_ignore_half", "poisson_nb_example.qmd")
+plot_log_gamma_histories(hist_pnb_ignore_half$log_gamma) / (
+plot_log_p_histories(hist_pnb_ignore_half$miscalibration, "Miscalibration") + 
+plot_log_p_histories(hist_pnb_ignore_half$schad, "DAP - t-test")) + plot_annotation(tag_levels = "A")
+```
+
+# Poisson vs. NB
+
+unbiased noise in BF
+
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+hist_pnb_vari <- load_histories("pnb_vari", "poisson_nb_example.qmd")
+plot_log_gamma_histories(hist_pnb_vari$log_gamma) / (
+plot_log_p_histories(hist_pnb_vari$miscalibration, "Miscalibration") + 
+plot_log_p_histories(hist_pnb_vari$schad, "DAP - t-test")) + plot_annotation(tag_levels = "A")
+```
+
+# Poisson vs. NB
+
+bias in BF
+
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+hist_pnb_bias <- load_histories("pnb_bias", "poisson_nb_example.qmd")
+plot_log_gamma_histories(hist_pnb_bias$log_gamma) / (
+plot_log_p_histories(hist_pnb_bias$miscalibration, "Miscalibration") + 
+plot_log_p_histories(hist_pnb_bias$schad, "DAP - t-test")) + plot_annotation(tag_levels = "A")
+```
+
+# Poisson vs. NB
+
+bias + noise in BF
+
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+
+hist_pnb_bias_vari <- load_histories("pnb_bias_vari", "poisson_nb_example.qmd")
+plot_log_gamma_histories(hist_pnb_bias_vari$log_gamma) / (
+plot_log_p_histories(hist_pnb_bias_vari$miscalibration, "Miscalibration") + 
+plot_log_p_histories(hist_pnb_bias_vari$schad, "DAP - t-test")) + plot_annotation(tag_levels = "A")
+```
 
 # SBC and DAP summary
 
@@ -168,6 +229,36 @@ plot_log_p_histories(hist_pnb_ignore_all$miscalibration, "Miscalibration") +
  - Improper priors
  - Related to prequenial definition of Bayes factors / sequential updating
  - Need to compute BF and use that as a new prior (or tweak prior)
+ 
+# Post-SBC tweak prior
+
+We want:
+
+<!--
+$$
+P(\mathcal{M}_1 | y_1) = \frac{\pi_\text{marg}(y_1 | \mathcal{M}_1)  P(\mathcal{M}_1) }{ \pi_\text{marg}(y_1 | \mathcal{M}_1)  P(\mathcal{M}_1) + \pi_\text{marg}(y_1 | \mathcal{M}_0)  (1 - P(\mathcal{M}_1))} = t
+$$
+-->
+$$
+\begin{aligned}
+\frac{1}{2} &= P(\mathcal{M}_1 | y_1) = \\
+&= \frac{\pi_\text{marg}(y_1 | \mathcal{M}_1)  P(\mathcal{M}_1) }{ \pi_\text{marg}(y_1 | \mathcal{M}_1)  P(\mathcal{M}_1) + \pi_\text{marg}(y_1 | \mathcal{M}_0)  (1 - P(\mathcal{M}_1))}
+\end{aligned}
+$$
+
+::: {.fragment}
+Solve for $P(\mathcal{M}_1)$:
+
+<!-- $$ -->
+<!-- P(\mathcal{M}_1) =  \frac{ t \pi_\text{marg}(y_1 | \mathcal{M}_0)}{(1 - t)\pi_\text{marg}(y_1 | \mathcal{M}_1) + t\pi_\text{marg}(y_1 | \mathcal{M}_0)} -->
+<!-- $$ -->
+
+$$
+P(\mathcal{M}_1) =  \frac{ \pi_\text{marg}(y_1 | \mathcal{M}_0)}{\pi_\text{marg}(y_1 | \mathcal{M}_1) + \pi_\text{marg}(y_1 | \mathcal{M}_0)}
+$$
+
+:::
+
 
 # Example - ranef/lmbf
 
@@ -200,6 +291,24 @@ plot_log_p_histories(hist_ranef_constant$schad, "DAP - t-test")) + plot_annotati
  - Another way to overcome bad prior
  - Needs to be done on the whole model, not the submodels!
 
-# Minor quibbles
+
+# Testing DAP
  - Bayes t-test vs. normal t-test vs. non-parametric test
+
+```{r}
+p_power <- readRDS("cache/figs_power.rds")
+p_power$bad
+```
+
+# Testing DAP 
+
+```{r}
+p_power$correct
+```
+
+# Testing DAP
+
+```{r}
+p_power$ci_width
+```
 

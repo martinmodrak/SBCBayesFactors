@@ -46,7 +46,7 @@ test_func_DAP_gaffke <- function(probs, mu, B = 4000) {
    data.frame(p = gaffke_p_from_m(m, mu, B = B), ci_low = ci[1], ci_high = ci[2])
 }
 
-test_DAP_power <- function(probs, size, test_func, mu = 0.5, B = 5000) {
+test_DAP_power <- function(probs, size, test_func, mu = 0.5, B = 2000) {
    res_list <- future.apply::future_replicate(
      B,
      simplify = FALSE,
@@ -56,11 +56,5 @@ test_DAP_power <- function(probs, size, test_func, mu = 0.5, B = 5000) {
        test_func(probs = p_to_test, mu = mu)
    })
    res_df <- do.call(rbind, res_list)
-   res_df |> mutate(ci_low = pmax(ci_low, 0), ci_high = pmin(ci_high, 1),
-                    ci_width = ci_high - ci_low) |>
-     summarise(n_sims = n(),
-               power = mean(p <= 0.05, na.rm = TRUE),
-               power_low = qbeta(0.025, sum(p <= 0.05, na.rm = TRUE), sum(p > 0.05, na.rm = TRUE) + 1),
-               power_high = qbeta(0.025, sum(p <= 0.05, na.rm = TRUE) + 1, sum(p > 0.05, na.rm = TRUE)),
-               power_by_ci = mean(ci_low > mu | ci_high < mu),mean_ci_width = mean(ci_width), sd_ci_width = sd(ci_width))
+   res_df
 }
