@@ -40,6 +40,13 @@ format_t_test_diff <- function(t_res) {
 ```
 
 <!--
+Must have:
+- so far what you write makes sense but the structure could be cleaner. For example, it would be important to see which are our contributions in this paper? Where are we merly stateting what others did and where are we adding something? Either new methods or new insights on old methods
+- Consistent naming of methods in results (esp. Calibration vs. Miscalibartion vs. Binary Calibration)
+- perhaps put an extra x tick and label at the red line so we know for which number of sims we found, say, 95% power. If you like this idea, I would do it in every plot if possible
+- The turtles result is hard to follow
+- Intro to discussion, better structure
+
 Important: 
 - Maybe Savage-Dickey as example of failure?
 - Find a failure mode for bridgesampling/lmbf (turtles?!) 
@@ -71,7 +78,7 @@ A flexible method is bridgesampling, which can work with any set of samples. Spe
 Our main contribution is to employ an improved variant of simulation-based calibration checking  (SBC, Modrák et al.) and the accompanying theoretical progress for validating Bayes factor computation. We show a theoretical equivalence between SBC for Bayes factors and binary prediction calibration. Using several toy models, we demonstrate how problems in Bayes factor computation not detectable by previously reported methods can easily be detected by SBC. Finally, we turn to real-world problems and show examples of full validation workflow for bridgesampling over Stan models, compare efficiency of various checks in discovering errors in normalization constants and show that using posterior SBC (cite Vehtari, https://arxiv.org/abs/2408.06504) is necessary when checking Bayes factor computation under improper priors for some model parameters.
 
 <!-- TODO improve tone. Maybe also ask Daniel & Shravan about the paragraph -->
-Previously, Schad and co-authors have developed a workflow for validating Bayes factor computation inspired by SBC and applied it to several problems (cite workflow, aggregate, biased). Both the theoretical and practical contributions of this paper are partially a reaction to Schad et al.: from the theoretical side, we note that the Schad et al. approach differs importantly from SBC both as originally described (cite Talts) as well as our improved variant. In fact the Schad et al. approach is better understood as a check based on data-averaged posterior. We show that data-averaged posterior checks typically use simulation results inefficiently and are insensitive to large classes of potential problems. Additionally, due to incorrect implementation at least some of the cases where Schad (biased BF) claim incorrect Bayes factor computations are false positives and we show that the resulting Bayes factors are in fact calibrated to high precision.
+Previously, Schad and co-authors have developed a workflow for validating Bayes factor computation inspired by SBC and applied it to several problems (cite workflow, aggregate, biased). Both the theoretical and practical contributions of this paper are partially a reaction to Schad et al.: from the theoretical side, we note that the Schad et al. approach differs importantly from SBC both as originally described (cite Talts) as well as our improved variant. In fact the Schad et al. approach is better understood as a check based on data-averaged posterior. We show that data-averaged posterior checks typically use simulation results inefficiently and are insensitive to large classes of potential problems. Additionally, due to incorrect implementation at least some of the cases where Schad (biased BF) claim incorrect Bayes factor computations are false positives and we show that the resulting Bayes factors are in fact calibrated to high precision (full results reported in Appendix).
 
 We conclude the paper with recommendations for checking Bayes factor computation both when developing new statistical tools as well as a part of Bayesian workflow (following Gelman et al. workflow preprint). Full code to reproduce our finding can be found at https://github.com/martinmodrak/SBCBayesFactor/.
 
@@ -84,14 +91,14 @@ implies the following joint, marginal, and posterior densities:
 
 $$
 \begin{aligned}
-    \pi^i_\text{joint}(y, \theta) &= \pi^i_\text{obs}(y | \theta) \pi^i_\text{prior}(\theta)\\
-    \pi^i_\text{marg}\left(y \right) &= \int_\Theta \mathrm{d} \theta \: \pi^i_{\text{obs}}(y | \theta) \pi^i_\text{prior}(\theta)\\
-    \pi^i_\text{post}(\theta | y) &= \frac{\pi^i_\text{obs}(y | \theta) \pi^i_\text{prior}(\theta)}{\pi^i_\text{marg}\left(y \right)}.
+    \pi^i_\text{joint}(y, \theta) &= \pi^i_\text{obs}(y \mid  \theta) \pi^i_\text{prior}(\theta)\\
+    \pi^i_\text{marg}\left(y \right) &= \int_\Theta \mathrm{d} \theta \: \pi^i_{\text{obs}}(y \mid  \theta) \pi^i_\text{prior}(\theta)\\
+    \pi^i_\text{post}(\theta \mid  y) &= \frac{\pi^i_\text{obs}(y \mid  \theta) \pi^i_\text{prior}(\theta)}{\pi^i_\text{marg}\left(y \right)}.
 \end{aligned}
 $$
 
 When there is no risk of confusion we may omit the model index. We will also use
-$\pi^i_\text{marg}, \pi^i_\text{prior}, \pi^i_\text{obs}$ (without argument) to denote the distributions
+$\pi^i_\text{marg}, \pi^i_\text{prior}, \pi^i_\text{obs}(\theta)$ (omitting the first argument) to denote the distributions
 themselves. We will use $\phi_\text{post}$ and $\phi_\text{marg}$ to denote candidate
 densities that are not guaranteed to be correct.
 
@@ -104,7 +111,7 @@ probabilities of the models relative to the ratio of their prior probabilities:
 
 $$
 BF_{i,j} = \frac{ \pi^i_\text{marg}\left(y \right) }{\pi^j_\text{marg}\left(y \right)} = 
-\frac{\text{Pr}(\mathcal{M_i} | y)}{\text{Pr}(\mathcal{M_j} | y)} \frac{\text{Pr}(\mathcal{M_j})}{\text{Pr}(\mathcal{M_i})}
+\frac{\text{Pr}(\mathcal{M}_i \mid  y)}{\text{Pr}(\mathcal{M}_j \mid y)} \frac{\text{Pr}(\mathcal{M}_j)}{\text{Pr}(\mathcal{M}_i)}
 $$
 
 
@@ -112,7 +119,7 @@ $$
 
 Bayes factors are closely related to Bayesian model averaging (BMA). In BMA, we assume a
 supermodel for the data with observation space $Y$ and parameter space
-$\Xi = \{ (0, \theta_0 ) | \theta_0 \in \Theta_0\} \cup \dots \cup  \{ (K-1, \theta_{K-1} ) | \theta_{K-1} \in \Theta_{K-1}\}$
+$\Xi = \{ (0, \theta_0 ) \mid \theta_0 \in \Theta_0\} \cup \dots \cup  \{ (K-1, \theta_{K-1} ) \mid \theta_{K-1} \in \Theta_{K-1}\}$
 of the form:
 
 $$
@@ -123,25 +130,25 @@ y &\sim \pi_\text{obs}^i(\theta_i)
 \end{aligned}
 $$
 
-The posterior distribution $\pi_\text{BMA}(i | y)$ of the model index $i$ is then fully determined by the
+The posterior distribution $\pi_\text{BMA}(i \mid y)$ of the model index $i$ is then fully determined by the
 marginal distributions and vice versa:
 
 $$
-\text{Pr}(\mathcal{M}_i | y) = \pi_\text{BMA}(i | y) = \frac{\pi^i_\text{marg}(y)\text{Pr}(\mathcal{M}_i)}{\sum_{j=0}^{K - 1} \pi^j_\text{marg}(y)\text{Pr}(\mathcal{M}_j)}
+\text{Pr}(\mathcal{M}_i \mid y) = \pi_\text{BMA}(i \mid y) = \frac{\pi^i_\text{marg}(y)\text{Pr}(\mathcal{M}_i)}{\sum_{j=0}^{K - 1} \pi^j_\text{marg}(y)\text{Pr}(\mathcal{M}_j)}
 $$
 
 And finally the posterior distribution of any quantity of interest is obtained by weighing
 the predictions of the individual models, i.e. for any quantity $\Delta$:
 
 $$
-\pi_\text{BMA}(\Delta | y) = \sum_{i=0}^{K - 1} \pi^i_\text{post}(\Delta | y) \pi_\text{BMA}(i | y)
+\pi_\text{BMA}(\Delta \mid y) = \sum_{i=0}^{K - 1} \pi^i_\text{post}(\Delta \mid y) \pi_\text{BMA}(i \mid y)
 $$
 
 This weighted prediction is then typically the output of BMA. We further note that
 
 $$
-\frac{\pi_\text{BMA}(i | y)}{\pi_\text{BMA}(j | y)} = \frac{\text{Pr}(\mathcal{M}_i | y)}{\text{Pr}(\mathcal{M}_j | y)} = 
-\frac{\text{Pr}(y| \mathcal{M}_i) \text{Pr}(\mathcal{M}_i)}{\text{Pr}(y | \mathcal{M}_j) \text{Pr}(\mathcal{M}_j)}   =
+\frac{\pi_\text{BMA}(i \mid y)}{\pi_\text{BMA}(j \mid y)} = \frac{\text{Pr}(\mathcal{M}_i \mid y)}{\text{Pr}(\mathcal{M}_j \mid y)} = 
+\frac{\text{Pr}(y\mid \mathcal{M}_i) \text{Pr}(\mathcal{M}_i)}{\text{Pr}(y \mid \mathcal{M}_j) \text{Pr}(\mathcal{M}_j)}   =
 BF_{i,j}\frac{\text{Pr}(\mathcal{M}_i)}{\text{Pr}(\mathcal{M}_j)}
 $$
 
@@ -157,35 +164,36 @@ over infinitely many simulations.
 ### Bayes factors and prediction calibration
 
 There is a straightforward way to check the correctness of posterior model probabilities
-with respect to the BMA supermodel - whenever $\pi_\text{BMA}(i | y) = p$, the true model
+with respect to the BMA supermodel - whenever $\pi_\text{BMA}(i \mid y) = p$, the true model
 should be $\mathcal{M}_i$ in $p$ of the cases. I.e. that the predictions are calibrated.
 
-Formally, given a candidate density $\phi_\text{BMA}(i | y)$, denote the
+Formally, given a candidate (possibly incorrect) density $\phi_\text{BMA}(i \mid y)$, denote the
 set of datasets that give model $k$ probability $p$ as
-$\text{Pred}^\phi_{k, p} = \left\{y \in Y | \phi_\text{BMA}\left(k | y \right)  = p\right\}$.
+$\text{Pred}^\phi_{k, p} = \left\{y \in Y \mid \phi_\text{BMA}\left(k \mid y \right)  = p\right\}$.
 
-A candidate 
+<!-- TODO make this an actual definition -->
+A candidate density $\phi_\text{BMA}(i \mid y)$
 passes the *prediction calibration check* if:
 
 $$
 \forall p,k: 0\leq p \leq 1,  k \in \{0, \dots, K - 1\}:\\
- \text{Pr}(\mathcal{M}_k | y \in \text{Pred}^\phi_{k, p} ) = p 
+ \text{Pr}(\mathcal{M}_k \mid y \in \text{Pred}^\phi_{k, p} ) = p 
 $$
 whenever the left hand size is defined (i.e. there exists data $y$ within the support of the BMA supermodel for which $\phi$ predicts posterior probability $p$ for model $k$).
 
-This property can be empirically checked via simulations. For each $s \in {1, \dots, S}$ 
+This property can be empirically checked via simulations as follows: For each simulation $s \in {1, \dots, S}$ 
 we first choose the model according to model prior: $i_s \sim \text{Categorical}(\text{Pr}(\mathcal{M}_0), \dots, \text{Pr}(\mathcal{M}_{K - 1}) )$, then draw from the prior and observational 
-distribution to obtain $y_s \sim \pi^{i_s}_\text{marg}$ and compute $\phi_\text{BMA}(j | y_s)$ for
+distribution to obtain $y_s \sim \pi^{i_s}_\text{marg}$ and compute $\phi_\text{BMA}(j \mid y_s)$ for
 $j \in \{0, \dots, K - 1\}$.
 
 Especially for binary case ($K = 2$) there is a large number of available methods for
 checking prediction calibration (TODO survey, Dimitriadis) - the $K > 2$ case can then be handled by
 looking at the binary calibration of the top (highest probability) prediction or by
-looking at calibration of the predictions for model $i$ vs. all others for all $i$.
+looking at a set of $K$ binary calibrations of the probability of one model against all other models.
 
-Binary prediction calibration will however be satisfied even if
+Prediction calibration will however be satisfied even if
 $\phi_\text{BMA} \neq \pi_\text{BMA}$ --- most notably, the check is satisfied if we
-ignore the data $\phi(i | y) = \text{Pr}(\mathcal{M}_i)$ or do not use the data completely
+ignore the data $\phi(i \mid y) = \text{Pr}(\mathcal{M}_i)$ or do not use the data completely
 (see appendix for proofs).
 
 ### Bayesian model consistency via simulations
@@ -199,7 +207,7 @@ in general are found in the literature.
 SBC relies on the joint distribution of the prior and posterior samples
 
 $$
-\pi_\text{SBC}(y, \theta, \tilde\theta) = \pi_\text{prior}(\tilde\theta) \pi_\text{obs}(y | \tilde\theta) \pi_\text{post}(\theta | y)
+\pi_\text{SBC}(y, \theta, \tilde\theta) = \pi_\text{prior}(\tilde\theta) \pi_\text{obs}(y \mid \tilde\theta) \pi_\text{post}(\theta \mid y)
 $$
 
 we then obtain that conditional on $y$, the $\tilde\theta$ and $\theta$ are exchangeable,
@@ -238,7 +246,7 @@ More generally for any model over data space $Y$ and parameter space $\Theta$ an
 w.r.t $f$ if and only if:
 
 $$
-\forall p: \text{Pr}\left(f(\theta, y) = 1 | \int_\Theta \: \text{d}\theta \: f(\theta, y)\phi(\theta | y) = p\right) = p
+\forall p: \text{Pr}\left(f(\theta, y) = 1 \mid \int_\Theta \: \text{d}\theta \: f(\theta, y)\phi(\theta \mid y) = p\right) = p
 $$
 whenever the left-hand side is defined (i.e. there is $y$ in the support of $\pi_\text{marg}$ for which $\phi$ predicts that the expected value for $f$ is $p$).
 See Appendix for proof.
@@ -247,7 +255,7 @@ Despite the two checks having the same properties in theory for $K = 2$ (which h
 
 
 
-When $K \geq 2$, we can still run SBC for the model index and discover problems. One relevant result from Modrák et al. is that in this case, changing the order of the submodels can result in different $\phi$ passing the SBC check. However, in practice examples when a miscalibration is detected only when we reorder a variable are hard to find.
+When $K \geq 2$, we can still run SBC for the model index and discover many potential problems, although the equivalence between SBC and prediction calibration will no longer hold. One relevant result from Modrák et al. is that in this case, changing the order of the submodels can result in different $\phi$ passing the SBC check. However, in practice examples when a miscalibration is detected only when we reorder a variable are hard to find.
 
 <!-- Even more generally, SBC has to pass (and calibration has to hold) also for any subset of
 of $Y$.-->
@@ -257,7 +265,7 @@ An important property of SBC is that by allowing test quantity $f$ to depend on 
 can in principle detect any mismatch between $\phi_\text{post}$ and $\pi_\text{post}$ ---
 we only need a suitable test quantity that is sensitive to the problem at hand. Modrák et
 al. provide theoretical and empirical evidence that the likelihood
-$f(\theta, y) = \pi_\text{obs}(y | \theta)$ is often highly sensitive in that regard.
+$f(\theta, y) = \pi_\text{obs}(y \mid \theta)$ is often highly sensitive in that regard.
 Applying that to the BMA supermodel, SBC can in principle detect any problem in Bayes
 factor computation. [Yao & Domke (2023)](https://proceedings.neurips.cc/paper_files/paper/2023/hash/7103cd82de95a7b30983fcf74ba499ac-Abstract-Conference.html) show that instead of choosing specific test quantities, we can train a classifier that tries to distinguish prior and posterior draws and this allows sensitivity to any type of problem without explicitly constructing a test quantity. Unfortunately, this comes at a price of requiring a potentially very large number of simulations. There are also other checks following similar ideas, which are reviewed in Modrák et al.
 
@@ -276,7 +284,7 @@ even a very good prior will result in most simulated datasets being very unlike
 the dataset we are interested in, making us less likely to notice potential problems
 that manifest only in the particular region of data space.
 
-All three problems can be overcome with *posterior SBC* (cite Aki's new preprint).
+All three problems can be overcome with *posterior SBC* (cite Aki's new preprint, Paul).
 
 The overall idea of posterior SBC is to fit the model to a well chosen dataset(s) and treat
 the resulting posterior(s) as the prior for simulations. More formally, if 
@@ -285,18 +293,18 @@ we can construct a new model $\bar\pi$ such that:
 
 $$
 \begin{aligned}
-\bar\pi_\text{prior}(\theta) &=  \pi_\text{post}(\theta | y_1) \\
-\bar\pi_\text{post}(\theta | y_2) &= \pi_\text{post}(\theta | (y_1, y_2)) \\
+\bar\pi_\text{prior}(\theta) &=  \pi_\text{post}(\theta \mid y_1) \\
+\bar\pi_\text{post}(\theta \mid y_2) &= \pi_\text{post}(\theta \mid (y_1, y_2)) \\
 \end{aligned}
 $$
 
 We can then simulate from $\bar\pi_\text{prior}$ by fitting $\pi$ to $y_1$ and 
-taking draws from $\pi_\text{post}(\theta|y_1)$. We may then use this parameter draw
+taking draws from $\pi_\text{post}(\theta\midy_1)$. We may then use this parameter draw
 to simulate $y_2$ from $\pi_\text{obs}$ and fit $\pi$ to the whole
 dataset $(y_1,y_2)$. 
-This setup can be generalized further by replacing the single fixed $y_1$ with a distribution $g$ over possible $y_1$, so we have $\bar\pi_\text{prior}(\theta) \int_{Y_1} \text{d}y_1 \: g(y_1)  \pi_\text{post}(\theta | y_1)$.
+This setup can be generalized further by replacing the single fixed $y_1$ with a distribution $g$ over possible $y_1$, so we have $\bar\pi_\text{prior}(\theta) \int_{Y_1} \text{d}y_1 \: g(y_1)  \pi_\text{post}(\theta \mid y_1)$. The overall idea bears is similar, but distinct to fractional Bayes factors (https://doi.org/10.1111/j.2517-6161.1995.tb02017.x)
 
-To check computation for models with improper priors, we need to choose $y_1$ such that $\pi_\text{post}(\theta | y_1)$ is proper and amenable to sampling. 
+To check computation for models with improper priors, we need to choose $y_1$ such that $\pi_\text{post}(\theta \mid y_1)$ is proper and amenable to sampling. 
 To provide a better prior, we take the distribution $g$ as representing prior beliefs about the data (which tend to be easier to elicit than
 priors on parameters (cite Paul).
 To target an SBC check
@@ -304,20 +312,25 @@ to a specific dataset, we may take a suitable portion of the dataset as fixed $y
 subsampling distribution of the dataset.
 
 To use posterior SBC with Bayes factors, we need to compute the implied prior for 
-the parameters of both models, but we also need the new prior for the model index $\bar\pi_\text{BMA}(i|y_1)$. 
+the parameters of both models, but we also need the new prior for the model index $\bar\pi_\text{BMA}(i\midy_1)$. 
 Another important factor in choosing $y_1$ thus needs to be that it does not produce too extreme implied prior probability for any 
 of the models under consideration.
 
 Alternatively, we can tweak the
-original prior probability, to get uniform distribution in the implied prior, i.e. choose $Pr(\mathcal{M}_k)$ such that $\bar\pi_\text{BMA}(i|y_1) = \frac{1}{K}$.
+original prior probability, to get uniform distribution in the implied prior, i.e. choose $\mbox{Pr}(\mathcal{M}_k)$ such that $\bar\pi_\text{BMA}(i\mid y_1) = \frac{1}{K}$. This is achieved by setting
 
+$$
+\mbox{Pr}(\mathcal{M}_k) \propto \prod_{i \neq k}\pi_\text{marg}^i(y_1).
+$$
+
+When $K = 2$ this simplifies to $\mbox{Pr}(\mathcal{M}_0) = \frac{\pi^0_\text{marg}(y_1)}{\pi^0_\text{marg}(y_1) + \pi^1_\text{marg}(y_1)}$.
 
 #### Data-averaged posterior
 
 Another set of approaches is based on the fact that data-averaged posterior should equal the prior:
 
 $$
-\forall \theta: \pi_\text{prior}(\theta) = \int_Y \mathrm{d} y \: \phi_\text{post}(\theta |y)\int_\Theta \mathrm{d}\tilde\theta  \:  \pi_\text{obs}(y | \tilde\theta) \pi_\text{prior}(\tilde \theta)
+\forall \theta: \pi_\text{prior}(\theta) = \int_Y \mathrm{d} y \: \phi_\text{post}(\theta \mid y )\int_\Theta \mathrm{d}\tilde\theta  \:  \pi_\text{obs}(y \mid  \tilde\theta) \pi_\text{prior}(\tilde \theta)
 $$
 
 Which once again can be tested by fitting the model to datasets simulated from the prior and observational model. This method traces back to Geweke 2004 who originally proposed building a sampler that directly samples the data-averaged posterior in a single chain.
@@ -326,6 +339,7 @@ $f: \Theta \to \mathbb{R}$ as there are practical tests for (in)equality of arbi
 Alternatively, we can compare the moments of the full prior to the moments of the full
 data-averaged posterior (cite).
 
+<!-- TODO: tone -->
 The method proposed to test Bayes factor computation in Schad et al. is called SBC, but it in fact consists of checking the data-averaged posterior criterion for the model
 index in the BMA supermodel (i.e. with $f: \Theta_\text{BMA} \to \{0, \ldots K - 1\}$ and
 $\forall (i, \theta_i) \in \Theta_\text{BMA}: f((i, \theta_i)) = i$), although they always
@@ -401,13 +415,13 @@ It notes that the expected Bayes factor in favor of the wrong hypothesis is 1, i
 
 
 $$
-\mathbb{E}(BF_{0,1} | \mathcal{M}_1) = 1
+\mathbb{E}(BF_{0,1} \mid  \mathcal{M}_1) = 1
 $$
 
-which is a special case of a more general identity:
+which is a special case of a more general identity for moments of Bayes factors:
 
 $$
-\forall k \in \mathbb{N}:\mathbb{E}(BF^{k + 1}_{0,1} | \mathcal{M}_1) = \mathbb{E}(BF^k_{0,1} | \mathcal{M}_0)
+\forall k \in \mathbb{N}:\mathbb{E}(BF^{k + 1}_{0,1} \mid  \mathcal{M}_1) = \mathbb{E}(BF^k_{0,1} \mid  \mathcal{M}_0)
 $$
 
 Sekulovski et al. recommend empirical testing of the identity for $k = 0$ and $k = 1$ via simulations.
@@ -425,7 +439,8 @@ $$
 \end{split}
 $$
 
-In this case, $\mathbb{Var}(BF_{0,1} | \mathcal{M}_1)$ is undefined. This is admittedly a bit extreme, most models do not feature Cauchy marginal data distributions. So let's assume that for a fixed, known $\mu$ we instead have $\mathcal{M}_0: y \sim \text{N}(\mu, 1)$. Then we have $\mathbb{Var}(BF_{0,1} | \mathcal{M}_1) = \mathbb{Var}(BF_{1,0} | \mathcal{M}_0) = \exp\left(\mu^2\right) - 1$, so e.g. already for $\mu = 2$ we need over 5 000 simulations just to bring the standard error of the mean below $\frac{1}{10}$. See appendix for full calculation.
+In this case, $\mathrm{Var}(BF_{0,1} \mid  \mathcal{M}_1)$ is undefined. This is admittedly a bit extreme, most models do not feature Cauchy marginal data distributions. So let's assume that for a fixed, known $\mu$ we instead have $\mathcal{M}_0: y \sim \text{N}(\mu, 1)$. Then we have $\mathbb{Var}(BF_{0,1} \mid  \mathcal{M}_1) = \mathbb{Var}(BF_{1,0} \mid  \mathcal{M}_0) = \exp\left(\mu^2\right) - 1$, so e.g. already for $\mu = 2$ we need over 5 000 simulations just to bring the standard error of the mean below $\frac{1}{10}$. This is despite both
+marginal data distributions being well behaved and having substantial overlap. See appendix for full calculation.
 
 The absence of any bound on variance of the estimate explains the lack of convergence for some cases 
 and slow convergence for others as reported by Sekulovski et al. It also prevents
@@ -440,24 +455,27 @@ For those reasons, we will not evaluate the Good check further in this paper.
 ## Evaluation methods
 
 The fact that a check can recognize an incorrectly computed Bayes factor/marginal
-likelihood/posterior model probability in principle does not mean it can reliably
-recognize the problem in practice. We run simulation studies to show the power of various
+likelihood/posterior model probability in the limit of infinitely many simulations
+and infinitely precise computation does not mean it can reliably
+recognize the problem with finite computational resources. We run simulation studies to show the power of various
 approaches to detect specific discrepancies.
 
 We simulate $i$ and then $\theta_i$ and $y$ from the corresponding model. In all
-simulations we assume uniform prior over models. To investigate how the various test
-statistics evolve over time, we randomly sample 100 histories of the same length from the
-simulations (there are always at least 10 times more simulations than the length of a
-single history under investigation).
+simulations we assume uniform prior over models. This is without loss of generality as 
+correct results depend on the correctness of the Bayes factor computation, which in turn
+allows us to compute results for any prior. 
+To investigate both the overall trend and variability of the evolution of the test
+statistics as the number of simulations increase, we take our pool of simulations and randomly sample 100 sets of the same size --- each set representing a possible "history". We then compute the
+test statistic at equally-spaced points in the history. The pool always contains at least 10 times more simulations than the length of a single history under investigation.
 
-For the data-averaged posterior we use the standard t-test and --- to compare to
-the work of Schad et al. --- we also used the Bayesian t-test. We set the scale parameter for the 
-alternative hypothesis to the sd of uniform distribution over $[0,1]$.
-For prediction calibration, we use the bootstrap-based miscalibration test based on
+For the data-averaged posterior we use the p-value from a standard t-test.
+For prediction calibration, we use the p-value from the bootstrap-based miscalibration test described in
 [Dimitriadis, Gneiting, Jordan (2021)](https://doi.org/10.1073/pnas.2016191118).
 
-For SBC we use the gamma statistic of Saailnoya (also used in Modrák et al.) - this cannot
-be easily turned into a p-value, so instead we report the log of the ratio of the
+For SBC we use the gamma statistic of Saailnoya (also used in Modrák et al.). 
+Saailnoya report a method to evaluate quantiles of the distribution under the null, but
+no efficient method to evaluate it's CDF is available and so we cannot directly compute a p-value.
+Instead we report the log of the ratio of the
 statistic, to its 5th percentile under the null (i.e. log ratio $< 0 \implies p < 0.05$).
 
 ## Toy examples
@@ -468,24 +486,24 @@ First, let us start with a comparison of two extremely simple models with no par
 ($\theta_0 = \theta_1 = \emptyset$):
 
 $$
-Y = \{0,1\}, \: \text{Pr}(y = 1 | \mathcal{M}_0) = \frac{1}{5}, \: \text{Pr}(y = 1 | \mathcal{M}_1) = \frac{4}{5}\\
+Y = \{0,1\}, \ \ \text{Pr}(y = 1 \mid  \mathcal{M}_0) = \frac{1}{5}, \ \  \text{Pr}(y = 1 \mid  \mathcal{M}_1) = \frac{4}{5}\\
 \text{Pr}(\mathcal{M}_0) = \text{Pr}(\mathcal{M}_1) = \frac{1}{2}
 $$
 
-Any candidate posterior can be described just by two numbers
-$\phi_\text{BMA}(\mathcal{M}_1 | Y = y) = b_y$. Analytically, we can show that
+Any candidate posterior can be described just by two numbers $b_0 = \phi_\text{BMA}(\mathcal{M}_1 \mid  Y = 0)$ and
+$b_1 = \phi_\text{BMA}(\mathcal{M}_1 \mid  Y = 1)$. Analytically, we can show that
 $\phi_\text{BMA}$ will satisfy the data-averaged posterior criterion if and only if
 $b_0 + b_1 = 1$, i.e. allowing infinitely many wrong Bayes factors, including assigning
 100% probability to the wrong model or having
-$\phi_\text{BMA}(\mathcal{M}_1 | Y = 0) = 1 - \pi_\text{BMA}( \mathcal{M}_1 | Y = 0)$. To
+$\phi_\text{BMA}(\mathcal{M}_1 \mid  Y = 0) = 1 - \pi_\text{BMA}( \mathcal{M}_1 \mid  Y = 0)$. To
 be specific the data-averaged posterior criterion for this model is:
 
 $$
-\forall i \in \{0,1\}: \text{Pr}(\mathcal{M}_i) = \sum_{y=0}^1  \phi_\text{BMA}(i | Y = y) \sum_{k=0}^1 \text{Pr}(y | \mathcal{M}_k) \text{Pr}(\mathcal{M}_k)
+\forall i \in \{0,1\}: \text{Pr}(\mathcal{M}_i) = \sum_{y=0}^1  \phi_\text{BMA}(i \mid  Y = y) \sum_{k=0}^1 \text{Pr}(y \mid  \mathcal{M}_k) \text{Pr}(\mathcal{M}_k)
 $$
 
 We note that averaged over the models, both values of $y$ are equally likely, i.e.
-$\sum_{k=0}^1 \text{Pr}(y | \mathcal{M}_k) \text{Pr}(\mathcal{M}_k) = \frac{1}{2}$
+$\sum_{k=0}^1 \text{Pr}(y \mid  \mathcal{M}_k) \text{Pr}(\mathcal{M}_k) = \frac{1}{2}$
 
 $$
 \frac{1}{2} = \frac{1}{2} \sum_{y=0}^1  b_y \wedge
@@ -514,11 +532,16 @@ expected random behavior and only rarely drop below the relevant thresholds (@fi
 
 hist_binary_correct <- load_histories("binary_correct", "binary_example.qmd")
 
+tag_theme <- theme(plot.tag.location = "plot", plot.tag.position = c(0, 1.01), plot.tag = element_text(hjust = 0))
+
 scale_x_correct <- scale_x_continuous("Number of simulations", breaks = c(0,500,1000))
-(plot_log_gamma_histories(hist_binary_correct$log_gamma) + scale_x_correct | 
-plot_log_p_histories(hist_binary_correct$miscalibration, "Calibration") + scale_x_correct | 
-plot_log_p_histories(hist_binary_correct$schad, "DAP - Schad et al.") + scale_x_correct) + plot_annotation(tag_levels = "A") + plot_layout(widths = c(2,1,1), axis_titles = "collect_x")
+
+(plot_log_gamma_histories(hist_binary_correct$log_gamma) + scale_x_correct + labs(tag = "A) SBC") + tag_theme | 
+plot_log_p_histories(hist_binary_correct$miscalibration, "Calibration") + scale_x_correct + labs(tag = "B) Calibration") + tag_theme | 
+plot_log_p_histories(hist_binary_correct$schad, "DAP - Schad et al.") + scale_x_correct + labs(tag = "C) DAP") + tag_theme)   + plot_layout(widths = c(2,1,1), axis_titles = "collect_x")
 ```
+
+<!-- Redo tags in other plots -->
 
 However, if we compute the Bayes factors as if the probabilities were flipped
 (i.e. computing the inverse of the true Bayes factor), the problem is immediately flagged by all tests except for data-averaged posterior (@fig-binary-flipped). This model is however somewhat artificial - only two possible Bayes factor values, let us
@@ -552,6 +575,10 @@ $$
 In our experiments we used $N = 25$ as this makes the observed posterior probabilities of models values cover the full $[0,1]$ interval. In that setting, the correct BF is just the likelihood ratio of the
 two models.
 
+<!-- Paul: I think this needs elaboration how exactly this data-dependent quantity is computed within the SBC workflow 
+Martin: I am unsure how to do that here... we explain test quantities in the intro to SBC and so
+we would need to repeat a lot of stuff here...
+-->
 Beyond the model index, we use two derived quantities in SBC, one is the log-likelihood,
 second is an estimate of variance, specifically
 $f(i, y) = \begin{cases}\text{Mean}(y) & i = 0 \\ \text{Var}(y) & i = 1 \end{cases}$ ---
@@ -671,7 +698,7 @@ n_sims_turtles_post_half <- turtles_post_half_test$t$parameter + 1
 We perform two checks --- for one we use standard SBC and $N = 70, G = 10$ (this keeps the distribution of observed BFs reasonably wide) and simulate the $x_i \sim N(0, \frac{1}{3})$.
 Due to the relatively wide priors on parameters, this tends to produce a substantial number of datasets where $y_i$ has zero or very little variance.
 This can be overcome by rejection sampling --- as in any other Bayesian inference problem, selectively removing datasets based on properties of $y$ does not change the posterior at all as long as we always take a new draw from the prior for the next dataset. So we remove all datasets (and the associated prior draws) where $\text{Avg}(y) < \frac{1}{10}$ or $\text{Avg}(y) > \frac{9}{10}$.
-We note that to keep SBC valid those rejections must be done for the whole BMA model, not when simulating each model individually^[The first author of this paper has spent an embarrassing amount of time tracking down the source apparent miscalibration in this model when the problem actually stemmed from rejecting datasets from each submodel separately. This illustrates the importance of trying to understand _why_ a model is calibrated before claiming there is a problem in computations.]. 
+We note that to keep SBC valid those rejections must be done for the whole BMA model, not when simulating each model individually^[The first author of this paper has spent an embarrassing amount of time tracking down the source an apparent miscalibration in this model when the problem actually stemmed from rejecting datasets from each submodel separately. This illustrates the importance of trying to understand _why_ a model is calibrated before claiming there is a problem in computations.]. 
 While rejections don't impact the posterior, they change the implied prior and since we now no longer have a known prior distribution, we must change the data-averaged posterior check to a two-sample test for equality of means between the true values for the non-rejected datasets. This test needs to allow for different variance in both samples as one is binary and the other is continuous. In this example, rejections change the implied prior to $P(\mathcal{M}_1) \simeq `r round(implied_prior_rejection, 2)`$ and after running `r format(n_sims_turtles, big.mark = " ")` we obtain gamma statistics in the range TODO (95% CI around the null = TODO), binary miscalibration of TODO (95% CI around the null = TODO) and 95% CI for the difference between prior and data-averaged posterior mean for the model index of `r turtles_ci_diff`.
 
 
@@ -682,7 +709,7 @@ data for the remaining groups.
 
 We could use the implied model probability 
 as prior for the model index, but to show an alternative, we can also choose $P(M_1) \simeq `r round(turtles_post_half_test$prob1_tweaked_prior,2)`$,
-which results in $P(M_1|y_1) = \frac{1}{2}$ and so our simulations will be more balanced --- this new $P(M_1)$
+which results in $P(M_1\mid y_1) = \frac{1}{2}$ and so our simulations will be more balanced --- this new $P(M_1)$
 is then used when converting the computed Bayes factor into posterior model probability for calibration checks.
 After running `r format(n_sims_turtles_post_half, big.mark = " ")` simulations we obtain gamma statistics in the range TODO (95% CI around the null = TODO), binary miscalibration of TODO (95% CI around the null = TODO) and 95% CI for the difference between prior and data-averaged posterior mean for the model index of `r turtles_ci_diff`.
 
@@ -700,10 +727,10 @@ This is quickly picked up by all checks, with binary calibration and data-averag
 ### Posterior SBC and the importance of using correct priors
 
 When our models use improper priors for some parameters, it may be tempting to 
-use a fixed value of $\mu$ and $\sigma^2$ or draw them from some
-surrogate distribution. In this case however, the assumptions of all of the consistency
+use a fixed value or draw the affected parameters from some
+surrogate prior distribution. In this case however, the assumptions of all of the consistency
 criteria do not hold. And indeed, we see violations of all
-checks.
+checks (see below).
 
 Problems are largest when a parameter with improper prior interacts with some parameter of
 actual interest. A practically highly relevant example is the interaction of the prior on
@@ -721,7 +748,7 @@ y_i &\sim  N(\alpha + \beta x_{i} + \gamma_{g_i}, \sigma),  &i = 1,2,\ldots,N\\
 \gamma_j &\sim N\left(0, \frac{\sqrt{2}}{4}\sigma \sqrt{\tau} \right), &j = 1,2,\ldots, G \\
 \tau &\sim \text{InvGamma}\left(\frac{1}{2},\frac{1}{2} \right),\\
 \beta &\sim N\left(0, \frac{\sqrt{2}}{4} \sigma \right),\\
-\pi_\text{prior}(\alpha_0, \sigma^2) &= \frac{1}{\sigma^2}.
+\pi_\text{prior}(\alpha, \sigma^2) &= \frac{1}{\sigma^2}.
 \end{aligned}
 $$
 
@@ -741,8 +768,8 @@ If we choose the overall intercept and residual standard deviation as fixed cons
 (here $\alpha = 0, \sigma = 1$) we obtain an apparent miscalibration
 for both the model index and all the individual random effect parameters (see
 @fig-ranef-constant). In this case the problem is the most quickly picked up by the
-binary scalibration test with data-averaged posterior and SBC for the model index following very quickly. However
-this is a false positive. Employing posterior SBC using $y_1$ as a dataset with 4 groups and 3 observations each (to make all
+binary calibration test with data-averaged posterior and SBC for the model index following very quickly. However
+this is a false positive due to the mismatch between the simulator (assuming constant $\alpha, \sigma$) and the model. Employing posterior SBC using a dataset with 4 groups and 3 observations each as $y_1$ (to make all
 parameters well identified for sampling) produces a proper prior for the mean
 and intercept and results in perfect calibration in all methods even after running `r format(n_ranef_sims, big.mark = " ")`
 simulations (@fig-ranef-post, miscalibration p `r format_p(ranef_test$miscalibration_p)`,
@@ -768,12 +795,15 @@ reliabilitydiag_post <- my_reliability_diag(bp_post)
 ((ecdf_ranef_post + theme(legend.position = "bottom")) | reliabilitydiag_post) + plot_layout(widths = c(2,1)) + plot_annotation(tag_levels = "A")
 ```
 
+<!--
 TODO: here we might want to also compare BFs calculated assuming standard improper prior
 vs. some weakly informative prior on intercept + sigma for the same set of datasets. I'd
 expect it will turn out to have noticeable effect despite a pretty common recommendation
 that priors on shared parameters don't matter that much. But maybe that's too tangential
 for this paper?
 
+Paul agrees its tangential
+-->
 The previous example is the simplest setting we discovered where we obtain apparent
 strong miscalibration due to improper priors for shared parameters, however, the problem
 subtly affects even much simpler settings.
@@ -831,46 +861,11 @@ derived quantities. So we conclude that the `ttest` function in fact works well 
 the above miscalibrations are simply a result of not matching the simulations to
 the model.
 
-### Schad & Vasishth 2024
-
-[Schad & Vasishth (2024)](https://arxiv.org/pdf/2406.08022v1) apply their
-method based on data-averaged posterior to show that in some settings Bayes factors from
-popular packages are biased. In particular, they claim there is bias in "2x2 repeated 
-measures design with crossed random effects for subjects and items" using both the `BayesFactor` package
-as well as `bridgesampling` with `brms` fits. 
-
-Unfortunately, their work has multiple problems making their conclusions invalid.
-The authors only shared their code for the `bridgsampling` case, but it is plausible
-the same problems appear in the results for the `BayesFactor` package as the reported 
-miscalibration is very similar in both cases.
-
-Most importantly Schad & Vasishth simulate from either a full model or a model where three coefficients 
-are zero, but then compute BF for three different hypotheses, each testing whether a single coefficient is zero.
-Additionally, they treat several variance parameters of random effects as fixed in simulation
-but treat them as unknown parameters in the model and there is a bug in their use of the LKJ prior 
-for random effect correlations. 
-
-```{r}
-schad <- load_precomputed_file(here::here("cache/schad_fixed_stats.rds"), "schad_biased_bf_fixed.qmd")
-n_schad_sim <- schad$t$parameter["df"] + 1
-schad_ci_diff <- format_t_test_diff(schad$t)
-```
-
-
-Using their simulation code for the `bridgesampling` case, fixing the bugs
-and matching the model to the simulation code we obtain calibrated Bayes factors. We have run `r format(n_schad_sim, big.mark  = " ")` simulations (some were removed due to problems sampling) and obtained miscalibration `r format_p(schad$miscalibration_p)` (95% CI under the null = TODO), 95% CI for data-averaged posterior difference from expected mean `r schad_ci_diff` and no problem in SBC for any quantity.
-
-Similar problems affect also the situations where they claim the Bayes factors are calibrated.
-Further
-they handle the improper priors
-used in the methods from `BayesFactor` package by taking a fixed value for the parameter, which --- as we have shown ---
-can result in invalid checks. When we reran simulations with a more careful checks we however did not
-uncover any additional problems.
-
-We are in contact with the preprint authors and we are collaborating on an updated version addressing the issues.
 
 
 ## Discussion
+
+
 
 While there are cases where data-averaged posterior performs somewhat better than SBC/prediction calibration,
 it also fails catastrophically in many examples where SBC and prediction calibration work. 
@@ -930,14 +925,14 @@ A possible future work is improving SBC to match the performance of miscalibrati
 
 ### Proofs and theory
 
-We will denote the integral of $f(x)$ w.r.t.\ $x$ over domain $X$ as $\int_X \mathrm{d}x \: f(x)$. $\mathbb{I}[P]$ is the indicator function for a given predicate $P$. When a function can be understood as describing a conditional probability distribution, we will use $|$ to separate the function arguments we condition on. This is only to assist comprehension and has the same semantic meaning as using a comma.
+We will denote the integral of $f(x)$ w.r.t.\ $x$ over domain $X$ as $\int_X \mathrm{d}x \: f(x)$. $\mathbb{I}[P]$ is the indicator function for a given predicate $P$. When a function can be understood as describing a conditional probability distribution, we will use $\mid $ to separate the function arguments we condition on. This is only to assist comprehension and has the same semantic meaning as using a comma.
 
 Unless noted otherwise, all definitions and proofs implicitly assume a single model $\pi$ is given.
 
 <!-- \begin{definition}[Posterior family] Given a data space $Y$ and a parameter space $\Theta$, a \emph{posterior family} $\phi$ assigns a normalized posterior density to each possible $y \in Y$. I.e. posterior family is a function $\phi : \Theta \times Y  \rightarrow  \mathbb{R^{+}}$ such that -->
 <!-- % -->
 <!-- \begin{equation*} -->
-<!-- \forall y: \int \mathrm{d}\theta \:\phi(\theta | y) = 1. -->
+<!-- \forall y: \int \mathrm{d}\theta \:\phi(\theta \mid  y) = 1. -->
 <!-- \end{equation*} -->
 <!-- % -->
 <!-- For each $y$, we will denote the implied distribution over $\Theta$ as $\phi_y$.  -->
@@ -958,10 +953,10 @@ $f: \Theta \times Y \to \{0,1\}$ if
 
 $$
 \forall p: 0\leq p \leq 1:\\
- \text{Pr}\left(f(\theta, y) = 1 | \int_\Theta \: \text{d}\theta \: f(\theta, y)\phi(\theta | y) = p \right) = p 
+ \text{Pr}\left(f(\theta, y) = 1 \mid  \int_\Theta \: \text{d}\theta \: f(\theta, y)\phi(\theta \mid  y) = p \right) = p 
 $$
 
-wherever the left-hand side is well-defined (i.e. when there are $y \in Y$ such that $\int_\Theta \: \text{d}\theta \: f(\theta, y)\phi(\theta | y) = p$)
+wherever the left-hand side is well-defined (i.e. when there are $y \in Y$ such that $\int_\Theta \: \text{d}\theta \: f(\theta, y)\phi(\theta \mid  y) = p$)
 
 We note that for BMA supermodel with two submodels the definition is equivalent to the prediction calibration for the model index.
 
@@ -974,21 +969,21 @@ posterior CDF, not just samples.
 
 
 **Definition:** (Continuous rank CDF, continuous $q$, continuous SBC)
-We first define fitted CDF: $C_{\phi,f}: \bar{\mathbb{R}}\times Y\to [0,1]$, $C_{\phi,f}(s | y) := \int_{\Theta}\mathrm{d}\theta\,\mathbb{I}\left[f\left(\theta, y \right) \leq s\right]\phi\left(\theta| y\right)$ and fitted tie probability: $D_{\phi,f}: \bar{\mathbb{R}}\times Y\to [0,1]$, 
-    $D_{\phi,f}(s | y) := \int_\Theta \mathrm{d}\theta \: \phi(\theta | y) \mathbb{I}\left[ f(\theta, y) = s \right]$
+We first define fitted CDF: $C_{\phi,f}: \bar{\mathbb{R}}\times Y\to [0,1]$, $C_{\phi,f}(s \mid  y) := \int_{\Theta}\mathrm{d}\theta\,\mathbb{I}\left[f\left(\theta, y \right) \leq s\right]\phi\left(\theta\mid  y\right)$ and fitted tie probability: $D_{\phi,f}: \bar{\mathbb{R}}\times Y\to [0,1]$, 
+    $D_{\phi,f}(s \mid  y) := \int_\Theta \mathrm{d}\theta \: \phi(\theta \mid  y) \mathbb{I}\left[ f(\theta, y) = s \right]$
 
 We then define the \emph{continuous } $q: [0,1] \times Y \to [0,1]$ as
 
 <!-- $$ -->
-<!-- q_{\phi,f}(x|y) :=  -->
-<!-- \int_\Theta \mathrm{d} \tilde\theta \: \pi_\text{post}(\tilde\theta | y) \mathrm{Pr}\left(C_{\phi,f} \left(f \left(\left.\tilde\theta, y \right) \right| y \right) - U D_{\phi,f} \left(f \left(\left.\tilde\theta, y \right) \right| y \right) \leq x\right), -->
+<!-- q_{\phi,f}(x\mid y) :=  -->
+<!-- \int_\Theta \mathrm{d} \tilde\theta \: \pi_\text{post}(\tilde\theta \mid  y) \mathrm{Pr}\left(C_{\phi,f} \left(f \left(\left.\tilde\theta, y \right) \right\mid  y \right) - U D_{\phi,f} \left(f \left(\left.\tilde\theta, y \right) \right\mid  y \right) \leq x\right), -->
 <!-- $$ -->
 assuming $U$ is a random variable distributed uniformly over the $[0, 1]$ interval. 
 
 
 
 Finally, $\phi$ _passes continuous SBC w.r.t._\ $f$ if 
-$\forall x \in [0, 1]: \int_Y \mathrm{d}y \: q_{\phi,f}(x|y) \pi_\text{marg}(y)  = x$.
+$\forall x \in [0, 1]: \int_Y \mathrm{d}y \: q_{\phi,f}(x\mid y) \pi_\text{marg}(y)  = x$.
 
 
 
@@ -996,50 +991,50 @@ $\forall x \in [0, 1]: \int_Y \mathrm{d}y \: q_{\phi,f}(x|y) \pi_\text{marg}(y) 
 w.r.t $f$ if and only if it satisfies binary calibration check w.r.t $f$.
 
 
-**Proof:** First let us explore how $q_{\phi,f}(x|y)$ looks when we restrict the image of $f$ to $\{0,1\}$. Directly from definitions we get:
+**Proof:** First let us explore how $q_{\phi,f}(x\mid y)$ looks when we restrict the image of $f$ to $\{0,1\}$. Directly from definitions we get:
 
 $$
-C_{\phi, f}(s | y) = \begin{cases}
+C_{\phi, f}(s \mid  y) = \begin{cases}
    0 & s < 0 \\
-   D_{\phi, f}(0 | y) & 0 \leq s < 1 \\
+   D_{\phi, f}(0 \mid  y) & 0 \leq s < 1 \\
    1 & 1 \leq s
 \end{cases} 
 \\
-D_{\phi, f}(0 | y) = 1 - D_{\phi, f}(1 | y)
+D_{\phi, f}(0 \mid  y) = 1 - D_{\phi, f}(1 \mid  y)
 $$
 
 <!-- $$ -->
-<!-- \mathrm{Pr}\left(C_{\phi,f} \left(f \left(\left.\tilde\theta, y \right) \right| y \right) - U D_{\phi,f} \left(f \left(\left.\tilde\theta, y \right) \right| y \right) \leq x \right) \\ -->
+<!-- \mathrm{Pr}\left(C_{\phi,f} \left(f \left(\left.\tilde\theta, y \right) \right\mid  y \right) - U D_{\phi,f} \left(f \left(\left.\tilde\theta, y \right) \right\mid  y \right) \leq x \right) \\ -->
 <!-- =\begin{cases} -->
-<!-- \mathrm{Pr}\left((1 - U)D_{\phi, f}(0 | y) \leq x\right) & f(\tilde\theta, y) = 0 \\ -->
-<!-- \mathrm{Pr}\left(1 - UD_{\phi, f}(1 | y) \leq x\right) & f(\tilde\theta, y) = 1 \\ -->
+<!-- \mathrm{Pr}\left((1 - U)D_{\phi, f}(0 \mid  y) \leq x\right) & f(\tilde\theta, y) = 0 \\ -->
+<!-- \mathrm{Pr}\left(1 - UD_{\phi, f}(1 \mid  y) \leq x\right) & f(\tilde\theta, y) = 1 \\ -->
 <!-- \end{cases} \\ -->
 <!-- =\begin{cases} -->
-<!-- F_u(x |0, D_{\phi, f}(0 | y)) & f(\tilde\theta, y) = 0 \\ -->
-<!-- F_u(x |D_{\phi, f}(0 | y), 1) & f(\tilde\theta, y) = 1 \\ -->
+<!-- F_u(x \mid 0, D_{\phi, f}(0 \mid  y)) & f(\tilde\theta, y) = 0 \\ -->
+<!-- F_u(x \mid D_{\phi, f}(0 \mid  y), 1) & f(\tilde\theta, y) = 1 \\ -->
 
 <!-- \end{cases}\\ -->
 
 
 <!-- $$ -->
 
-where $F_u(x | a, b)$ is the CDF of the continuous uniform distribution on the interval $[a,b]$ evaluated at $x$.
+where $F_u(x \mid  a, b)$ is the CDF of the continuous uniform distribution on the interval $[a,b]$ evaluated at $x$.
 We will denote 
 
 $$
-F_0(x | y) = F_u(x |0, D_{\phi, f}(0 | y)) \\
-F_1(x | y) = F_u(x |D_{\phi, f}(0 | y), 1) 
+F_0(x \mid  y) = F_u(x \mid 0, D_{\phi, f}(0 \mid  y)) \\
+F_1(x \mid  y) = F_u(x \mid D_{\phi, f}(0 \mid  y), 1) 
 $$
 
 $$
-q_{\phi,f}(x | y) = \sum_{i = 0}^1 \int_{\tilde\theta:f(\tilde\theta, y) = i} \mathrm{d} \tilde\theta \: \pi_\text{post}(\tilde\theta | y) F_i(x | y) = \sum_{i = 0}^1 D_{\pi, f}(i | y) F_i(x | y)
+q_{\phi,f}(x \mid  y) = \sum_{i = 0}^1 \int_{\tilde\theta:f(\tilde\theta, y) = i} \mathrm{d} \tilde\theta \: \pi_\text{post}(\tilde\theta \mid  y) F_i(x \mid  y) = \sum_{i = 0}^1 D_{\pi, f}(i \mid  y) F_i(x \mid  y)
 $$
 
 For $i \in \{0,1\}$ we denote:
 
 $$
-F_i(x) = \int_Y \mathrm{d} y \: \pi_\text{marg}(y)D_{\pi, f}(i | y) F_i(x | y) \\
-= \int_Y \mathrm{d} y \int_{\tilde\theta:f(\tilde\theta, y) = i} \mathrm{d} \tilde\theta \: \pi_\text{post}(\tilde\theta | y) F_i(x | y)
+F_i(x) = \int_Y \mathrm{d} y \: \pi_\text{marg}(y)D_{\pi, f}(i \mid  y) F_i(x \mid  y) \\
+= \int_Y \mathrm{d} y \int_{\tilde\theta:f(\tilde\theta, y) = i} \mathrm{d} \tilde\theta \: \pi_\text{post}(\tilde\theta \mid  y) F_i(x \mid  y)
 $$
 
 Note that $F_i(x)$ can be interpreted as the probability of obtaining expected $f$ of at most $x$ in a simulation.
@@ -1051,7 +1046,7 @@ F_0(x) + F_1(x) = x
 $$
 
 $$
-F_i(x) = \mathrm{Pr}(f(\theta, y) \leq x | f(\tilde\theta,y) = i)
+F_i(x) = \mathrm{Pr}(f(\theta, y) \leq x \mid  f(\tilde\theta,y) = i)
 $$
 
 
@@ -1061,7 +1056,7 @@ Assume we have a binary variable $M \in \{1,2 \}$ and $R \in [0,1]$ is the poste
 The $q$ function given $M, R$ is then:
 
 $$
-q(x | M, R) = \begin{cases}
+q(x \mid  M, R) = \begin{cases}
 \frac{x}{R} & M = 1, x < R \\
 1 & M = 1, x \geq R \\
 0 & M = 2, x < R \\
@@ -1078,7 +1073,7 @@ $$
 = \mathrm{Pr}\left(M = 1 \wedge R \geq \frac{x}{s} \right) + \mathrm{Pr}\left(M = 2 \wedge R \geq \frac{x-s}{1-s} \right) 
 $$
 
-We now define the CDFs $F^R_i(x) = \mathrm{Pr}(R \leq x | M = i)$
+We now define the CDFs $F^R_i(x) = \mathrm{Pr}(R \leq x \mid  M = i)$
 
 TODO: below holds only fo continuous distributions (for continuous P(X >= y) != 1 - F(y))
 
@@ -1104,7 +1099,7 @@ For a positive rv $X$ we have
 $$
 E(X) = \int_0^\infty (1 - F^X(t)) \text{d}t
 $$
-We now define the cCDFs $C^R_i(x) = \mathrm{Pr}(R \geq x | M = i)$
+We now define the cCDFs $C^R_i(x) = \mathrm{Pr}(R \geq x \mid  M = i)$
 
 $$
 \mathrm{Pr}(q(x) \leq s) 
@@ -1132,24 +1127,30 @@ following Theorem 7 of Modrák et al., if $f$ ignores data (e.g. when we do bina
 
 Proof binary calibration OK -> DAP OK.
 
+### Metrics to assess data-averaged posterior
+
+ and --- to compare to
+the work of Schad et al. --- we also used the Bayesian t-test. We set the scale parameter for the 
+alternative hypothesis to the sd of uniform distribution over $[0,1]$
+
 ### Good check convergence
 
 Assuming $\mathcal{M}_0: y \sim \text{Cauchy}(0, 1), \mathcal{M}_1: y \sim N(0, 1)$ we have
 
 $$
-BF_{0,1}(y) = \frac{\text{Cauchy}(y | 0, 1)}{\text{Norm}(y | 0,1)} = \sqrt{\frac{2}{\pi}} \frac{e^\frac{y^2}{2}}{1 + y^2} 
+BF_{0,1}(y) = \frac{\text{Cauchy}(y \mid  0, 1)}{\text{Norm}(y \mid  0,1)} = \sqrt{\frac{2}{\pi}} \frac{e^\frac{y^2}{2}}{1 + y^2} 
 $$
 
 and the second raw moment
 
 $$
-\mathbb{E}(BF_{0,1}^2 | \mathcal{M}_1) = \int_{-\infty}^\infty \frac{\left(\text{Cauchy}(y | 0, 1)\right)^2}{\text{Norm(y | 0,1)}} \text{d}y
+\mathbb{E}(BF_{0,1}^2 \mid  \mathcal{M}_1) = \int_{-\infty}^\infty \frac{\left(\text{Cauchy}(y \mid  0, 1)\right)^2}{\text{Norm(y \mid  0,1)}} \text{d}y
 $$
 
 which is infinite because 
 
 $$
-\lim_{y \to \pm\infty} \frac{\left(\text{Cauchy}(y | 0, 1)\right)^2}{\text{Norm(y | 0,1)}} = \lim_{y \to \pm\infty} \frac{\sqrt{2} \exp\left(\frac{y^2}{2}\right)}{\pi^\frac{3}{2}(1 + y^2)^2} = \infty 
+\lim_{y \to \pm\infty} \frac{\left(\text{Cauchy}(y \mid  0, 1)\right)^2}{\text{Norm(y \mid  0,1)}} = \lim_{y \to \pm\infty} \frac{\sqrt{2} \exp\left(\frac{y^2}{2}\right)}{\pi^\frac{3}{2}(1 + y^2)^2} = \infty 
 $$
 
 and hence also the variance is infinite.
@@ -1157,19 +1158,21 @@ and hence also the variance is infinite.
 Now, let's assume $\mathcal{M}_0: y \sim N(\mu, 1)$ for a fixed and known $\mu$. Then the second raw moment is:
 
 $$
-\mathbb{E}(BF_{0,1}^2 | \mathcal{M}_1) = \int_{-\infty}^\infty \frac{\left(\text{Norm}(y | \mu, 1)\right)^2}{\text{Norm(y | 0,1)}} \text{d}y = \int_{-\infty}^\infty \frac{\exp\left(\frac{x^2}{2} - (x - \mu)^2\right)}{\sqrt{2 \pi}} \text{d}y \\
+\begin{gather*}
+\mathbb{E}(BF_{0,1}^2 \mid  \mathcal{M}_1) = \int_{-\infty}^\infty \frac{\left(\text{Norm}(y \mid  \mu, 1)\right)^2}{\text{Norm}(y \mid  0,1)} \text{d}y = \int_{-\infty}^\infty \frac{\exp\left(\frac{x^2}{2} - (x - \mu)^2\right)}{\sqrt{2 \pi}} \text{d}y \\
 = \exp\left(\mu^2\right) \int_{-\infty}^\infty \frac{\exp\left(-\frac{1}{2} (x - 2\mu)^2\right)}{\sqrt{2 \pi}} \text{d}y = \exp\left(\mu^2\right)
+\end{gather*}
 $$
 
 where in the last step, the integral is over the PDF of a normal distribution with mean $2\mu$ and standard deviation $1$. Therefore the variance of the Bayes factor is 
 
 $$
-\text{Var}(BF_{0,1}|\mathcal{M}_1) = \mathbb{E}(BF_{0,1}^2|\mathcal{M}_1) - E(BF_{0,1}|\mathcal{M}_1)^2 = \exp\left(\mu^2\right)  - 1.
+\text{Var}(BF_{0,1}\mid \mathcal{M}_1) = \mathbb{E}(BF_{0,1}^2\mid \mathcal{M}_1) - E(BF_{0,1}\mid \mathcal{M}_1)^2 = \exp\left(\mu^2\right)  - 1.
 $$ 
 
-We note that this situation is completely symmetric in the sense that $\mathbb{E}(BF_{0,1}^2 | \mathcal{M}_1) = \mathbb{E}(BF_{1,0}^2 | \mathcal{M}_0)$ so the problems are not specific to one "direction" of the Good check.
+We note that this situation is completely symmetric in the sense that $\mathbb{E}(BF_{0,1}^2 \mid  \mathcal{M}_1) = \mathbb{E}(BF_{1,0}^2 \mid  \mathcal{M}_0)$ so the problems are not specific to one "direction" of the Good check.
 
-Now assume that $\mu = 2$, then the standard error of the mean after $i$ iterations is $\sqrt{\frac{\exp(4) - 1}{n}}$ so we expect to need 5 360 simulations to keep the standard error belowe $\frac{1}{10}$ and 21 440 simulations to keep the standard error below $\frac{1}{20}$ and thus obtain estimates likely within $\frac{1}{10}$ of the correct value. 
+Now assume that $\mu = 2$, then the standard error of the mean after $i$ iterations is $\sqrt{\frac{\exp(4) - 1}{n}}$ so we expect to need 5 360 simulations to keep the standard error below $\frac{1}{10}$ and 21 440 simulations to keep the standard error below $\frac{1}{20}$ and thus obtain estimates likely within $\frac{1}{10}$ of the correct value. 
 
 Empirically, we can see the lack of any convergence for the Cauchy case and very slow convergence for the normal case in @fig-good-convergence. It follows, that the Good check cannot reliably diagnose BF computation unless we know that the BF distribution is well behaved. 
 
@@ -1256,3 +1259,43 @@ On the contrary, SBC as well as prediction calibration and data-averaged posteri
 ### Miscalibration with surrogate distributions for variance in `ttestBF`
 
 TODO - paste results
+
+
+### Schad & Vasishth 2024
+
+[Schad & Vasishth (2024)](https://arxiv.org/pdf/2406.08022v1) apply their
+method based on data-averaged posterior to show that in some settings Bayes factors from
+popular packages are biased. In particular, they claim there is bias in "2x2 repeated 
+measures design with crossed random effects for subjects and items" using both the `BayesFactor` package
+as well as `bridgesampling` with `brms` fits. 
+
+Unfortunately, their work has multiple problems making their conclusions invalid.
+The authors only shared their code for the `bridgsampling` case, but it is plausible
+the same problems appear in the results for the `BayesFactor` package as the reported 
+miscalibration is very similar in both cases.
+
+Most importantly Schad & Vasishth simulate from either a full model or a model where three coefficients 
+are zero, but then compute BF for three different hypotheses, each testing whether a single coefficient is zero.
+Additionally, they treat several variance parameters of random effects as fixed in simulation
+but treat them as unknown parameters in the model and there is a bug in their use of the LKJ prior 
+for random effect correlations. 
+
+```{r}
+schad <- load_precomputed_file(here::here("cache/schad_fixed_stats.rds"), "schad_biased_bf_fixed.qmd")
+n_schad_sim <- schad$t$parameter["df"] + 1
+schad_ci_diff <- format_t_test_diff(schad$t)
+```
+
+
+Using their simulation code for the `bridgesampling` case, fixing the bugs
+and matching the model to the simulation code we obtain calibrated Bayes factors. We have run `r format(n_schad_sim, big.mark  = " ")` simulations (some were removed due to problems sampling) and obtained miscalibration `r format_p(schad$miscalibration_p)` (95% CI under the null = TODO), 95% CI for data-averaged posterior difference from expected mean `r schad_ci_diff` and no problem in SBC for any quantity.
+
+Similar problems affect also the situations where they claim the Bayes factors are calibrated.
+Further
+they handle the improper priors
+used in the methods from `BayesFactor` package by taking a fixed value for the parameter, which --- as we have shown ---
+can result in invalid checks. When we reran simulations with a more careful checks we however did not
+uncover any additional problems.
+
+We are in contact with the preprint authors and we are collaborating on an updated version addressing the issues.
+

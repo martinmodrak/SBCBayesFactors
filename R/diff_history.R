@@ -411,11 +411,16 @@ compute_bootstrapped_histories <- function(stats, history_length, n_histories, h
 plot_log_gamma_histories <- function(histories_df, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
   alpha <- sqrt(1/length(unique(histories_df$history_id)))
 
+  variable_order <- as.integer(factor(histories_df$variable))
+  variable_order[histories_df$variable == "model"] <- -1
+  histories_df$variable <- forcats::fct_reorder(histories_df$variable, variable_order)
+
   power_df <- histories_df %>% group_by(sim_id, variable) %>%
     summarise(power = mean(log_gamma < log_gamma_threshold), .groups = "drop") %>%
     filter(power >= 0.8) %>%
     group_by(variable) %>%
     summarise(first_power_sim_id = min(c(Inf,sim_id)))
+
 
   histories_df %>%
     filter(sim_id >= min_sim_id) %>%
@@ -445,6 +450,14 @@ log_p_labels <- function(breaks) {
 
 plot_log_p_histories <- function(histories_df, title, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
   alpha <- sqrt(1/length(unique(histories_df$history_id)))
+
+  if(length(unique(histories_df$variable)) == 1) {
+    histories_df$variable <- " "
+  } else {
+    variable_order <- as.integer(factor(histories_df$variable))
+    variable_order[histories_df$variable == "model"] <- -1
+    histories_df$variable <- forcats::fct_reorder(histories_df$variable, variable_order)
+  }
 
   power_df <- histories_df %>% group_by(sim_id, variable) %>%
     summarise(power = mean(log_p < log(0.05)), .groups = "drop") %>%
