@@ -386,7 +386,7 @@ plot_log_p_histories(hist_turtles_norm_bad_brier, "Brier resampling")
 plot_log_p_histories(hist_turtles_norm_bad_ttest, "DAP - t-test")
 plot_log_p_histories(hist_turtles_norm_bad_miscalibration, "Miscalibration resampling")
 
-save_histories("hist_turtles_norm_bad",
+save_histories("turtles_norm_bad",
                log_gamma = hist_turtles_norm_bad,
                ttest = hist_turtles_norm_bad_ttest,
                miscalibration = hist_turtles_norm_bad_miscalibration)

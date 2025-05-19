@@ -241,7 +241,7 @@ compute_ttest_history_single <- function(probs, true_model, step = 1, expected =
 
 #' @export
 compute_ttest_history <- function(...) {
-  compute_calibration_history(compute_schad_bf_history_single, ...)
+  compute_calibration_history(compute_ttest_history_single, ...)
 }
 
 
