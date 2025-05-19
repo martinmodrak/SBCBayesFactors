@@ -567,7 +567,7 @@ scale_x_correct <- scale_x_continuous("Number of simulations", breaks = c(0,500,
 
 (plot_log_gamma_histories(hist_binary_correct$log_gamma) + scale_x_correct + labs(tag = "A) SBC") + tag_theme | 
 plot_log_p_histories(hist_binary_correct$miscalibration) + scale_x_correct + labs(tag = "B) Calibration") + tag_theme | 
-plot_log_p_histories(hist_binary_correct$schad) + scale_x_correct + labs(tag = "C) DAP") + tag_theme)   + plot_layout(widths = c(2,1,1), axis_titles = "collect_x")
+plot_log_p_histories(hist_binary_correct$ttest) + scale_x_correct + labs(tag = "C) DAP") + tag_theme)   + plot_layout(widths = c(2,1,1), axis_titles = "collect_x")
 ```
 
 <!-- Redo tags in other plots -->
@@ -585,7 +585,7 @@ move to a slightly more realistic example.
 hist_binary_flip <- load_histories("binary_flip", "binary_example.qmd")
 ((plot_log_gamma_histories(hist_binary_flip$log_gamma) + labs(tag = "A) SBC") + tag_theme) | 
 (plot_log_p_histories(hist_binary_flip$miscalibration) + labs(tag = "B) Calibration") + tag_theme) | 
-(plot_log_p_histories(hist_binary_flip$schad)) + labs(tag = "C) DAP") + tag_theme) + plot_layout(widths = c(2,1,1), axis_titles = "collect_x")
+(plot_log_p_histories(hist_binary_flip$ttest)) + labs(tag = "C) DAP") + tag_theme) + plot_layout(widths = c(2,1,1), axis_titles = "collect_x")
 ```
 
 
@@ -633,7 +633,7 @@ plot_log_gamma_histories(hist_pnb_ignore_all$log_gamma) #/ (
 #+
 #  plot_spacer()
 #) +
-#plot_log_p_histories(hist_pnb_ignore_all$schad, "DAP - Schad et al.")) + 
+#plot_log_p_histories(hist_pnb_ignore_all$ttest, "DAP - Schad et al.")) + 
 #  plot_annotation(tag_levels = "A")
 ```
 
@@ -654,7 +654,7 @@ hist_pnb_ignore_half <- load_histories("pnb_ignore_half", "poisson_nb_example.qm
 plot_log_gamma_histories(hist_pnb_ignore_half$log_gamma) 
 #/ (
 #plot_log_p_histories(hist_pnb_ignore_half$miscalibration, "Calibration") + 
-#plot_log_p_histories(hist_pnb_ignore_half$schad, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
+#plot_log_p_histories(hist_pnb_ignore_half$ttest, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
 ```
 
 Now let us try to introduce noise into the BF, specifically we will add normal noise with
@@ -667,7 +667,7 @@ but generally missed by data-averaged posterior, see @fig-pnb-noise.
 hist_pnb_vari <- load_histories("pnb_vari", "poisson_nb_example.qmd")
 (plot_log_gamma_histories(hist_pnb_vari$log_gamma) + labs(tag = "A) SBC") + tag_theme) / (
 (plot_log_p_histories(hist_pnb_vari$miscalibration) + labs(tag = "B) Calibration") + tag_theme) + 
-(plot_log_p_histories(hist_pnb_vari$schad)  + labs(tag = "C) DAP") + tag_theme))
+(plot_log_p_histories(hist_pnb_vari$ttest)  + labs(tag = "C) DAP") + tag_theme))
 ```
 
 There is however a case where data-averaged posterior works better than the other options, that is when the
@@ -682,7 +682,7 @@ the fewest simulations.
 hist_pnb_bias <- load_histories("pnb_bias", "poisson_nb_example.qmd")
 (plot_log_gamma_histories(hist_pnb_bias$log_gamma) + labs(tag = "A) SBC") + tag_theme) / (
 (plot_log_p_histories(hist_pnb_bias$miscalibration) + labs(tag = "B) Calibration") + tag_theme) + 
-(plot_log_p_histories(hist_pnb_bias$schad)  + labs(tag = "C) DAP") + tag_theme))
+(plot_log_p_histories(hist_pnb_bias$ttest)  + labs(tag = "C) DAP") + tag_theme))
 ```
 
 ### Summary of toy examples
@@ -812,7 +812,7 @@ the BF calculation in the BayesFactor package in fact works well for this case.
 hist_ranef_constant <- load_histories("ranef_constant", "lmbf_ranef_presence_post_sbc.qmd")
 (plot_log_gamma_histories(hist_ranef_constant$log_gamma)  + labs(tag = "A) SBC") + tag_theme)/ (
 (plot_log_p_histories(hist_ranef_constant$miscalibration)  + labs(tag = "B) Calibration") + tag_theme) + 
-(plot_log_p_histories(hist_ranef_constant$schad)  + labs(tag = "C) DAP") + tag_theme))
+(plot_log_p_histories(hist_ranef_constant$ttest)  + labs(tag = "C) DAP") + tag_theme))
 ```
 
 ```{r fig-ranef-post}

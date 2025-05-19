@@ -1,5 +1,5 @@
 ---
-title: "lmBF 2x2 from Schad & Vasishth"
+title: "lmBF - random effects presence"
 format: html
 ---
 
@@ -441,8 +441,8 @@ hist_ranef_constant <- compute_bootstrapped_histories(stats_filtered, history_le
 bp_ranef_constant <- binary_probabilities_from_stats(res_constant$stats)
 
 
-hist_ranef_constant_schad <- compute_bootstrapped_histories(bp_ranef_constant, history_length = hist_length_constant, n_histories = 100, step = hist_step_constant,
-                                            compute_schad_history, min_sim_id = 10)
+hist_ranef_constant_ttest <- compute_bootstrapped_histories(bp_ranef_constant, history_length = hist_length_constant, n_histories = 100, step = hist_step_constant,
+                                            compute_ttest_history, min_sim_id = 10)
 
 
 
@@ -450,12 +450,12 @@ hist_ranef_constant_miscalib <- compute_bootstrapped_histories(bp_ranef_constant
                                             compute_miscalibration_history)
 
 plot_log_gamma_histories(hist_ranef_constant)
-plot_log_p_histories(hist_ranef_constant_schad, "Schad")
+plot_log_p_histories(hist_ranef_constant_ttest, "ttest")
 plot_log_p_histories(hist_ranef_constant_miscalib, "Miscalibration resampling")
 
 save_histories("ranef_constant",
                log_gamma = hist_ranef_constant,
-               schad = hist_ranef_constant_schad,
+               ttest = hist_ranef_constant_ttest,
                miscalibration = hist_ranef_constant_miscalib)
 
 ```

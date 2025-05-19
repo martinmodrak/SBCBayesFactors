@@ -135,33 +135,6 @@ compute_log_gamma_history <- function(stats, step = step, min_sim_id = 1) {
     inner_join(gamma_thresholds_df, by = c("sim_id" = "N_sims"))
 }
 
-compute_schad_history_single <- function(probs, true_model, step = 1, expected = 0.5) {
-  steps_to_include <- include_step(1:length(probs), step)
-  sums <- cumsum(probs)[steps_to_include]
-  ns <- (1:length(probs))[steps_to_include]
-
-  sds <- numeric(floor(length(probs)/step))
-  for(i in which(steps_to_include)) {
-    sds[step_id(i,step)] <- sd(probs[1:i])
-  }
-  means <- sums/ns
-  t_stat <- (means - expected) / (sds / sqrt(ns))
-
-  dfs <- ns - 1
-  log_ps <- case_when(
-    sds == 0 & (abs(means - expected) < 1e-8) ~ 1,
-    sds == 0 ~ NA_real_,
-    TRUE ~ log(2) + pt(-abs(t_stat), dfs, log.p = TRUE)
-  )
-
-  return(log_ps)
-}
-
-#' @export
-compute_schad_history <- function(...) {
-  compute_calibration_history(compute_schad_history_single, ...)
-}
-
 compute_schad_bf_history_single <- function(probs, true_model, step = 1, expected = 0.5) {
   steps_to_include <- include_step(1:length(probs), step)
 
