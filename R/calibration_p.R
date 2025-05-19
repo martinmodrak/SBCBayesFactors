@@ -127,14 +127,35 @@ miscalibration_single <- function(x,y) {
 
 # Faster reimplementation from https://www.pnas.org/doi/full/10.1073/pnas.2016191118#sec-4
 # and the reliabilitydiag package
-# TODO check licensing
-miscalibration_resampling_p <- function(x,y, B = 1000) {
-  actual_miscalibration <- miscalibration_single(x,y)
-  misc_null <- replicate(B, {
+miscalibration_resampling_nulldist <- function(x,y, B = 1000) {
+  replicate(B, {
     yrep <- rbinom(length(x), size = 1, prob = x)
     miscalibration_single(x, yrep)
   })
+}
+
+miscalibration_resampling_p <- function(x,y, B = 1000) {
+  actual_miscalibration <- miscalibration_single(x,y)
+  misc_null <- miscalibration_resampling_nulldist(x, y, B)
   max(mean(actual_miscalibration <= misc_null), 0.5/B)
+}
+
+miscalibration_resampling_stats <- function(x,y, B = 1000, alpha = 0.05) {
+  actual_miscalibration <- miscalibration_single(x,y)
+  misc_null <- miscalibration_resampling_nulldist(x, y, B)
+  structure(list(
+    observed = actual_miscalibration,
+    rejection_limit = quantile(misc_null, probs = 1 - alpha),
+    alpha = alpha,
+    p = max(mean(actual_miscalibration <= misc_null), 0.5/B)
+  ), class = "miscalibration_resampling_stats"
+  )
+}
+
+#' @export
+print.miscalibration_resampling_stats <- function(s) {
+  cat("Miscalibration: \t", s$observed, "\nQ", scales::percent(1 - s$alpha), " under null: \t", s$rejection_limit, ", p = ", s$p, "\n", sep ="")
+  invisible()
 }
 
 CEP_bins <- function(x, y) {

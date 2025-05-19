@@ -271,20 +271,14 @@ plot_ecdf_diff(res_turtles, combine_variables = combine_array_elements)
 ```
 
 ```{r}
-bp_turtles <- binary_probabilities_from_stats(res_turtles$stats)
-
-t_res_orig <- t.test(bp_turtles$prob, as.numeric(ds_turtles$variables[,"model"]))
-t_res_orig
-miscalibration_p_orig <- miscalibration_resampling_p(bp_turtles$prob, bp_turtles$simulated_value)
-miscalibration_p_orig
-my_reliability_diag(bp_turtles)
+metrics_orig <- calibration_metrics(res_turtles, prob1_prior = as.numeric(ds_turtles$variables[,"model"]))
+print(metrics_orig)
 ```
 
 
 ```{r save-stats}
-saveRDS(list(t  = t_res_orig,
-       miscalibration_p = miscalibration_p_orig),
-  file.path(cache_dir, paste0("turtles_stats.rds")))
+saveRDS(metrics_orig,
+  file.path(cache_dir, paste0("turtles_metrics.rds")))
 
 ```
 
@@ -357,12 +351,10 @@ plot_ecdf_diff(res_turtles_norm_bad, combine_variables = combine_array_elements)
 ```
 
 ```{r}
-bp_turtles_norm_bad <- binary_probabilities_from_stats(res_turtles_norm_bad$stats)
-
-t.test(bp_turtles_norm_bad$prob, as.numeric(ds_turtles_norm$variables[,"model"]))
-miscalibration_resampling_p(bp_turtles_norm_bad$prob, bp_turtles_norm_bad$simulated_value)
-my_reliability_diag(bp_turtles_norm_bad)
+metrics_norm_bad <- calibration_metrics(res_turtles_norm_bad, prob1_prior = as.numeric(ds_turtles_norm$variables[,"model"]))
+print(metrics_norm_bad)
 ```
+
 
 ```{r}
 hist_length_turtles_norm_bad <- 400
@@ -401,8 +393,104 @@ save_histories("hist_turtles_norm_bad",
 ```
 
 
-## Posterior SBC - half dataset
+## Posterior SBC
 
+### Simulator
+
+```{r}
+invisible(force(turtles))
+
+gen_globals <- c("r_inv_one_plus_sq")
+
+sim_turtles_post_sbc <- function(model, data_prior, draws_prior_H0, draws_prior_H1, N_per_old_clutch, N_per_new_clutch = 5, C_new = 0, sigma2_prior = "default") {
+  if(model == 0) {
+    prior_draw <- posterior::subset_draws(draws_prior_H0, draw = sample.int(posterior::ndraws(draws_prior_H0), size = 1))
+  } else {
+    prior_draw <- posterior::subset_draws(draws_prior_H1, draw = sample.int(posterior::ndraws(draws_prior_H1), size = 1))
+  }
+  
+    alpha0_raw <- posterior::draws_of(prior_draw$alpha0_raw)[1]
+    alpha1_raw <- posterior::draws_of(prior_draw$alpha1_raw)[1]
+    alpha0 <- sqrt(10) * alpha0_raw
+    alpha1 <- sqrt(10) * alpha1_raw
+
+    old_clutch_ids <- unique(data_prior$clutch)
+    new_clutch_ids <- seq(from = max(old_clutch_ids) + 1, length.out = C_new)
+    clutch_new <- c(rep(old_clutch_ids, each = N_per_old_clutch),
+                    rep(new_clutch_ids, each = N_per_new_clutch))     
+
+    x_new <- sample(data_prior$x, size = length(clutch_new), replace = TRUE)
+
+    
+    log_lik_shared <- dnorm(alpha0_raw, log = TRUE) +
+      dnorm(alpha1_raw, log = TRUE)
+    
+    if(model == 0) {
+      predictor <- alpha0 + alpha1 * data_prior$x
+      predictor_new <- alpha0 + alpha1 * x_new
+      log_lik_spec <- 0
+    } else {
+      if(sigma2_prior == "default") {
+        sigma2_clutch <- posterior::draws_of(prior_draw$sigma2)[1]
+        sigma_clutch <- sqrt(sigma2_clutch)      
+        
+        sigma2_log_lik <- log(sigma2_clutch)  +# Jacobian
+          (- 2 * log1p(sigma2_clutch))
+      } else if(sigma2_prior == "sqrt_norm") {
+        sigma_clutch <- posterior::draws_of(prior_draw$sigma)[1]
+
+        sigma2_log_lik <- log(sigma_clutch)  +# Jacobian
+          log(2) + dnorm(sigma_clutch, sd = 1, log = TRUE)
+      } else {
+        stop("Invalid sigma2_prior")
+      }
+
+      b_clutch_raw <- c(
+        posterior::draws_of(prior_draw$b_raw)[1,], 
+        rnorm(C_new))
+      b_clutch <- b_clutch_raw * sigma_clutch
+      
+      predictor <- alpha0 + alpha1 * data_prior$x + b_clutch[data_prior$clutch]
+      predictor_new <- alpha0 + alpha1 * x_new + b_clutch[clutch_new]
+      
+      log_lik_spec <- 
+        sigma2_log_lik +
+        sum(dnorm(b_clutch_raw, log = TRUE))
+    }
+    
+    prob <- pnorm(predictor)
+    prob_new <- pnorm(predictor_new)
+    y_new <- rbinom(length(clutch_new), p = prob_new, size = 1)
+
+  log_lik_predictor <- sum(dbinom(data_prior$y, size = 1, p = prob, log = TRUE)) +
+    sum(dbinom(y_new, size = 1, p = prob_new, log = TRUE))
+  
+  variables <- list(
+      alpha0 = alpha0,
+      alpha1 = alpha1,
+      lp__ = log_lik_shared + log_lik_spec + log_lik_predictor
+    )
+  
+  if(model == 1) {
+    variables$sigma <- sigma_clutch
+    variables$b <- b_clutch
+  } 
+
+  list(
+    generated = list(
+      N = nrow(data_prior) + length(clutch_new),
+      y = c(data_prior$y, y_new),
+      x = c(data_prior$x, x_new),
+      C = max(c(data_prior$clutch, clutch_new)),
+      clutch = c(data_prior$clutch, clutch_new)
+    ),
+    variables = variables
+  )
+}
+```
+
+
+### Half dataset
 Fit the first half of the dataset and compute BF.
 
 ```{r}
@@ -506,7 +594,7 @@ ds_turtles_m1_half <- generate_datasets(
 )
 
 set.seed(985243245)
-ds_turtles_half <- SBC_datasets_for_bf(ds_turtles_m0_half, ds_turtles_m1_half, prob_H1 = prob1_target)
+ds_turtles_half <- SBC_datasets_for_bf(ds_turtles_m0_half, ds_turtles_m1_half, prob_H1 = prob1_target_half)
 ```
 
 ```{r turtles-post-half}
@@ -530,25 +618,21 @@ plot_ecdf_diff(res_turtles_post_half, combine_variables = combine_array_elements
 ```
 
 ```{r}
-bp_turtles_post_half <- binary_probabilities_from_stats(res_turtles_post_half$stats)
-t_res <- t.test(bp_turtles_post_half$prob, mu = prob1_target_half)
-t_res
-miscalibration_p <- miscalibration_resampling_p(bp_turtles_post_half$prob, bp_turtles_post_half$simulated_value)
-miscalibration_p
-my_reliability_diag(bp_turtles_post_half)
+metrics_turtles_post_half <- calibration_metrics(res_turtles_post_half, prob1_prior = prob1_target_half)
+metrics_turtles_post_half$prob1_tweaked_prior_half <- prob1_tweaked_prior_half
+print(metrics_turtles_post_half)
 ```
+
 
 
 ```{r save-stats-post-half}
-saveRDS(list(t  = t_res,
-       miscalibration_p = miscalibration_p,
-       prob1_tweaked_prior = prob1_tweaked_prior_half),
-  file.path(cache_dir, paste0("turtles_post_half_stats.rds")))
+saveRDS(metrics_turtles_post_half,
+  file.path(cache_dir, paste0("turtles_post_half_metrics.rds")))
 
 ```
 
 
-## Posterior SBC - full dataset
+### Full dataset
 
 ```{r}
 data("turtles", package = "bridgesampling")
@@ -602,103 +686,7 @@ prob1_tweaked_prior <- (marg_m0 * prob1_target) / (marg_m1 + marg_m0 * prob1_tar
 
 
 
-## Simulator
 
-```{r}
-invisible(force(turtles))
-
-gen_globals <- c("r_inv_one_plus_sq")
-
-sim_turtles_post_sbc <- function(model, data_prior, draws_prior_H0, draws_prior_H1, N_per_old_clutch, N_per_new_clutch = 5, C_new = 0, sigma2_prior = "default") {
-  if(model == 0) {
-    prior_draw <- posterior::subset_draws(draws_prior_H0, draw = sample.int(posterior::ndraws(draws_prior_H0), size = 1))
-  } else {
-    prior_draw <- posterior::subset_draws(draws_prior_H1, draw = sample.int(posterior::ndraws(draws_prior_H1), size = 1))
-  }
-  
-    alpha0_raw <- posterior::draws_of(prior_draw$alpha0_raw)[1]
-    alpha1_raw <- posterior::draws_of(prior_draw$alpha1_raw)[1]
-    alpha0 <- sqrt(10) * alpha0_raw
-    alpha1 <- sqrt(10) * alpha1_raw
-
-    old_clutch_ids <- unique(data_prior$clutch)
-    new_clutch_ids <- seq(from = max(old_clutch_ids) + 1, length.out = C_new)
-    clutch_new <- c(rep(old_clutch_ids, each = N_per_old_clutch),
-                    rep(new_clutch_ids, each = N_per_new_clutch))     
-
-    x_new <- sample(data_prior$x, size = length(clutch_new), replace = TRUE)
-
-    
-    log_lik_shared <- dnorm(alpha0_raw, log = TRUE) +
-      dnorm(alpha1_raw, log = TRUE)
-    
-    if(model == 0) {
-      predictor <- alpha0 + alpha1 * data_prior$x
-      predictor_new <- alpha0 + alpha1 * x_new
-      log_lik_spec <- 0
-    } else {
-      if(sigma2_prior == "default") {
-        sigma2_clutch <- posterior::draws_of(prior_draw$sigma2)[1]
-        sigma_clutch <- sqrt(sigma2_clutch)      
-        
-        sigma2_log_lik <- log(sigma2_clutch)  +# Jacobian
-          (- 2 * log1p(sigma2_clutch))
-      } else if(sigma2_prior == "sqrt_norm") {
-        sigma_clutch <- posterior::draws_of(prior_draw$sigma)[1]
-
-        sigma2_log_lik <- log(sigma_clutch)  +# Jacobian
-          log(2) + dnorm(sigma_clutch, sd = 1, log = TRUE)
-      } else {
-        stop("Invalid sigma2_prior")
-      }
-
-      b_clutch_raw <- c(
-        posterior::draws_of(prior_draw$b_raw)[1,], 
-        rnorm(C_new))
-      b_clutch <- b_clutch_raw * sigma_clutch
-      
-      predictor <- alpha0 + alpha1 * data_prior$x + b_clutch[data_prior$clutch]
-      predictor_new <- alpha0 + alpha1 * x_new + b_clutch[clutch_new]
-      
-      log_lik_spec <- 
-        sigma2_log_lik +
-        sum(dnorm(b_clutch_raw, log = TRUE))
-    }
-    
-    prob <- pnorm(predictor)
-    prob_new <- pnorm(predictor_new)
-    y_new <- rbinom(length(clutch_new), p = prob_new, size = 1)
-
-  log_lik_predictor <- sum(dbinom(data_prior$y, size = 1, p = prob, log = TRUE)) +
-    sum(dbinom(y_new, size = 1, p = prob_new, log = TRUE))
-  
-  variables <- list(
-      alpha0 = alpha0,
-      alpha1 = alpha1,
-      lp__ = log_lik_shared + log_lik_spec + log_lik_predictor
-    )
-  
-  if(model == 1) {
-    variables$sigma <- sigma_clutch
-    variables$b <- b_clutch
-  } 
-
-  list(
-    generated = list(
-      N = nrow(data_prior) + length(clutch_new),
-      y = c(data_prior$y, y_new),
-      x = c(data_prior$x, x_new),
-      C = max(c(data_prior$clutch, clutch_new)),
-      clutch = c(data_prior$clutch, clutch_new)
-    ),
-    variables = variables
-  )
-}
-```
-
-
-
-## Original prior
 
 ```{r shared-config}
 N <- NULL
@@ -770,11 +758,10 @@ plot_ecdf_diff(res_turtles_post, combine_variables = combine_array_elements)
 ```
 
 ```{r}
-bp_turtles_post <- binary_probabilities_from_stats(res_turtles_post$stats)
-t.test(bp_turtles_post$prob, mu = 0.5)
-miscalibration_resampling_p(bp_turtles_post$prob, bp_turtles_post$simulated_value)
-my_reliability_diag(bp_turtles_post)
+metrics_turtles_post <- calibration_metrics(res_turtles_post)
+print(metrics_turtles_post)
 ```
+
 
 
 

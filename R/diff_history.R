@@ -448,8 +448,15 @@ log_p_labels <- function(breaks) {
   signif(exp(breaks), digits = 3)
 }
 
-plot_log_p_histories <- function(histories_df, title, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
+plot_log_p_histories <- function(histories_df, title = NULL, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
   alpha <- sqrt(1/length(unique(histories_df$history_id)))
+
+  if(is.null(title)) {
+    y_label <- "p-value"
+  } else {
+    y_label <- paste0("p - ", title)
+  }
+
 
   if(length(unique(histories_df$variable)) == 1) {
     histories_df$variable <- " "
@@ -472,7 +479,7 @@ plot_log_p_histories <- function(histories_df, title, min_sim_id = 0, wrap_cols 
     geom_vline(aes(xintercept = first_power_sim_id), data = power_df, color = "orangered") +
     geom_line(alpha = alpha) +
     geom_hline(yintercept = log(0.05), color = "lightblue", linewidth = 1) +
-    scale_y_continuous(paste0("p - ", title), limits = ylim, breaks = log_p_breaks, labels = log_p_labels) +
+    scale_y_continuous(y_label, limits = ylim, breaks = log_p_breaks, labels = log_p_labels) +
     scale_x_continuous("Number of simulations") +
     facet_wrap(~variable, ncol = wrap_cols)
 }

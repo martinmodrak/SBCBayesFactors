@@ -262,18 +262,12 @@ res_post <- compute_SBC(ds_post, backend_post, keep_fits = FALSE,
                             cache_location = file.path(cache_dir, paste0("lmbf_ranef_post_presence_", N_for_filename, ".rds")))
 
 plot_ecdf_diff(res_post, combine_variables = combine_lmBF_arrays)
-bp_post <- binary_probabilities_from_stats(res_post$stats)
-post_t <- t.test(bp_post$prob, mu = prob1_prior)
-post_t
-post_miscalibration_p <- miscalibration_resampling_p(bp_post$prob, bp_post$simulated_value)
-post_miscalibration_p
 
-reliabilitydiag::reliabilitydiag(x = bp_post$prob, y = bp_post$simulated_value)
+metrics_post <- calibration_metrics(res_post, prob1_prior = prob1_prior)
+print(metrics_post)
 
-saveRDS(
-  list(t  = post_t,
-       miscalibration_p = post_miscalibration_p),
-  file.path(cache_dir, paste0("lmbf_ranef_post_presence_", N_for_filename, "_tests.rds")))
+saveRDS(metrics_post,
+  file.path(cache_dir, paste0("lmbf_ranef_post_presence_", N_for_filename, "_metrics.rds")))
 
 
 ```
@@ -427,11 +421,13 @@ res_constant <- compute_SBC(ds_constant, backend_constant, keep_fits = FALSE,
                             cache_location = file.path(cache_dir, paste0("lmbf_ranef_post_presence_constant_", N_for_filename, "_", n_sims, ".rds")))
 
 plot_ecdf_diff(res_constant, combine_variables = combine_lmBF_arrays)
-bp_constant <- binary_probabilities_from_stats(res_constant$stats)
-t.test(bp_constant$prob, mu = 0.5)
 
-miscalibration_resampling_p(bp_constant$prob, bp_constant$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp_constant$prob, y = bp_constant$simulated_value)
+metrics_constant <- calibration_metrics(res_constant)
+print(metrics_constant)
+
+saveRDS(metrics_constant,
+  file.path(cache_dir, paste0("lmbf_ranef_post_presence_constant_", N_for_filename, "_metrics.rds")))
+
 ```
 
 ```{r}

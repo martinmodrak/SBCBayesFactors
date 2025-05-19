@@ -177,25 +177,10 @@ res <- compute_SBC(ds_ttest_no_sigma, backend, keep_fits = FALSE, globals = ttes
 plot_ecdf_diff(res)
 ```
 ```{r}
-bp <- binary_probabilities_from_stats(res$stats)
-miscalibration_p <- miscalibration_resampling_p(bp$prob, bp$simulated_value)
-miscalibration_p
-my_reliability_diag(bp)
-```
-
-
-```{r}
-t_res <- t.test(bp$prob, mu = prob1_prior)
-t_res
-saveRDS(list(t  = t_res,
-       miscalibration_p = miscalibration_p),
-  file.path(cache_dir, paste0("ttest_post_stats.rds")))
-
-```
-
-
-```{r}
-#plot_binary_calibration(res$stats)
+metrics <- calibration_metrics(res, prob1_prior = prob1_prior)
+print(metrics)
+saveRDS(metrics,
+  file.path(cache_dir, paste0("ttest_post_metrics.rds")))
 ```
 
 
@@ -264,15 +249,12 @@ res_fixed <- compute_SBC(ds_fixed, backend, keep_fits = FALSE, globals = ttest_g
 
 ```{r}
 plot_ecdf_diff(res_fixed)
+```
 
-bp_fixed <- binary_probabilities_from_stats(res_fixed$stats)
-miscalibration_p_fixed <- miscalibration_resampling_p(bp_fixed$prob, bp_fixed$simulated_value)
-miscalibration_p_fixed
-reliability_diag_fixed <- my_reliability_diag(bp_fixed)
-reliability_diag_fixed
 
-t_res_fixed <-  t.test(bp_fixed$prob, mu = 0.5)
-t_res_fixed
+```{r}
+metrics_fixed <- calibration_metrics(res_fixed)
+print(metrics_fixed)
 ```
 
 
@@ -289,29 +271,21 @@ plot_log_gamma_histories(hist_fixed)
 ```{r}
 high_sd_fixed <- ds_fixed$generated %>% purrr::map_lgl(\(x) sd(x$y) >= 1)
 
-bp_fixed_high <- bp_fixed |> filter(sim_id %in% which(high_sd_fixed))
-bp_fixed_low <- bp_fixed |> filter(sim_id %in% which(!high_sd_fixed))
+res_fixed_high <- res_fixed[high_sd_fixed] 
+res_fixed_low <- res_fixed[!high_sd_fixed] 
 
-miscalibration_p_fixed_high <- miscalibration_resampling_p(bp_fixed_high$prob, bp_fixed_high$simulated_value)
-miscalibration_p_fixed_high
-reliability_diag_fixed_high <-  my_reliability_diag(bp_fixed_high)
+metrics_fixed_high <- calibration_metrics(res_fixed_high)
+metrics_fixed_low <- calibration_metrics(res_fixed_low)
 
-
-miscalibration_p_fixed_low <- miscalibration_resampling_p(bp_fixed_low$prob, bp_fixed_low$simulated_value)
-reliability_diag_fixed_low <-  my_reliability_diag(bp_fixed_low)
+print(metrics_fixed_high)
+print(metrics_fixed_low)
 
 saveRDS(list(
-       sbc_res = res_fixed,
-       hist = hist_fixed,
-       t  = t_res_fixed,
-       miscalibration_p = miscalibration_p_fixed,
-       reliability_diag = reliability_diag_fixed,
-       miscalibration_p_high = miscalibration_p_fixed_high,
-       reliability_diag_high = reliability_diag_fixed_high,
-       miscalibration_p_low = miscalibration_p_fixed_low,
-       reliability_diag_low = reliability_diag_fixed_low
-       ),
-  file.path(cache_dir, paste0("ttest_fixed_stats.rds")))
+  hist = hist_fixed,
+  all = metrics_fixed,
+  high = metrics_fixed_high,
+  low = metrics_fixed_low),
+  file.path(cache_dir, paste0("ttest_fixed_metrics.rds")))
 
 ```
 
@@ -346,24 +320,27 @@ res_inv1psquared <- compute_SBC(ds_inv1psquared, backend, keep_fits = FALSE, glo
 ```{r}
 plot_ecdf_diff(res_inv1psquared)
 
-bp_inv1psquared <- binary_probabilities_from_stats(res_inv1psquared$stats)
-miscalibration_resampling_p(bp_inv1psquared$prob, bp_inv1psquared$simulated_value)
-my_reliability_diag(bp_inv1psquared)
-
-t.test(bp_inv1psquared$prob, mu = 0.5)
+metrics_inv1psquared <- calibration_metrics(res_inv1psquared)
+print(metrics_inv1psquared)
 ```
 
 ```{r}
 high_sd_inv1psquared <- ds_inv1psquared$generated %>% purrr::map_lgl(\(x) sd(x$y) >= 1)
 
-bp_inv1psquared_high <- bp_inv1psquared |> filter(sim_id %in% which(high_sd_inv1psquared))
-bp_inv1psquared_low <- bp_inv1psquared |> filter(sim_id %in% which(!high_sd_inv1psquared))
+res_inv1psquared_high <- res_inv1psquared[high_sd_inv1psquared] 
+res_inv1psquared_low <- res_inv1psquared[!high_sd_inv1psquared] 
 
-miscalibration_resampling_p(bp_inv1psquared_high$prob, bp_inv1psquared_high$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp_inv1psquared_high$prob, y = bp_inv1psquared_high$simulated_value)
-miscalibration_resampling_p(bp_inv1psquared_low$prob, bp_inv1psquared_low$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp_inv1psquared_low$prob, y = bp_inv1psquared_low$simulated_value)
+metrics_inv1psquared_high <- calibration_metrics(res_inv1psquared_high)
+metrics_inv1psquared_low <- calibration_metrics(res_inv1psquared_low)
 
+print(metrics_inv1psquared_high)
+print(metrics_inv1psquared_low)
+
+saveRDS(list(
+  all = metrics_inv1psquared,
+  high = metrics_inv1psquared_high,
+  low = metrics_inv1psquared_low),
+  file.path(cache_dir, paste0("ttest_post_metrics_inv1psquared.rds")))
 ```
 
 
@@ -392,24 +369,27 @@ res_cauchy <- compute_SBC(ds_cauchy, backend, keep_fits = FALSE, globals = ttest
 ```{r}
 plot_ecdf_diff(res_cauchy)
 
-bp_cauchy <- binary_probabilities_from_stats(res_cauchy$stats)
-miscalibration_resampling_p(bp_cauchy$prob, bp_cauchy$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp_cauchy$prob, y = bp_cauchy$simulated_value)
-
-t.test(bp_cauchy$prob, mu = 0.5)
+metrics_cauchy <- calibration_metrics(res_cauchy)
+print(metrics_cauchy)
 ```
 
 ```{r}
 high_sd_cauchy <- ds_cauchy$generated %>% purrr::map_lgl(\(x) sd(x$y) >= 1)
 
-bp_cauchy_high <- bp_cauchy |> filter(sim_id %in% which(high_sd_cauchy))
-bp_cauchy_low <- bp_cauchy |> filter(sim_id %in% which(!high_sd_cauchy))
+res_cauchy_high <- res_cauchy[high_sd_cauchy] 
+res_cauchy_low <- res_cauchy[!high_sd_cauchy] 
 
-miscalibration_resampling_p(bp_cauchy_high$prob, bp_cauchy_high$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp_cauchy_high$prob, y = bp_cauchy_high$simulated_value)
-miscalibration_resampling_p(bp_cauchy_low$prob, bp_cauchy_low$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp_cauchy_low$prob, y = bp_cauchy_low$simulated_value)
+metrics_cauchy_high <- calibration_metrics(res_cauchy_high)
+metrics_cauchy_low <- calibration_metrics(res_cauchy_low)
 
+print(metrics_cauchy_high)
+print(metrics_cauchy_low)
+
+saveRDS(list(
+  all = metrics_cauchy,
+  high = metrics_cauchy_high,
+  low = metrics_cauchy_low),
+  file.path(cache_dir, paste0("ttest_post_metrics_cauchy.rds")))
 ```
 
 ## Via bridgesampling
