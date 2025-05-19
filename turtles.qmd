@@ -395,6 +395,15 @@ save_histories("hist_turtles_norm_bad",
 
 ## Posterior SBC
 
+```{r shared-config}
+N <- NULL
+C <- NULL
+N_sims <- 2000
+iter <- 15500
+warmup <- 500
+init <- 0
+```
+
 ### Simulator
 
 ```{r}
@@ -683,142 +692,6 @@ marg_m1 <- exp(bs_prior_H1$logml)
 prob1_tweaked_prior <- (marg_m0 * prob1_target) / (marg_m1 + marg_m0 * prob1_target - marg_m1 * prob1_target)
 
 ```
-
-
-```{r shared-config}
-N <- NULL
-C <- NULL
-N_sims <- 2000
-iter <- 15500
-warmup <- 500
-init <- 0
-```
-
-
-```{r simulateds-half}
-N_per_old_clutch <- 0
-C_new <- length(unique(turtles$clutch)) - length(clutches_to_keep)
-N_per_new_clutch <- floor((nrow(turtles) - nrow(turtles_half)) / C_new)
-
-set.seed(6846523)
-ds_turtles_m0_half <- generate_datasets(
-  SBC_generator_function(
-    sim_turtles_post_sbc,
-    data_prior = turtles_half,
-    draws_prior_H0 = draws_prior_H0_half,
-    draws_prior_H1 = draws_prior_H1_half,
-    model = 0,
-    N_per_old_clutch = N_per_old_clutch,
-    N_per_new_clutch = N_per_new_clutch,
-    C_new = C_new,
-    future.globals = gen_globals
-  ),
-  n_sims = N_sims
-)
-ds_turtles_m1_half <- generate_datasets(
-  SBC_generator_function(
-    sim_turtles_post_sbc,
-    data_prior = turtles_half,
-    draws_prior_H0 = draws_prior_H0_half,
-    draws_prior_H1 = draws_prior_H1_half,
-    model = 1,
-    N_per_old_clutch = N_per_old_clutch,
-    N_per_new_clutch = N_per_new_clutch,
-    C_new = C_new,
-    future.globals = gen_globals
-  ),
-  n_sims = N_sims
-)
-
-set.seed(985243245)
-ds_turtles_half <- SBC_datasets_for_bf(ds_turtles_m0_half, ds_turtles_m1_half, prob_H1 = prob1_target_half)
-```
-
-```{r turtles-post-half}
-backend_turtles_half <- SBC_backend_bridgesampling(
-  SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
-  SBC_backend_rstan_sample(m_H1, iter = iter, warmup = warmup, init = init),
-  prior_prob1 = prob1_tweaked_prior_half
-)
-res_turtles_post_half <- compute_SBC_cache_blocks(ds_turtles_half, backend_turtles_half, 
-                           keep_fits = FALSE,
-                           cache_prefix = file.path(cache_dir, "turtles_post_half_"),
-                           block_size = 500)
-```
-
-
-```{r}
-plot_ecdf_diff(res_turtles_post_half, combine_variables = combine_array_elements)
-# plot_ecdf_diff(res_turtles_post$stats |> mutate(variable = "all", sim_id = 1:n()))
-# plot_rank_hist(res_turtles_post$stats |> mutate(variable = "all", sim_id = 1:n()), bins = 20)
-
-```
-
-```{r}
-bp_turtles_post_half <- binary_probabilities_from_stats(res_turtles_post_half$stats)
-t.test(bp_turtles_post_half$prob, mu = 0.5)
-miscalibration_resampling_p(bp_turtles_post_half$prob, bp_turtles_post_half$simulated_value)
-my_reliability_diag(bp_turtles_post_half)
-```
-
-
-## Posterior SBC - full dataset
-
-```{r}
-data("turtles", package = "bridgesampling")
-
-m0_cache_file <- file.path(cache_dir, paste0("turtles_H0_fit_", rlang::hash(m_H0@model_code), ".rds"))
-m1_cache_file <- file.path(cache_dir, paste0("turtles_H1_fit_", rlang::hash(m_H1@model_code), ".rds"))
-
-# Directly copying the settings from the `turtles` page in the manual
-if(!file.exists(m0_cache_file)) {
-  stanfit_H0 <- sampling(m_H0,
-                     data = list(y = turtles$y, x = turtles$x, N = nrow(turtles)),
-                     iter = 15500, warmup = 500, chains = 10, cores = 10, refresh = 4000, seed = 456622342)
-  
-  draws_prior_H0 <- stanfit_to_prior_draws(stanfit_H0)
-  set.seed(321987524)
-  bs_prior_H0 <- bridgesampling::bridge_sampler(stanfit_H0)
-  saveRDS(list(draws = draws_prior_H0, bs = bs_prior_H0), file = m0_cache_file)
-} else {
-  h0_cache <- readRDS(m0_cache_file)
-  draws_prior_H0 <- h0_cache$draws
-  bs_prior_H0 <- h0_cache$bs
-}
-
-if(!file.exists(m1_cache_file)) {
-  stanfit_H1 <- sampling(m_H1,
-                   data = list(y = turtles$y, x = turtles$x, N = nrow(turtles),
-                               C = max(turtles$clutch), clutch = turtles$clutch),
-                   iter = 15500, warmup = 500, chains = 10, cores = 10, refresh = 4000, seed = 846522143)
-
-  draws_prior_H1 <- stanfit_to_prior_draws(stanfit_H1)
-  set.seed(3452365)
-  bs_prior_H1 <- bridgesampling::bridge_sampler(stanfit_H1)
-  saveRDS(list(draws = draws_prior_H1, bs = bs_prior_H1), file = m1_cache_file)
-} else {
-  h1_cache <- readRDS(m1_cache_file)
-  draws_prior_H1 <- h1_cache$draws
-  bs_prior_H1 <- h1_cache$bs
-  
-}
-bf_prior_bs <- bridgesampling::bayes_factor(bs_prior_H1, bs_prior_H0)
-prob1_uniform_prior <- bf_prior_bs$bf / (1 + bf_prior_bs$bf)
-
-# Tweak the prior assumed wihtout any data to have Pr(M1 | turtles) = target = 0.5
-# I want: target = pi_marg(y | M1) * prob1_tweaked / (pi_marg(y | M1) * prob1_tweaked + pi_marg(y | M0) * (1 - prob1_tweaked))
-prob1_target <- 0.5
-marg_m0 <- exp(bs_prior_H0$logml)
-marg_m1 <- exp(bs_prior_H1$logml)
-prob1_tweaked_prior <- (marg_m0 * prob1_target) / (marg_m1 + marg_m0 * prob1_target - marg_m1 * prob1_target)
-
-```
-
-
-
-
-
-
 
 
 
