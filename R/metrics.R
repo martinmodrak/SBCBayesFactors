@@ -35,10 +35,21 @@ calibration_metrics <- function(res, prob1_prior = 0.5) {
 
 #' @export
 print.calibration_metrics <- function(m) {
+  cat(m$n_sims, " simulations\n")
   cat("DAP - ", m$t$method, " - H0: ", m$t$null.value, "\n95% CI for difference: [", m$t$conf.int[1] - m$t$null.value, ", ", m$t$conf.int[2] - m$t$null.value,"], p = ", m$t$p.value,  "\n", sep = "")
   print(m$miscalibration_stats)
   cat("Log gamma range: [", min(m$log_gammas$log_gamma), ", ", max(m$log_gammas$log_gamma), "]\n",
       "Q95% under null: ", m$log_gamma_limit, ", ", sum(m$log_gammas$log_gamma < m$log_gamma_limit), "/", nrow(m$log_gammas), " (", scales::percent(mean(m$log_gammas$log_gamma < m$log_gamma_limit)), ") below threshold.\n", sep = "")
   cat("Sensitive to eCDF difference up to ", m$max_ecdf_diff, "\n")
   print(m$reliability_diag)
+}
+
+
+report_success_metrics <- function(m) {
+  cat(m$n_sims, " simulations, 95% CI for DAP difference from prior: [", m$t$conf.int[1] - m$t$null.value, ", ", m$t$conf.int[2] - m$t$null.value,"], p = ", m$t$p.value,  "\n", sep = "")
+  print(m$miscalibration_stats)
+  cat("Log gamma range: [", min(m$log_gammas$log_gamma), ", ", max(m$log_gammas$log_gamma), "]\n",
+      "Q95% under null: ", m$log_gamma_limit, ", ", sum(m$log_gammas$log_gamma < m$log_gamma_limit), "/", nrow(m$log_gammas), " (", scales::percent(mean(m$log_gammas$log_gamma < m$log_gamma_limit)), ") below threshold.\n", sep = "")
+  cat("Sensitive to eCDF difference up to ", m$max_ecdf_diff, "\n")
+
 }
