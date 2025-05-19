@@ -395,14 +395,6 @@ save_histories("turtles_norm_bad",
 
 ## Posterior SBC
 
-```{r shared-config}
-N <- NULL
-C <- NULL
-N_sims <- 2000
-iter <- 15500
-warmup <- 500
-init <- 0
-```
 
 ### Simulator
 
@@ -695,13 +687,13 @@ prob1_tweaked_prior <- (marg_m0 * prob1_target) / (marg_m1 + marg_m0 * prob1_tar
 
 
 
-```{r simulateds}
+```{r simulateds-post-full}
 N_per_old_clutch <- 0
 N_per_new_clutch <- 4
 C_new <- 25
 
 set.seed(345852)
-ds_turtles_m0 <- generate_datasets(
+ds_turtles_post_m0 <- generate_datasets(
   SBC_generator_function(
     sim_turtles_post_sbc,
     data_prior = turtles,
@@ -715,7 +707,7 @@ ds_turtles_m0 <- generate_datasets(
   ),
   n_sims = N_sims
 )
-ds_turtles_m1 <- generate_datasets(
+ds_turtles_post_m1 <- generate_datasets(
   SBC_generator_function(
     sim_turtles_post_sbc,
     data_prior = turtles,
@@ -731,16 +723,16 @@ ds_turtles_m1 <- generate_datasets(
 )
 
 set.seed(68234245)
-ds_turtles <- SBC_datasets_for_bf(ds_turtles_m0, ds_turtles_m1, prob_H1 = prob1_target)
+ds_turtles_post <- SBC_datasets_for_bf(ds_turtles_post_m0, ds_turtles_post_m1, prob_H1 = prob1_target)
 ```
 
-```{r turtles1}
-backend_turtles <- SBC_backend_bridgesampling(
+```{r turtles1-post}
+backend_turtles_post <- SBC_backend_bridgesampling(
   SBC_backend_rstan_sample(m_H0, iter = iter, warmup = warmup, init = init),
   SBC_backend_rstan_sample(m_H1, iter = iter, warmup = warmup, init = init),
   prior_prob1 = prob1_tweaked_prior
 )
-res_turtles_post <- compute_SBC_cache_blocks(ds_turtles, backend_turtles, 
+res_turtles_post <- compute_SBC_cache_blocks(ds_turtles_post, backend_turtles_post, 
                            keep_fits = FALSE,
                            cache_prefix = file.path(cache_dir, "turtles_post_"),
                            block_size = 200)
@@ -755,7 +747,7 @@ plot_ecdf_diff(res_turtles_post, combine_variables = combine_array_elements)
 ```
 
 ```{r}
-metrics_turtles_post <- calibration_metrics(res_turtles_post)
+metrics_turtles_post <- calibration_metrics(res_turtles_post, prob = prob1_target)
 print(metrics_turtles_post)
 ```
 

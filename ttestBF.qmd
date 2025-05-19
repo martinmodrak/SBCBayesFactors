@@ -187,15 +187,27 @@ saveRDS(metrics,
 ```{r}
 high_sd <- ds_ttest$generated %>% purrr::map_lgl(\(x) sd(x$y) >= 1)
 
-bp_high <- bp[high_sd,]
-bp_low <- bp[!high_sd,]
+res_high <- res[high_sd] 
+res_low <- res[!high_sd] 
 
-miscalibration_resampling_p(bp_high$prob, bp_high$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp_high$prob, y = bp_high$simulated_value)
-miscalibration_resampling_p(bp_low$prob, bp_low$simulated_value)
-reliabilitydiag::reliabilitydiag(x = bp_low$prob, y = bp_low$simulated_value)
+true_model <- as.numeric(ds_ttest_no_sigma$variables[,"model"])
+
+metrics_high <- calibration_metrics(res_high, prob1_prior = true_model[high_sd])
+metrics_low <- calibration_metrics(res_low, prob1_prior = true_model[!high_sd])
+
+print(metrics_high)
+print(metrics_low)
+
+# saveRDS(list(
+#   hist = hist,
+#   all = metrics,
+#   high = metrics_high,
+#   low = metrics_low),
+#   file.path(cache_dir, paste0("ttest_metrics.rds")))
+
 
 ```
+
 
 ## Fixed sigma
 
@@ -274,8 +286,11 @@ high_sd_fixed <- ds_fixed$generated %>% purrr::map_lgl(\(x) sd(x$y) >= 1)
 res_fixed_high <- res_fixed[high_sd_fixed] 
 res_fixed_low <- res_fixed[!high_sd_fixed] 
 
-metrics_fixed_high <- calibration_metrics(res_fixed_high)
-metrics_fixed_low <- calibration_metrics(res_fixed_low)
+true_model_fixed <- as.numeric(ds_fixed$variables[,"model"])
+
+metrics_fixed_high <- calibration_metrics(res_fixed_high, prob1_prior = true_model_fixed[high_sd_fixed])
+metrics_fixed_low <- calibration_metrics(res_fixed_low, prob1_prior = true_model_fixed[!high_sd_fixed])
+
 
 print(metrics_fixed_high)
 print(metrics_fixed_low)
@@ -330,8 +345,10 @@ high_sd_inv1psquared <- ds_inv1psquared$generated %>% purrr::map_lgl(\(x) sd(x$y
 res_inv1psquared_high <- res_inv1psquared[high_sd_inv1psquared] 
 res_inv1psquared_low <- res_inv1psquared[!high_sd_inv1psquared] 
 
-metrics_inv1psquared_high <- calibration_metrics(res_inv1psquared_high)
-metrics_inv1psquared_low <- calibration_metrics(res_inv1psquared_low)
+true_model_inv1psquared <- as.numeric(ds_inv1psquared$variables[,"model"])
+
+metrics_inv1psquared_high <- calibration_metrics(res_inv1psquared_high, prob1_prior = true_model_inv1psquared[high_sd_inv1psquared])
+metrics_inv1psquared_low <- calibration_metrics(res_inv1psquared_low, prob1_prior = true_model_inv1psquared[!high_sd_inv1psquared])
 
 print(metrics_inv1psquared_high)
 print(metrics_inv1psquared_low)
@@ -379,8 +396,10 @@ high_sd_cauchy <- ds_cauchy$generated %>% purrr::map_lgl(\(x) sd(x$y) >= 1)
 res_cauchy_high <- res_cauchy[high_sd_cauchy] 
 res_cauchy_low <- res_cauchy[!high_sd_cauchy] 
 
-metrics_cauchy_high <- calibration_metrics(res_cauchy_high)
-metrics_cauchy_low <- calibration_metrics(res_cauchy_low)
+true_model_cauchy <- as.numeric(ds_cauchy$variables[,"model"])
+
+metrics_cauchy_high <- calibration_metrics(res_cauchy_high, prob1_prior = true_model_cauchy[high_sd_cauchy])
+metrics_cauchy_low <- calibration_metrics(res_cauchy_low, prob1_prior = true_model_cauchy[!high_sd_cauchy])
 
 print(metrics_cauchy_high)
 print(metrics_cauchy_low)

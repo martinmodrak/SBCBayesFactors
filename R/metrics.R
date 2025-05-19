@@ -3,7 +3,10 @@ calibration_metrics <- function(res, prob1_prior = 0.5) {
   if(length(prob1_prior) == 1) {
     t_res <- t.test(bp$prob, mu = prob1_prior)
   } else if(all(prob1_prior %in% c(0,1))) {
+    stopifnot(length(prob1_prior) == length(res))
     t_res <- t.test(bp$prob, prob1_prior)
+  } else {
+    stop("Invalid prob1_prior")
   }
   miscalibration_stats <- miscalibration_resampling_stats(bp$prob, bp$simulated_value)
   reliability_diag <- my_reliability_diag(bp)
