@@ -320,7 +320,7 @@ r_inv1psquared <- function() {
 }
 
 set.seed(5422223)
-ds_inv1psquared <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = r_inv1psquared, r_scale = r_scale), n_sims = 20000)
+ds_inv1psquared <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = r_inv1psquared, r_scale = r_scale), n_sims = 30000)
 ```
 
 ```{r}
@@ -371,7 +371,7 @@ $$
 
 ```{r}
 set.seed(235485)
-ds_cauchy <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = \() abs(rcauchy(1)), r_scale = r_scale), n_sims = 20000)
+ds_cauchy <- generate_datasets(SBC_generator_function(sim_jzs_sigma, N = 5, sigma_generator = \() abs(rcauchy(1)), r_scale = r_scale), n_sims = 40000)
 ```
 
 ```{r}

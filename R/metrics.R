@@ -48,11 +48,12 @@ print.calibration_metrics <- function(m) {
 }
 
 
-report_success_metrics <- function(m) {
-  cat(m$n_sims, " simulations, 95% CI for DAP difference from prior: [", m$t$conf.int[1] - m$t$null.value, ", ", m$t$conf.int[2] - m$t$null.value,"], p = ", m$t$p.value,  "\n", sep = "")
-  print(m$miscalibration_stats)
-  cat("Log gamma range: [", min(m$log_gammas$log_gamma), ", ", max(m$log_gammas$log_gamma), "]\n",
-      "Q95% under null: ", m$log_gamma_limit, ", ", sum(m$log_gammas$log_gamma < m$log_gamma_limit), "/", nrow(m$log_gammas), " (", scales::percent(mean(m$log_gammas$log_gamma < m$log_gamma_limit)), ") below threshold.\n", sep = "")
-  cat("Sensitive to eCDF difference up to ", m$max_ecdf_diff, "\n")
-
+report_success_metrics <- function(m, dap_digits = 3, miscalib_digits = 4, ecdf_diff_digits = 3) {
+  my_format <- function(x, digits) {
+    format(round(x, digits), scientific = FALSE)
+  }
+  cat("95% CI for DAP difference from prior: ", my_format(m$t$conf.int[1] - m$t$null.value, dap_digits), " -- ", my_format(m$t$conf.int[2] - m$t$null.value, dap_digits),"; ",
+      "miscalibration: ", my_format(m$miscalibration_stats$observed, miscalib_digits), ", ", scales::percent(1 - m$miscalibration_stats$alpha), " quantile under null: ", my_format(m$miscalibration_stats$rejection_limit, miscalib_digits),"; ",
+      "SBC sensitive to eCDF difference up to ", my_format(m$max_ecdf_diff, ecdf_diff_digits),
+      sep = "")
 }

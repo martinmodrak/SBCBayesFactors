@@ -78,7 +78,6 @@ A flexible method is bridgesampling (TODO cite), which can work with any set of 
 
 Our main contribution is to employ an improved variant of simulation-based calibration checking  (SBC, Modrák et al.) and the accompanying theoretical progress for validating Bayes factor computation. We show a theoretical equivalence between SBC for Bayes factors and binary prediction calibration. Using several toy models, we demonstrate how problems in Bayes factor computation not detectable by previously reported methods can easily be detected by SBC. Finally, we turn to real-world problems and show examples of full validation workflow for bridgesampling over Stan models, compare efficiency of various checks in discovering errors in normalization constants and show that using posterior SBC (cite Vehtari, https://arxiv.org/abs/2408.06504) is necessary when checking Bayes factor computation under improper priors for some model parameters. This in turns lets us to validate the computation for several models available in the BayesFactors package.
 
-<!-- TODO improve tone. Maybe also ask Daniel & Shravan about the paragraph -->
 Previously, Schad and co-authors have developed a workflow for validating Bayes factor computation inspired by SBC and applied it to several problems (cite workflow, aggregate). Both the theoretical and practical contributions of this paper are partially a reaction to Schad et al.: from the theoretical side, we note that the Schad et al. approach differs importantly from SBC both as originally described (cite Talts) as well as our improved variant. In fact the Schad et al. approach is better understood as a check based on data-averaged posterior. We show that data-averaged posterior checks typically use simulation results inefficiently and are insensitive to large classes of potential problems. 
 
 We recently collaborated with Schad & Vasisth on using data-averaged posterior and binary prediction calibration to check Bayes factor for several families of models popular in cognitive science (cite biased). This paper provides theoretical and empirical underpinnings for this approach as well as showing further possible extensions and improvements.
@@ -496,9 +495,11 @@ To investigate both the overall trend and variability of the evolution of the te
 statistics as the number of simulations increase, we take our pool of simulations and randomly sample 100 sets of the same size --- each set representing a possible "history". We then compute the
 test statistic at equally-spaced points in the history. The pool always contains at least 10 times more simulations than the length of a single history under investigation.
 
-For the data-averaged posterior we use the p-value from a standard t-test.
-For binary prediction calibration, we use the p-value from the bootstrap-based miscalibration test described in
-[Dimitriadis, Gneiting, Jordan (2021)](https://doi.org/10.1073/pnas.2016191118).
+For the data-averaged posterior we use the results from a standard t-test.
+For binary prediction calibration, we use a bootstrap-based miscalibration test based on score decomposition described in
+[Dimitriadis, Gneiting, Jordan (2021)](https://doi.org/10.1073/pnas.2016191118). 
+Specifically, miscalibration reported here is the difference between the actual Brier score of the forecasts and Brier score from a suitably recalibrated forecast which provides a meaningful interpretation to its values.
+Following Dimitriadis et al. we calculate bootstrap-based null distribution for miscalibration by repeatedly sampling new observed binary outcomes as if the computed probabilities were correct. This lets us compute a p-value as well as the 95\% quantile of the null distribution.
 
 For SBC we use the gamma statistic of Saailnoya (also used in Modrák et al.). 
 Saailnoya report a method to evaluate quantiles of the distribution under the null, but
@@ -674,9 +675,9 @@ There is however a case where data-averaged posterior works better than the othe
 main problem is overall bias in the BF (e.g. because of wrong normalization constant in
 one of the models) --- here we add 2 to the logarithm of the Bayes factor for all
 simulations. This is discovered relatively quickly by all of the options, but data-averaged posterior requires
-the fewest simulations.
+the fewest simulations, see @fig-pnb-bias.
 
-```{r}
+```{r fig-pnb-bias}
 #| fig-cap: Histories of check statistics for biased poisson-NB model.  A) shows the log gamma statistic of default SBC, B) is the p-value of the bootstrapped miscalabration test of Dimitraidis et al. and C) is the p-value from t-test for the data-averaged posterior.
 
 hist_pnb_bias <- load_histories("pnb_bias", "poisson_nb_example.qmd")
@@ -729,19 +730,19 @@ turtles_post_half_ci_diff <- format_t_test_diff(turtles_post_half_metrics$t)
 We perform two checks --- for one we use standard SBC and $N = 70, G = 10$ (this keeps the distribution of observed BFs reasonably wide) and simulate the $x_i \sim N(0, \frac{1}{3})$.
 Due to the relatively wide priors on parameters, this tends to produce a substantial number of datasets where $y_i$ has zero or very little variance.
 This can be overcome by rejection sampling (see methods for justificat) --- as in any other Bayesian inference problem, selectively removing datasets based on properties of $y$ does not change the posterior at all as long as we always take a new draw from the prior for the next dataset. So we remove all datasets (and the associated prior draws) where $\text{Avg}(y) < \frac{1}{10}$ or $\text{Avg}(y) > \frac{9}{10}$.
- In this example, rejections change the implied prior to $P(\mathcal{M}_1) \simeq `r round(implied_prior_rejection, 2)`$ and after running `r format(turtles_metrics$n_sims, big.mark = " ")` we obtain gamma statistics in the range TODO (95% CI around the null = TODO), binary miscalibration of TODO (95% CI around the null = TODO) and 95% CI for the difference between prior and data-averaged posterior mean for the model index of `r turtles_ci_diff`.
+ In this example, rejections change the implied prior to $P(\mathcal{M}_1) \simeq `r round(implied_prior_rejection, 2)`$ and after running `r format(turtles_metrics$n_sims, big.mark = " ")` we find no problems `r report_success_metrics(turtles_metrics)`.
 
 
 For the second check, we focus the simulations to the neighborhood of the actual data. 
 To this end, we pick data for half of the groups as $y_1$, fit both models to this smaller dataset,
-and calculate the Bayes factor (TODO result). We then use the fitted parameters to simulate
+and calculate the posterior model probabilities. We then use the fitted parameters to simulate
 data for the remaining groups.
 
 We could use the implied model probability 
 as prior for the model index, but to show an alternative, we can also choose $P(M_1) \simeq `r round(turtles_post_half_metrics$prob1_tweaked_prior_half,2)`$,
 which results in $P(M_1\mid y_1) = \frac{1}{2}$ and so our simulations will be more balanced --- this new $P(M_1)$
 is then used when converting the computed Bayes factor into posterior model probability for calibration checks.
-After running `r format(turtles_post_half_metrics$n_sims, big.mark = " ")` simulations we obtain gamma statistics in the range TODO (95% CI around the null = TODO), binary miscalibration of TODO (95% CI around the null = TODO) and 95% CI for the difference between prior and data-averaged posterior mean for the model index of `r turtles_ci_diff`.
+After running `r format(turtles_post_half_metrics$n_sims, big.mark = " ")` simulations we see no calibration issues `r report_success_metrics(turtles_post_half_metrics)`.
 
 TODO: maybe it would be better to report remaining uncertainty for models that passed calibration in a single table?
 
@@ -752,7 +753,17 @@ the prevalence of missing or incorrect normalizing constants for posterior densi
 The authors note that 9 out of 21 investigated Stan models using a truncated distribution neglected the normalizing constant. If those models were used with `bridgesampling`, the resulting marginal likelihoods (and hence Bayes factors) would be biased. Here we test how quickly our checks discover this problem. We use the
 same model as in the previous section, except for a more standard prior on random effect standard deviation $\tau \sim \text{HalfN}(0, 1)$. We also neglect the normalization constant and so the density and marginal likelihood is wrong by a factor of 2. 
 
-This is quickly picked up by all checks, with binary prediction calibration and data-averaged posterior being the fastest. TODO - show  evals
+This is quickly picked up by all checks, with binary prediction calibration and data-averaged posterior being the fastest (@fig-turtles-bad-norm). 
+
+
+```{r fig-turtles-bad-norm}
+#| fig-cap: Histories of check statistics for bad normalization constant in the turtles model.  A) shows the log gamma statistic of default SBC, B) is the p-value of the bootstrapped miscalabration test of Dimitraidis et al. and C) is the p-value from t-test for the data-averaged posterior.
+
+hist_turtles_norm_bad <- load_histories("turtles_norm_bad", "turtles.qmd")
+(plot_log_gamma_histories(hist_turtles_norm_bad$log_gamma) + labs(tag = "A) SBC") + tag_theme) / (
+(plot_log_p_histories(hist_turtles_norm_bad$miscalibration) + labs(tag = "B) Calibration") + tag_theme) + 
+(plot_log_p_histories(hist_turtles_norm_bad$ttest)  + labs(tag = "C) DAP") + tag_theme))
+```
 
 ### Posterior SBC and the importance of using correct priors
 
@@ -786,8 +797,7 @@ Where $x_i = \pm \frac{\sqrt{2}}{2}$ is a binary predictor coded following the s
 Without modifications, we therefore cannot sample from the prior on $\alpha, \sigma^2$.
 
 ```{r}
-ranef_test <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100_tests.rds"), "lmbf_ranef_presence_post_sbc.qmd")
-ranef_ci_diff <- format_t_test_diff(ranef_test$t)
+ranef_test <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100_metrics.rds"), "lmbf_ranef_presence_post_sbc.qmd")
 
 res_ranef_post <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100.rds"), "lmbf_ranef_presence_post_sbc.qmd")$result
 n_ranef_sims <- length(res_ranef_post)
@@ -798,21 +808,20 @@ If we choose the overall intercept and residual standard deviation as fixed cons
 (here $\alpha = 0, \sigma = 1$) we obtain an apparent miscalibration
 for both the model index and all the individual random effect parameters (see
 @fig-ranef-constant). In this case the problem is the most quickly picked up by the
-binary calibration test with data-averaged posterior and SBC for the model index following very quickly. However
+binary prediction calibration test with data-averaged posterior and SBC for the model index following very quickly. However
 this is a false positive due to the mismatch between the simulator (assuming constant $\alpha, \sigma$) and the model. Employing posterior SBC using a dataset with 4 groups and 3 observations each as $y_1$ (to make all
-parameters well identified for sampling) produces a proper prior for the mean
-and intercept and results in perfect calibration in all methods even after running `r format(n_ranef_sims, big.mark = " ")`
-simulations (@fig-ranef-post, miscalibration p `r format_p(ranef_test$miscalibration_p)`,
-95% CI for data-averaged posterior difference from expected mean `r ranef_ci_diff`). So we can conclude that
+parameters well identified for sampling) produces a proper prior for the intercept and standard deviations and results in perfect calibration in all methods even after running `r format(n_ranef_sims, big.mark = " ")`
+simulations (@fig-ranef-post; `r report_success_metrics(ranef_test)`). So we can conclude that
 the BF calculation in the BayesFactor package in fact works well for this case.
 
 ```{r fig-ranef-constant}
-#| fig-cap: Histories of check statistics for random effect model using constant mean and intercept. 
+#| fig-cap: Histories of check statistics for random effect model using constant intercept and standard deviation. 
 
 hist_ranef_constant <- load_histories("ranef_constant", "lmbf_ranef_presence_post_sbc.qmd")
 (plot_log_gamma_histories(hist_ranef_constant$log_gamma)  + labs(tag = "A) SBC") + tag_theme)/ (
 (plot_log_p_histories(hist_ranef_constant$miscalibration)  + labs(tag = "B) Calibration") + tag_theme) + 
 (plot_log_p_histories(hist_ranef_constant$ttest)  + labs(tag = "C) DAP") + tag_theme))
+#TODO: uncertainty about red line?
 ```
 
 ```{r fig-ranef-post}
@@ -882,17 +891,13 @@ tag_theme_calib <- tag_theme + theme(plot.tag.position = c(0, 1.1))
 
 ```{r}
 ttest_post <- load_precomputed_file(here::here("cache/ttest_post_metrics.rds"), "ttestBF.qmd")
-ttest_ci_diff <-  format_t_test_diff(ttest_post$t)
 
 
 ```
 
-TODO: consistent reporting for passes SBC (miscalib? max_ecdf_diff? both? a table?)
-
 When we use posterior SBC (with $y_1 = (-1,1)$), the computed Bayes factors pass all checks to high
-precision --- we have run `r format(ttest_post$n_sim, big.mark  = " ")` simulations and obtained miscalibration p `r format_p(ttest_post$miscalibration_stats$p)`,
-95% CI for data-averaged posterior difference from expected mean `r ttest_ci_diff` and no problems with SBC including all
-derived quantities (test is sensitive to eCDF differences up to `r ttest_post$max_ecdf_diff`). So we conclude that the `ttest` function in fact works well and
+precision --- we have run `r format(ttest_post$n_sim, big.mark  = " ")` simulations and see no sign of problems including all
+derived quantities  (`r report_success_metrics(ttest_post, dap_digits = 4)`). So we conclude that the `ttest` function in fact works well and
 the above-mentioned violations of the SBC and binary prediction calibration checks are simply a result of not matching the simulations to
 the model.
 
@@ -1287,6 +1292,33 @@ On the contrary, SBC as well as prediction calibration and data-averaged posteri
 
 ### Miscalibration with surrogate distributions for variance in `ttestBF`
 
-TODO - paste results
+```{r}
+ttest_inv1psquared <- load_precomputed_file("cache/ttest_post_metrics_inv1psquared.rds", "ttestBF.qmd")
+ttest_cauchy <- load_precomputed_file("cache/ttest_post_metrics_cauchy.rds", "ttestBF.qmd")
+```
+
+
+Recall the the improper prior for variance is $\pi_\text{prior}\left(\sigma^2\right) &= \frac{1}{\sigma^2}$. First we instead use a proper prior with similar form $\pi_\text{prior}(\sigma^2) = \frac{1}{1 + \sigma^2}$. We require `r format(ttest_inv1psquared$all$n_sims, big.mark = " ")` simulations to detect mild miscalibration which is visible in the specifically designed derived quantity as well as when splitting the results based on the standard deviation of the data, see @fig-ttest-inv1psquared. We see similarly mild problems when instead using $\sigma \sim \text{HalfCauchy}(0,1)$, see @fig-ttest-cauchy.
+
+
+```{r fig-ttest-inv1psquared}
+#| fig-cap: Results of SBC when using a $\pi_\text{prior}(\sigma^2) = \frac{1}{1 + \sigma^2}$ when simulating datasets for Bayesian t-test. A) ECDF difference plot for the derived quantity $f(i, y) = (i - \frac{1}{2})(\text{sd}(y) - 1)$ (model_sd_m1). B) and C) Separate binary prediction calibration plots for datasets with high/low standard deviation.
+
+res_ttest_inv1psquared <- load_precomputed_file("cache/ttest_inv1psquared.rds", "ttestBF.qmd")$result
+
+
+((plot_ecdf_diff(res_ttest_inv1psquared, variables = "model_sd_m1")  + theme(legend.position = "bottom") + labs(tag = "A) SBC") + tag_theme_calib) | (ttest_inv1psquared$high$reliability_diag  + labs(tag = "B) Calibration - sd(y) ≥ 1") + tag_theme_calib) | 
+   (ttest_inv1psquared$low$reliability_diag  + labs(tag = "C) Calibration - sd(y) < 1") + tag_theme_calib))
+```
+
+```{r fig-ttest-cauchy}
+#| fig-cap: Results of SBC when using a $\sigma \sim \text{HalfCauchy}(0,1)$ when simulating datasets for Bayesian t-test. A) ECDF difference plot for the derived quantity $f(i, y) = (i - \frac{1}{2})(\text{sd}(y) - 1)$ (model_sd_m1). B) and C) Separate binary prediction calibration plots for datasets with high/low standard deviation.
+
+res_ttest_cauchy <- load_precomputed_file("cache/ttest_cauchy.rds", "ttestBF.qmd")$result
+
+
+((plot_ecdf_diff(res_ttest_cauchy, variables = "model_sd_m1") + theme(legend.position = "bottom") + labs(tag = "A) SBC") + tag_theme_calib) | (ttest_cauchy$high$reliability_diag  + labs(tag = "B) Calibration - sd(y) ≥ 1") + tag_theme_calib) | 
+   (ttest_cauchy$low$reliability_diag  + labs(tag = "C) Calibration - sd(y) < 1") + tag_theme_calib))
+```
 
 
