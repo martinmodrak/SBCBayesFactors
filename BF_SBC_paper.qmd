@@ -1298,7 +1298,7 @@ ttest_cauchy <- load_precomputed_file("cache/ttest_post_metrics_cauchy.rds", "tt
 ```
 
 
-Recall the the improper prior for variance is $\pi_\text{prior}\left(\sigma^2\right) &= \frac{1}{\sigma^2}$. First we instead use a proper prior with similar form $\pi_\text{prior}(\sigma^2) = \frac{1}{1 + \sigma^2}$. We require `r format(ttest_inv1psquared$all$n_sims, big.mark = " ")` simulations to detect mild miscalibration which is visible in the specifically designed derived quantity as well as when splitting the results based on the standard deviation of the data, see @fig-ttest-inv1psquared. We see similarly mild problems when instead using $\sigma \sim \text{HalfCauchy}(0,1)$, see @fig-ttest-cauchy.
+Recall the the improper prior for variance is $\pi_\text{prior}\left(\sigma^2\right) = \frac{1}{\sigma^2}$. First we instead use a proper prior with similar form $\pi_\text{prior}(\sigma^2) = \frac{1}{1 + \sigma^2}$. We require `r format(ttest_inv1psquared$all$n_sims, big.mark = " ")` simulations to detect mild miscalibration which is visible in the specifically designed derived quantity as well as when splitting the results based on the standard deviation of the data, see @fig-ttest-inv1psquared. We see similarly mild problems when instead using $\sigma \sim \text{HalfCauchy}(0,1)$, see @fig-ttest-cauchy.
 
 
 ```{r fig-ttest-inv1psquared}
