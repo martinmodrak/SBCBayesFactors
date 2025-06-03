@@ -111,9 +111,12 @@ res_good_cauchy <- compute_SBC(ds_cauchy, SBC_backend_good_example("cauchy", 100
 ```{r}
 plot_ecdf_diff(res_good_cauchy)
 plot_rank_hist(res_good_cauchy)
-bp_good_cauchy <- binary_probabilities_from_stats(res_good_cauchy$stats)
-my_reliability_diag(bp_good_cauchy)
-miscalibration_resampling_p(bp_good_cauchy$prob, bp_good_cauchy$simulated_value)
+
+metrics_good_cauchy <- calibration_metrics(res_good_cauchy)
+print(metrics_good_cauchy)
+saveRDS(metrics_good_cauchy,
+  file.path(cache_dir, paste0("good_cauchy_metrics.rds")))
+
 ```
 
 
@@ -131,7 +134,11 @@ res_good_norm2 <- compute_SBC(ds_norm2, SBC_backend_good_example(2, 100),
 ```{r}
 plot_ecdf_diff(res_good_norm2)
 plot_rank_hist(res_good_norm2)
-bp_good_norm2 <- binary_probabilities_from_stats(res_good_norm2$stats)
-my_reliability_diag(bp_good_norm2)
-miscalibration_resampling_p(bp_good_norm2$prob, bp_good_norm2$simulated_value)
+
+
+metrics_good_norm2 <- calibration_metrics(res_good_norm2)
+print(metrics_good_norm2)
+saveRDS(metrics_good_norm2,
+  file.path(cache_dir, paste0("good_norm2_metrics.rds")))
+
 ```

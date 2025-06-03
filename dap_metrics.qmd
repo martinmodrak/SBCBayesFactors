@@ -1,0 +1,112 @@
+---
+title: "DAP metrics"
+format: html
+---
+
+```{r setup}
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(SBC)
+devtools::load_all()
+
+cache_dir <- here::here("cache")
+
+theme_set(theme_minimal())
+```
+
+
+```{r cluster}
+setup_cluster()
+
+```
+
+
+```{r}
+res_good_cauchy <- load_precomputed_file(here::here("cache/good_cauchy.rds"), "good_check_examples.qmd")$result
+res_good_norm2 <- load_precomputed_file(here::here("cache/good_norm2.rds"), "good_check_examples.qmd")$result
+res_ranef_post <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100.rds"), "lmbf_ranef_presence_post_sbc.qmd")$result
+metrics_ranef_post <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100_metrics.rds"), "lmbf_ranef_presence_post_sbc.qmd")
+
+
+bp_good_cauchy <- binary_probabilities_from_stats(res_good_cauchy$stats)
+bp_good_norm2 <- binary_probabilities_from_stats(res_good_norm2$stats)
+bp_ranef_post <- binary_probabilities_from_stats(res_ranef_post$stats)
+
+N_to_test <- c(10, 20, 50, 100)
+bp_correct <- list("Good Cauchy" = list(bp = bp_good_cauchy, prob1_prior = 0.5),
+                   "Good Normal" = list(bp = bp_good_norm2, prob1_prior = 0.5),
+                   "Ranef presence Post SBC" = list(bp = bp_ranef_post, prob1_prior = metrics_ranef_post$prob1_prior))
+```
+
+
+```{r}
+res_correct_list <- list()
+for(N in N_to_test){
+  for(bp_name in names(bp_correct)) {
+     probs <- bp_correct[[bp_name]]$bp$prob
+     cache_file <- file.path(cache_dir, paste0("dap_metrics_correct_", rlang::hash(list(probs, N))))
+     res_correct_list[[length(res_correct_list) + 1]] <- 
+       dap_power_scenario(bp_name, N_sims = 1000,  probs, N = N, bp_correct[[bp_name]]$prob1_prior)
+  }
+}
+res_df_correct <- do.call(rbind, res_correct_list)
+```
+
+```{r}
+probs_df <- purrr::imap_dfr(bp_correct, \(x, name) data.frame(scenario = name, prob = x$bp$prob)) 
+probs_df |> ggplot(aes(x = prob)) + geom_histogram(binwidth = 0.05) + facet_wrap(~scenario, scales = "free_y")
+  
+correct_summary <- res_df_correct |> dap_power_summary() 
+saveRDS(list(summary = correct_summary, probs_df = probs_df), file = file.path(cache_dir, "dap_metrics_correct_summary.rds"))
+
+
+correct_summary |> dap_power_table()
+
+```
+
+
+```{r}
+bad_norm_list <- list()
+for(i in 1:5) {
+  bad_norm_list[[i]] <- load_precomputed_file(here::here(paste0("cache/turtles_norm_bad_",i,".rds")), "turtles.qmd")$result
+}
+res_turtles_bad_norm <- do.call(bind_results, bad_norm_list)
+
+res_ranef_constant <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_constant_100_7500.rds"), "lmbf_ranef_presence_post_sbc.qmd")$result
+metrics_ranef_constant <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_constant_100_metrics.rds"), "lmbf_ranef_presence_post_sbc.qmd")
+res_pnb_bias <- load_precomputed_file(here::here("cache/poisson_nb_bias.rds"), "poisson_nb_example.qmd")$result
+
+
+bp_turtles_bad_norm <- binary_probabilities_from_stats(res_turtles_bad_norm$stats)
+bp_ranef_constant <- binary_probabilities_from_stats(res_ranef_constant$stats)
+bp_pnb_bias <- binary_probabilities_from_stats(res_pnb_bias$stats)
+
+N_to_test <- c(10, 20, 50, 100)
+bp_wrong <- list("Poisson NB - bias" = list(bp = bp_pnb_bias, prob1_prior = 0.5),
+                   "Turtles - bad normalization" = list(bp = bp_turtles_bad_norm, prob1_prior = 0.5),
+                   "Ranef presence fixed" = list(bp = bp_ranef_constant, prob1_prior = metrics_ranef_constant$prob1_prior))
+```
+
+
+```{r}
+res_wrong_list <- list()
+for(N in N_to_test){
+  for(bp_name in names(bp_wrong)) {
+     res_wrong_list[[length(res_wrong_list) + 1]] <- 
+       dap_power_scenario(bp_name, N_sims = 1000,  bp_wrong[[bp_name]]$bp$prob, N = N, bp_wrong[[bp_name]]$prob1_prior)
+  }
+}
+res_df_wrong <- do.call(rbind, res_wrong_list)
+```
+
+```{r}
+probs_wrong_df <- purrr::imap_dfr(bp_wrong, \(x, name) data.frame(scenario = name, prob = x$bp$prob)) 
+probs_wrong_df |> ggplot(aes(x = prob)) + geom_histogram(binwidth = 0.05) + facet_wrap(~scenario, scales = "free_y")
+
+wrong_summary <- res_df_wrong |> dap_power_summary() 
+  
+saveRDS(list(summary = wrong_summary, probs_df = probs_wrong_df), file = file.path(cache_dir, "dap_metrics_wrong_summary.rds"))
+
+wrong_summary |> dap_power_table()
+```

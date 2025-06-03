@@ -135,6 +135,30 @@ compute_log_gamma_history <- function(stats, step = step, min_sim_id = 1) {
     inner_join(gamma_thresholds_df, by = c("sim_id" = "N_sims"))
 }
 
+schad_bf_wrapper <- function(probs_to_test, expected, rscale = sqrt(1/12)) {
+  n <- length(probs_to_test)
+  if(n <= 5) {
+    log_p <- 0
+  } else if(sd(probs_to_test) == 0) {
+    if(abs(mean(probs_to_test) - expected) < 1e-8) {
+      log_p <- 0
+    } else {
+      log_p <- NA_real_
+    }
+  } else if(sd(probs_to_test) < 0.0001) {
+    if(abs(mean(probs_to_test) - expected) < 0.001) {
+      log_p <- 0
+    } else {
+      log_p <- pnorm(-abs(mean(probs_to_test) - expected), 0, 0.001, log.p = TRUE) + log(2)
+    }
+  } else {
+    bf <- tryCatch(BayesFactor::ttestBF(probs_to_test, mu = expected, rscale = rscale),
+                   error = \(e) { message("ttestBF failed for c(",paste0(probs_to_test, collapse = ", "), ")");  NA_real_ })
+    log_p <-  plogis(-bf@bayesFactor[1, "bf"], log.p = TRUE)
+  }
+  log_p
+}
+
 compute_schad_bf_history_single <- function(probs, true_model, step = 1, expected = 0.5) {
   steps_to_include <- include_step(1:length(probs), step)
 
@@ -145,25 +169,7 @@ compute_schad_bf_history_single <- function(probs, true_model, step = 1, expecte
     # don't play nicely
     probs_to_test <- probs[1:i]
     out_i <- step_id(i,step)
-    if(i <= 5) {
-      log_ps[out_i] <- 0
-    } else if(sd(probs_to_test) == 0) {
-      if(abs(mean(probs_to_test) - expected) < 1e-8) {
-        log_ps[out_i] <- 0
-      } else {
-        log_ps[out_i] <- NA_real_
-      }
-    } else if(sd(probs_to_test) < 0.0001) {
-      if(abs(mean(probs_to_test) - expected) < 0.001) {
-        log_ps[out_i] <- 0
-      } else {
-        log_ps[out_i] <- pnorm(-abs(mean(probs_to_test) - expected), 0, 0.001, log.p = TRUE) + log(2)
-      }
-    } else {
-      bf <- tryCatch(BayesFactor::ttestBF(probs_to_test, mu = expected, rscale = uniform_sd),
-                     error = \(e) { message("ttestBF failed for c(",paste0(probs_to_test, collapse = ", "), ")");  NA_real_ })
-      log_ps[out_i] <-  plogis(-bf@bayesFactor[1, "bf"], log.p = TRUE)
-    }
+    log_ps[out_i] <- schad_bf_wrapper(probs_to_test, expected, rscale = uniform_sd)
   }
 
   return(log_ps)
@@ -473,3 +479,75 @@ load_histories <- function(name, producer_script) {
   load_precomputed_file(filename, producer_script)
 }
 
+
+dap_power_single <- function(id, probs_all, N, expected, B = 10000, rscale = 1/12) {
+  probs <- sample(probs_all, size = N, replace = TRUE)
+  if(sd(probs) == 0) {
+    if(abs(mean(probs) - expected) < 1e-8) {
+      p_t <- 1
+    } else {
+      p_t <- NA_real_
+    }
+  } else {
+    p_t <- t.test(probs, mu = expected)$p.value
+  }
+  p_schad <- exp(schad_bf_wrapper(probs, expected, rscale = rscale))
+  p_gaffke <- gaffke_p(probs, mu = expected)
+  data.frame(id = id, method = c("t", "schad", "gaffke"), p = c(p_t, p_schad, p_gaffke))
+}
+
+dap_power_scenario <- function(scenario, N_sims, probs_all, N, expected, ...) {
+  res_list <- future.apply::future_lapply(
+    1:N_sims,
+    \(id) {dap_power_single(id, probs_all, N, expected, ...)},
+    future.seed = TRUE)
+  res_df <- do.call(rbind, res_list)
+  res_df$scenario <- scenario
+  res_df$N <- N
+  res_df
+}
+
+dap_power_summary <- function(res_df) {
+  res_df |> group_by(scenario, N, method) |>
+    summarise(n_total = n(), n_success = sum(p <= 0.05),
+              power = n_success / n_total,
+              ci_low = qbeta(0.025, n_success, n_total - n_success + 1),
+              ci_high = qbeta(0.975, n_success + 1, n_total - n_success),
+              .groups = "drop"
+              )
+}
+
+plot_dap_power <- function(summary_df, highlight = NULL) {
+  if(is.null(highlight)) {
+    highlight_geom <- NULL
+  } else {
+    highlight_geom <- geom_hline(color = "orangered", yintercept = highlight)
+  }
+
+  summary_df |>
+    mutate(method = factor(method, levels = c("t", "schad", "gaffke"), labels = c("T-test", "Bayesian t-test", "Gaffke"))) |>
+    ggplot() +
+    aes(x = method, y = power, ymin =ci_low, ymax = ci_high, color = method) +
+    highlight_geom +
+    geom_pointrange(position = position_dodge(width = 0.5)) +
+    facet_grid(scenario~N, labeller = labeller(.rows = label_value, .cols = label_both)) +
+    scale_color_brewer(type = "qual") + guides(color = "none") +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.2))
+
+}
+
+dap_power_table <- function(summary_df) {
+  summary_df |> mutate(
+    value = paste0(scales::percent(power, accuracy = 0.01)),
+    method = factor(
+      method,
+      levels = c("t", "gaffke", "schad"),
+      labels = c("T-test", "Gaffke", "Bayesian t-test")
+    )
+  ) |>
+    select(N, scenario, method, value) |>
+    tidyr::pivot_wider(names_from = "method", values_from = "value", names_sort = TRUE) |>
+    arrange(N) |>
+    mutate(N = if_else(scenario == min(scenario), as.character(N), "")) |>
+    knitr::kable()
+}
