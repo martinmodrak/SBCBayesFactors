@@ -8,6 +8,8 @@ calibration_metrics <- function(res, prob1_prior = 0.5) {
   } else {
     stop("Invalid prob1_prior")
   }
+  okada_good_t <- good_check_okada(bp$prob, bp$simulated_value, prior_prob1 = mean(prob1_prior))
+
   miscalibration_stats <- miscalibration_resampling_stats(bp$prob, bp$simulated_value)
   reliability_diag <- my_reliability_diag(bp)
 
@@ -31,7 +33,8 @@ calibration_metrics <- function(res, prob1_prior = 0.5) {
          max_ecdf_diff = max_ecdf_diff,
          log_gamma_limit = log(gamma_limit),
          prob1_prior = prob1_prior,
-         reliability_diag = reliability_diag),
+         reliability_diag = reliability_diag,
+         okada_good_t = okada_good_t),
     class = "calibration_metrics"
   )
 }
@@ -44,6 +47,7 @@ print.calibration_metrics <- function(m) {
   cat("Log gamma range: [", min(m$log_gammas$log_gamma), ", ", max(m$log_gammas$log_gamma), "]\n",
       "Q95% under null: ", m$log_gamma_limit, ", ", sum(m$log_gammas$log_gamma < m$log_gamma_limit), "/", nrow(m$log_gammas), " (", scales::percent(mean(m$log_gammas$log_gamma < m$log_gamma_limit)), ") below threshold.\n", sep = "")
   cat("Sensitive to eCDF difference up to ", m$max_ecdf_diff, "\n")
+  cat("Fractional Good check 95% CI : [", m$okada_good_t$conf.int[1], ", ", m$okada_good_t$conf.int[2],"], p = ", m$okada_good_t$p.value,  "\n", sep = "")
   print(m$reliability_diag)
 }
 

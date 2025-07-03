@@ -224,6 +224,44 @@ compute_ttest_history <- function(...) {
 }
 
 
+compute_okada_history_single <- function(probs, true_model, step = 1, prior_prob1 = 0.5) {
+  steps_to_include <- include_step(1:length(probs), step)
+  bf01s <- ((1 - probs) / probs) / ((1 - prior_prob1) / prior_prob1)
+
+  log_ps <- numeric(floor(length(probs)/step))
+  for(i in which(steps_to_include)) {
+    out_i <- step_id(i,step)
+
+    bf01s_to_test <- bf01s[1:i]
+    true_to_test <- true_model[1:i]
+    bf01s_frac_given_h0 <- bf01s_to_test[true_to_test == 0]^-0.5
+    bf01s_frac_given_h1 <- bf01s_to_test[true_to_test == 1]^0.5
+
+    # Handling some edge cases typically with few sims where t-test
+    # don't play nicely
+    if(length(bf01s_frac_given_h0 == 1) < 2 || length(bf01s_frac_given_h1 == 0) < 2) {
+      log_ps[out_i] <- 0
+    } else if(sd(bf01s_frac_given_h0) == 0 || sd(bf01s_frac_given_h1) == 0) {
+      if(abs(mean(bf01s_frac_given_h0) - mean(bf01s_frac_given_h1)) < 1e-8) {
+        log_ps[out_i] <- 0
+      } else {
+        log_ps[out_i] <- NA_real_
+      }
+    } else {
+      t <- t.test(bf01s_frac_given_h0, bf01s_frac_given_h1)
+      log_ps[out_i] <- log(t$p.value)
+    }
+  }
+
+  return(log_ps)
+}
+
+#' @export
+compute_okada_history <- function(...) {
+  compute_calibration_history(compute_okada_history_single, ...)
+}
+
+
 compute_giviti_history_single <- function(probs, true_model, step = 1) {
   steps_to_include <- which(include_step(1:length(probs), step))
 

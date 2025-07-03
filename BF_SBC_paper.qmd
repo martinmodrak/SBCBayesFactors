@@ -293,30 +293,8 @@ Empirically, we can see the lack of any convergence for the Cauchy case and very
 #|   Convergence of the good check when a single datapoint is simulated from the standard normal and  A) $\mathcal{M}_0: y \sim \text{Cauchy}(0, 1)$ --- here the variance is infinite and we see no convergence at all or B) $\mathcal{M}_0: y \sim N(2, 1)$ where the average Bayes factor eventually converges, but 50 000 simulations are not enough for reliable convergence. Each line is the cumulative average from a single set of simulations. The highlighted area shows average BF 0.9 - 1.1. Means from first 1000 simulations are not shown.
 #| fig-width: 7
 #| fig-height: 2.5
-plot_good_example <- function(n_sims, n_runs, m0, step = 10, start = 1, linealpha = 0.3) {
-   y <- matrix(rnorm(n_sims * n_runs), nrow = n_sims)
-   if(m0 == "cauchy") {
-     ll0 <- dcauchy(y, log = TRUE)
-   } else {
-     ll0 <- dnorm(y, mean = m0, log = TRUE)
-   }
-   ll1 <- dnorm(y, log = TRUE)
-   bf <- exp(ll0 - ll1)
-   cmeans <- apply(bf, MARGIN = 2, FUN = \(x) cumsum(x) / (1:length(x)))
-   colnames(cmeans) <- 1:n_runs
-   sims <- seq(start, n_sims, by = step)
-   cmeans <- cmeans[sims,]
-   plot_df <- as.data.frame(cmeans) |> mutate(sim = sims) |> 
-     tidyr::pivot_longer(c(everything(), - all_of("sim")), names_to = "run", values_to = "mean_bf")
-   plot_df |> ggplot(aes(x = sim, y = mean_bf, group = run)) + 
-     geom_rect(xmin = start, xmax = n_sims, ymin = 0.9, ymax = 1.1, fill = "lightblue") +
-     geom_hline(yintercept = 1, color = "darkblue") +
-     geom_line(alpha = linealpha) +
-     scale_y_continuous("Cumulative mean BF") +
-     #scale_y_log10("Cumulative mean BF") +
-     scale_x_continuous("Simulations") +
-     expand_limits(y = c(0.9,1.1))
-}
+
+
 
 {
 set.seed(68523321)
@@ -325,10 +303,88 @@ good_step <- 10
 good_linealpha <- 0.2
 good_sims <- 50000
 good_runs <- 20
-(plot_good_example(good_sims, good_runs, m0 = "cauchy", step = good_step, start = good_start, linealpha = good_linealpha) | plot_good_example(good_sims, good_runs, m0 = 2, step = good_step, start = good_start, linealpha = good_linealpha)) + plot_layout(axis_titles = "collect") + plot_annotation(tag_levels = "A")
+
+good_sims_cauchy <- run_good_sims(good_sims, good_runs, m0 = "cauchy", step = good_step, start = good_start)
+plot_good_cauchy <- plot_good_example(good_sims_cauchy, linealpha = good_linealpha)
+
+good_sims_norm2 <- run_good_sims(good_sims, good_runs, m0 = 2, step = good_step, start = good_start)
+plot_good_norm2 <- plot_good_example(good_sims_norm2, linealpha = good_linealpha)
+
+(plot_good_cauchy | plot_good_norm2) + plot_layout(axis_titles = "collect") + plot_annotation(tag_levels = "A")
   
 }
 
+```
+
+```{r fig-good-okada-cauchy}
+okada_plots <- function(m0, m1 = 0, ylim = NULL) {
+  okada_ci_runs <- 50
+  bf01_given_h0_sims <- run_good_sims(good_sims, okada_ci_runs, m0 = m0, m1 = m1, step = good_step, start = good_start, moment = -0.5, numerator = 0, simulate_from = 0)
+
+
+  bf01_given_h1_sims <- run_good_sims(good_sims, okada_ci_runs, m0 = m0, m1 = m1, step = good_step, start = good_start, moment = 0.5, numerator = 0, simulate_from = 1)
+
+
+  t_test_p <- numeric(okada_ci_runs)
+  t_test_low <- numeric(okada_ci_runs)
+  t_test_high <- numeric(okada_ci_runs)
+  t_test_est <- numeric(okada_ci_runs)
+  t_stat <- numeric(okada_ci_runs)
+  t_df <- numeric(okada_ci_runs)
+  
+  raw_bf1 <- attr(bf01_given_h0_sims, "raw_bf_moment")
+  raw_bf2 <- attr(bf01_given_h1_sims, "raw_bf_moment")
+  for(i in 1:okada_ci_runs) {
+    t_res <- t.test(raw_bf1[,i], raw_bf2[,i])
+    t_test_p[i] <- t_res$p.value
+    t_test_est[i] <- -diff(t_res$estimate)
+    t_test_low[i] <- t_res$conf.int[1]
+    t_test_high[i] <- t_res$conf.int[2]
+    t_stat[i] <- t_res$statistic
+    t_df[i] <- t_res$parameter
+  }
+
+  # diff_test <- data.frame(id = 1:okada_ci_runs, low = t_test_low, est = t_test_est, high = t_test_high) |>
+  #   ggplot(aes(x = id, y = est, ymin = low, ymax = high)) + geom_hline(yintercept = 0, color = "darkblue") + geom_pointrange(fatten = 0.8) + scale_x_discrete("Run") + scale_y_continuous("Estimated difference")
+
+  min_df <- min(t_df)
+  # diff_test <- data.frame(id = 1:okada_ci_runs, t = t_stat) |> 
+  #   ggplot(aes(x = id, y = t_stat)) + 
+  #   geom_rect(xmin = 1, xmax = okada_ci_runs, ymin = qt(0.0005, df = min_df), ymax = qt(0.9995, df = min_df), fill = "lightblue") +     
+  #   geom_hline(yintercept = 0, color = "darkblue") + 
+  #   geom_point() + scale_x_discrete("Run") + scale_y_continuous("Welch's t-statistic") 
+
+  alpha <- 0.05
+  diff_test <- data.frame(id = 1:okada_ci_runs, t = t_stat) |> 
+    ggplot(aes(x = t_stat)) + 
+    geom_rect(ymin = -Inf, ymax = +Inf, xmin = qt(alpha / 2, df = min_df), xmax = qt(1 - alpha / 2, df = min_df), fill = "lightblue") +     
+    geom_histogram(binwidth = 0.1) +
+    scale_x_continuous("Welch's t-statistic") 
+  
+  diff_test
+  bf01_given_h0 <- plot_good_example(bf01_given_h0_sims[,1 : good_runs], linealpha = good_linealpha, correct_value = NULL, ylim = ylim)
+  bf01_given_h1 <- plot_good_example(bf01_given_h1_sims[,1 : good_runs], linealpha = good_linealpha, correct_value = NULL, ylim = ylim)
+    
+  ((bf01_given_h0 + bf01_given_h1) / diff_test) + plot_annotation(tag_levels = "A") + plot_layout(axes = "collect")
+
+}
+
+
+
+set.seed(53324955)
+
+
+okada_plots("cauchy", ylim = c(0.86, 0.95))
+
+```
+
+```{r fig-good-okada-norm2}
+set.seed(6542224)
+okada_plots(2, ylim = c(0.53, 0.68))
+okada_plots(10)
+```
+```{r}
+okada_plots(m0 = 0, m1 = "cauchy")
 ```
 
 
@@ -375,7 +431,16 @@ cat("N sims norm2: ", good_norm2_metrics$n_sims, "\n")
 report_success_metrics(good_norm2_metrics,dap_digits = 4)
 ```
 
+#### Fractional Good check
 
+The relationship between the probability and fractional bf is mostlly close to linear, explaining the similar performance??? Maybe???
+
+```{r}
+x <- seq(0.001,0.999, length.out = 1000); plot(x, sqrt((1 - x) / x))
+x <- seq(0.2,0.999, length.out = 1000); plot(x, sqrt((1 - x) / x))
+x <- seq(0.001,0.999, length.out = 1000); plot(x, ((1 - x) / x)^-0.5)
+x <- seq(0.001,0.2, length.out = 1000); plot(x, ((1 - x) / x)^-0.5)
+```
 
 ### Miscalibration with surrogate distributions for variance in `ttestBF`
 

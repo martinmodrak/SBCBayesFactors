@@ -158,6 +158,14 @@ hist_correct <- compute_bootstrapped_histories(res_pnb_correct$stats, history_le
 plot_log_gamma_histories(hist_correct)
 ```
 
+```{r}
+bp_correct <- binary_probabilities_from_stats(res_pnb_correct$stats)
+hist_correct_okada <- compute_bootstrapped_histories(bp_correct, history_length = 100, n_histories = 100, step = hist_step_correct,
+                                                           compute_okada_history, min_sim_id = 20)
+
+plot_log_p_histories(hist_correct_okada, "Fractional Good check")
+```
+
 
 ## Ignore all
 
@@ -278,16 +286,23 @@ hist_pnb_vari_brier <- compute_bootstrapped_histories(bp_pnb_vari, history_lengt
 hist_pnb_vari_miscalib <- compute_bootstrapped_histories(bp_pnb_vari, history_length = hist_length_vari, n_histories = 100, step = hist_step_vari,
                                             compute_miscalibration_history)
 
+
+hist_pnb_vari_okada <- compute_bootstrapped_histories(bp_pnb_vari, history_length = hist_length_vari, n_histories = 100, step = hist_step_vari,
+                                            compute_okada_history)
+
+
 plot_log_gamma_histories(hist_pnb_vari)
 plot_log_p_histories(hist_pnb_vari_ttest, "ttest")
 plot_log_p_histories(hist_pnb_vari_brier, "Brier resampling")
 plot_log_p_histories(hist_pnb_vari_miscalib, "Miscalibration resampling")
+plot_log_p_histories(hist_pnb_vari_okada, "Fractional Good check")
 
 save_histories("pnb_vari",
                log_gamma = hist_pnb_vari,
                ttest = hist_pnb_vari_ttest,
                brier = hist_pnb_vari_brier,
-               miscalibration = hist_pnb_vari_miscalib)
+               miscalibration = hist_pnb_vari_miscalib,
+               okada = hist_pnb_vari_okada)
 
 ```
 
@@ -323,16 +338,22 @@ hist_pnb_bias_brier <- compute_bootstrapped_histories(bp_pnb_bias, history_lengt
 hist_pnb_bias_miscalib <- compute_bootstrapped_histories(bp_pnb_bias, history_length = hist_length_bias, n_histories = 100, step = hist_step_bias,
                                             compute_miscalibration_history)
 
+
+hist_pnb_bias_okada <- compute_bootstrapped_histories(bp_pnb_bias, history_length = hist_length_bias, n_histories = 100, step = hist_step_bias,
+                                            compute_okada_history)
+
 plot_log_gamma_histories(hist_pnb_bias)
 plot_log_p_histories(hist_pnb_bias_ttest, "ttest")
 plot_log_p_histories(hist_pnb_bias_brier, "Brier resampling")
 plot_log_p_histories(hist_pnb_bias_miscalib, "Miscalibration resampling")
+plot_log_p_histories(hist_pnb_bias_okada, "Fractional Good check")
 
 save_histories("pnb_bias",
                log_gamma = hist_pnb_bias,
                ttest = hist_pnb_bias_ttest,
                brier = hist_pnb_bias_brier,
-               miscalibration = hist_pnb_bias_miscalib)
+               miscalibration = hist_pnb_bias_miscalib,
+               okada = hist_pnb_bias_okada)
 
 
 ```
@@ -374,16 +395,21 @@ hist_pnb_bias_vari_brier <- compute_bootstrapped_histories(bp_pnb_bias_vari, his
 hist_pnb_bias_vari_miscalib <- compute_bootstrapped_histories(bp_pnb_bias_vari, history_length = hist_length_bias_vari, n_histories = 100, step = hist_step_bias_vari,
                                             compute_miscalibration_history)
 
+hist_pnb_bias_vari_okada <- compute_bootstrapped_histories(bp_pnb_bias_vari, history_length = hist_length_bias_vari, n_histories = 100, step = hist_step_bias_vari,
+                                            compute_okada_history)
+
 plot_log_gamma_histories(hist_pnb_bias_vari)
 plot_log_p_histories(hist_pnb_bias_vari_ttest, "ttest")
 plot_log_p_histories(hist_pnb_bias_vari_brier, "Brier resampling")
 plot_log_p_histories(hist_pnb_bias_vari_miscalib, "Miscalibration resampling")
+plot_log_p_histories(hist_pnb_bias_vari_okada, "Fractional Good check")
 
 save_histories("pnb_bias_vari",
                log_gamma = hist_pnb_bias_vari,
                ttest = hist_pnb_bias_vari_ttest,
                brier = hist_pnb_bias_vari_brier,
-               miscalibration = hist_pnb_bias_vari_miscalib)
+               miscalibration = hist_pnb_bias_vari_miscalib,
+               okada = hist_pnb_bias_vari_okada)
 
 
 ```

@@ -139,19 +139,31 @@ hist_correct_miscalibration <- compute_bootstrapped_histories(bp_correct, histor
                                                            compute_miscalibration_history, min_sim_id = 10)
 
 
+hist_correct_okada <- compute_bootstrapped_histories(bp_correct, history_length = hist_length_correct, n_histories = n_histories, step = hist_step_correct,
+                                                           compute_okada_history, min_sim_id = 20)
+
 
 
 plot_log_gamma_histories(hist_correct)
 plot_log_p_histories(hist_correct_brier, "Brier resampling")
 plot_log_p_histories(hist_correct_ttest, "P - ttest")
 plot_log_p_histories(hist_correct_miscalibration, "Miscalibration resampling")
+plot_log_p_histories(hist_correct_okada, "Okada Good check")
+
 
 save_histories("binary_correct",
                log_gamma = hist_correct,
                brier = hist_correct_brier,
                ttest = hist_correct_ttest,
-               miscalibration = hist_correct_miscalibration)
+               miscalibration = hist_correct_miscalibration,
+               okada = hist_correct_okada)
 ```
+
+```{r}
+plot_log_p_histories(hist_correct_okada, "Okada Good check")
+
+```
+
 
 ## Flipped probabilities
 
@@ -168,26 +180,31 @@ my_reliability_diag(binary_probabilities_from_stats(res_bin_flip$stats))
 
 
 ```{r}
-hist_flip <- compute_bootstrapped_histories(res_bin_flip$stats, history_length = 50, n_histories = 100,
+hist_flip <- compute_bootstrapped_histories(res_bin_flip$stats, history_length = 50, n_histories = n_histories,
                                             compute_log_gamma_history)
 
 bp_flip <- binary_probabilities_from_stats(res_bin_flip$stats)
 
 
-hist_flip_ttest <- compute_bootstrapped_histories(bp_flip, history_length = 50, n_histories = 100,
+hist_flip_ttest <- compute_bootstrapped_histories(bp_flip, history_length = 50, n_histories = n_histories,
                                             compute_ttest_history, min_sim_id = 10)
 
-hist_flip_miscalib <- compute_bootstrapped_histories(bp_flip, history_length = 50, n_histories = 100,
+hist_flip_miscalib <- compute_bootstrapped_histories(bp_flip, history_length = 50, n_histories = n_histories,
                                             compute_miscalibration_history)
 
 
-hist_flip_brier <- compute_bootstrapped_histories(bp_flip, history_length = 50, n_histories = 100,
+hist_flip_brier <- compute_bootstrapped_histories(bp_flip, history_length = 50, n_histories = n_histories,
                                             compute_brier_history)
+
+
+hist_flip_okada <- compute_bootstrapped_histories(bp_flip, history_length = 50, n_histories = n_histories, min_sim_id = 20,
+                                            compute_okada_history)
 
 plot_log_gamma_histories(hist_flip)
 plot_log_p_histories(hist_flip_ttest, "P ttest")
 plot_log_p_histories(hist_flip_brier, "Brier")
 plot_log_p_histories(hist_flip_miscalib, "Miscalibration resampling")
+plot_log_p_histories(hist_flip_okada, "Okada Good Check")
 
 save_histories("binary_flip",
                log_gamma = hist_flip,
@@ -197,8 +214,24 @@ save_histories("binary_flip",
 
 ```
 
+Does the Good check (direct vs. fractional) detect flips? Standard yes, fractional NO.
+
+
 ```{r}
-hist_flip2 <- compute_bootstrapped_histories(res_bin_flip$stats, history_length = 500, n_histories = 100,
+good_check(bp_flip$prob, bp_flip$simulated_value)
+good_check_okada(bp_flip$prob, bp_flip$simulated_value)
+```
+
+Do I get something for DAP by conditioning on the true model? Not really
+
+```{r}
+t.test(bp_flip$prob[bp_flip$simulated_value == 0], 1 - bp_flip$prob[bp_flip$simulated_value == 1])
+t.test(bp_correct$prob[bp_correct$simulated_value == 0], 1 - bp_correct$prob[bp_correct$simulated_value == 1])
+```
+
+
+```{r}
+hist_flip2 <- compute_bootstrapped_histories(res_bin_flip$stats, history_length = 500, n_histories = n_histories,
                                             compute_log_gamma_history)
 
 plot_log_gamma_histories(hist_flip2)
@@ -221,7 +254,7 @@ my_reliability_diag(binary_probabilities_from_stats(res_bin_prior$stats))
 
 
 ```{r}
-hist_prior <- compute_bootstrapped_histories(res_bin_prior$stats, history_length = 50, n_histories = 100,
+hist_prior <- compute_bootstrapped_histories(res_bin_prior$stats, history_length = 50, n_histories = n_histories,
                                             compute_log_gamma_history)
 plot_log_gamma_histories(hist_prior)
 ```
@@ -243,7 +276,7 @@ my_reliability_diag(binary_probabilities_from_stats(res_bin_small$stats))
 ```{r}
 hist_length_small <- 5000
 invisible(get_precomputed_gamma_thresholds(unique(res_bin_small$stats$max_rank) + 1,min_sims = 1, max_sims = max(1000,hist_length_small)))
-hist_small <- compute_bootstrapped_histories(res_bin_small$stats, history_length = hist_length_small, n_histories = 100,
+hist_small <- compute_bootstrapped_histories(res_bin_small$stats, history_length = hist_length_small, n_histories = n_histories,
                                              step = 50,
                                             compute_log_gamma_history)
 plot_log_gamma_histories(hist_small)
@@ -260,29 +293,34 @@ plot_ecdf_diff(res_bin_bad)
 plot_binary_calibration_diff(res_bin_bad$stats)
 ```
 
-
+Note - the fractionl Good check here is hampered by a lot of NAs from purely constant BFs.
 
 ```{r}
-hist_bad <- compute_bootstrapped_histories(res_bin_bad$stats, history_length = 100, n_histories = 100,
+hist_bad <- compute_bootstrapped_histories(res_bin_bad$stats, history_length = 100, n_histories = n_histories,
                                             compute_log_gamma_history, min_sim_id = 5)
 
 
 
-hist_bad_ttest <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
+hist_bad_ttest <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = n_histories,
                                             compute_ttest_history, min_sim_id = 5)
 
 
-hist_bad_brier <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
+hist_bad_brier <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = n_histories,
                                             compute_brier_history, min_sim_id = 5)
 
-hist_bad_miscalibration <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
+hist_bad_miscalibration <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = n_histories,
                                             compute_miscalibration_history, min_sim_id = 10)
+
+
+hist_bad_okada <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = n_histories,
+                                            compute_okada_history, min_sim_id = 20)
 
 
 plot_log_gamma_histories(hist_bad)
 plot_log_p_histories(hist_bad_ttest, "P - ttest")
 plot_log_p_histories(hist_bad_brier, "Brier")
 plot_log_p_histories(hist_bad_miscalibration, "Miscalibration")
+plot_log_p_histories(hist_bad_okada, "Fractional Good check")
 
 
 ```

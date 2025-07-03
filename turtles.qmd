@@ -282,6 +282,17 @@ saveRDS(metrics_orig,
 
 ```
 
+
+
+```{r}
+bp_orig <- binary_probabilities_from_stats(res_turtles$stats)
+good_check_okada(bp_orig$prob, bp_orig$simulated_value, prior_prob1 = mean(as.numeric(ds_turtles$variables[,"model"])))
+
+hist_orig_okada <- compute_bootstrapped_histories(bp_orig, history_length = 500, n_histories = 100, compute_okada_history, min_sim_id = 20, prior_prob1 = mean(as.numeric(ds_turtles$variables[,"model"])))
+
+plot_log_p_histories(hist_orig_okada, "Fractional Good check")
+```
+
 ## Normal prior on sigma
 
 ```{r simulateds-norm}
@@ -325,6 +336,10 @@ bp_turtles_norm <- binary_probabilities_from_stats(res_turtles_norm$stats)
 t.test(bp_turtles_norm$prob, as.numeric(ds_turtles_norm$variables[,"model"]))
 miscalibration_resampling_p(bp_turtles_norm$prob, bp_turtles_norm$simulated_value)
 my_reliability_diag(bp_turtles_norm)
+```
+
+```{r}
+good_check_okada(bp_turtles_norm$prob, bp_turtles_norm$simulated_value, prior_prob1 = mean(bp_turtles_norm$simulated_value))
 ```
 
 
@@ -378,6 +393,8 @@ hist_turtles_norm_bad_brier <- compute_bootstrapped_histories(bp_turtles_norm_ba
 hist_turtles_norm_bad_miscalibration <- compute_bootstrapped_histories(bp_turtles_norm_bad, history_length = hist_length_turtles_norm_bad, n_histories = n_histories, step = hist_step_turtles_norm_bad,
                                                            compute_miscalibration_history, min_sim_id = 10)
 
+hist_turtles_norm_bad_okada <- compute_bootstrapped_histories(bp_turtles_norm_bad, history_length = hist_length_turtles_norm_bad, n_histories = n_histories, step = hist_step_turtles_norm_bad,
+                                                           compute_okada_history, min_sim_id = 10, prior_prob1 = mean(as.numeric(ds_turtles_norm$variables[,"model"])))
 
 
 
@@ -385,6 +402,7 @@ plot_log_gamma_histories(hist_turtles_norm_bad)
 plot_log_p_histories(hist_turtles_norm_bad_brier, "Brier resampling")
 plot_log_p_histories(hist_turtles_norm_bad_ttest, "DAP - t-test")
 plot_log_p_histories(hist_turtles_norm_bad_miscalibration, "Miscalibration resampling")
+plot_log_p_histories(hist_turtles_norm_bad_okada, "Fractional Good check")
 
 save_histories("turtles_norm_bad",
                log_gamma = hist_turtles_norm_bad,
