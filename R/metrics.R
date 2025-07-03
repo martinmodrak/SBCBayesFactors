@@ -48,12 +48,17 @@ print.calibration_metrics <- function(m) {
 }
 
 
-report_success_metrics <- function(m, dap_digits = 3, miscalib_digits = 4, ecdf_diff_digits = 3) {
+report_success_metrics <- function(m, dap_digits = 3, miscalib_digits = 4, ecdf_diff_digits = 3, tex = FALSE) {
   my_format <- function(x, digits) {
     format(round(x, digits), scientific = FALSE)
   }
-  cat("95% CI for DAP difference from prior: ", my_format(m$t$conf.int[1] - m$t$null.value, dap_digits), " -- ", my_format(m$t$conf.int[2] - m$t$null.value, dap_digits),"; ",
+  text <- paste0("95% CI for DAP difference from prior: ", my_format(m$t$conf.int[1] - m$t$null.value, dap_digits), " -- ", my_format(m$t$conf.int[2] - m$t$null.value, dap_digits),"; ",
       "miscalibration: ", my_format(m$miscalibration_stats$observed, miscalib_digits), ", ", scales::percent(1 - m$miscalibration_stats$alpha), " quantile under null: ", my_format(m$miscalibration_stats$rejection_limit, miscalib_digits),"; ",
       "SBC sensitive to eCDF difference up to ", my_format(m$max_ecdf_diff, ecdf_diff_digits),
       sep = "")
+
+  if(tex) {
+    text <- gsub("%", "\\%", text, fixed = TRUE)
+  }
+  cat(text)
 }

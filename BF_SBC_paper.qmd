@@ -7,12 +7,18 @@ format:
     fig-width: 7
     fig-height: 4
     keep-tex: true
+    
 execute: 
   echo: FALSE
   cache: true
+fig-width: 7
+fig-height: 4
 editor: 
   markdown: 
     wrap: 90
+knitr:
+  opts_chunk: 
+    dev: cairo_pdf    
 ---
 
 This document reproduces all figures and numbers for the relevant sections.
@@ -117,7 +123,7 @@ plot_log_gamma_histories(hist_pnb_ignore_half$log_gamma)
 #| fig-cap: Histories of check statistics for poisson-NB model with noise in BF.  A) shows the log gamma statistic of default SBC, B) is the p-value of the bootstrapped miscalabration test of Dimitraidis et al. and C) is the p-value from t-test for the data-averaged posterior.
 
 hist_pnb_vari <- load_histories("pnb_vari", "poisson_nb_example.qmd")
-(plot_log_gamma_histories(hist_pnb_vari$log_gamma) + labs(tag = "A) SBC") + tag_theme) / (
+(plot_log_gamma_histories(hist_pnb_vari$log_gamma) + labs(tag = "A) SBC") + tag_theme+ theme(axis.title.y = element_text(size = 9))) / (
 (plot_log_p_histories(hist_pnb_vari$miscalibration) + labs(tag = "B) Calibration") + tag_theme) + 
 (plot_log_p_histories(hist_pnb_vari$ttest)  + labs(tag = "C) DAP") + tag_theme))
 ```
@@ -127,7 +133,7 @@ hist_pnb_vari <- load_histories("pnb_vari", "poisson_nb_example.qmd")
 #| fig-cap: Histories of check statistics for biased poisson-NB model.  A) shows the log gamma statistic of default SBC, B) is the p-value of the bootstrapped miscalabration test of Dimitraidis et al. and C) is the p-value from t-test for the data-averaged posterior.
 
 hist_pnb_bias <- load_histories("pnb_bias", "poisson_nb_example.qmd")
-(plot_log_gamma_histories(hist_pnb_bias$log_gamma) + labs(tag = "A) SBC") + tag_theme) / (
+(plot_log_gamma_histories(hist_pnb_bias$log_gamma) + labs(tag = "A) SBC") + tag_theme + theme(axis.title.y = element_text(size = 9))) / (
 (plot_log_p_histories(hist_pnb_bias$miscalibration) + labs(tag = "B) Calibration") + tag_theme) + 
 (plot_log_p_histories(hist_pnb_bias$ttest)  + labs(tag = "C) DAP") + tag_theme))
 ```
@@ -161,7 +167,7 @@ After running `r format(turtles_post_half_metrics$n_sims, big.mark = " ")` simul
 #| fig-cap: Histories of check statistics for bad normalization constant in the turtles model.  A) shows the log gamma statistic of default SBC, B) is the p-value of the bootstrapped miscalabration test of Dimitraidis et al. and C) is the p-value from t-test for the data-averaged posterior.
 
 hist_turtles_norm_bad <- load_histories("turtles_norm_bad", "turtles.qmd")
-(plot_log_gamma_histories(hist_turtles_norm_bad$log_gamma) + labs(tag = "A) SBC") + tag_theme) / (
+(plot_log_gamma_histories(hist_turtles_norm_bad$log_gamma) + labs(tag = "A) SBC") + tag_theme + theme(axis.title.y = element_text(size = 9))) / (
 (plot_log_p_histories(hist_turtles_norm_bad$miscalibration) + labs(tag = "B) Calibration") + tag_theme) + 
 (plot_log_p_histories(hist_turtles_norm_bad$ttest)  + labs(tag = "C) DAP") + tag_theme))
 ```
@@ -185,7 +191,7 @@ simulations (@fig-ranef-post; `r report_success_metrics(ranef_test)`).
 #| fig-cap: Histories of check statistics for random effect model using constant intercept and standard deviation. 
 
 hist_ranef_constant <- load_histories("ranef_constant", "lmbf_ranef_presence_post_sbc.qmd")
-(plot_log_gamma_histories(hist_ranef_constant$log_gamma)  + labs(tag = "A) SBC") + tag_theme)/ (
+(plot_log_gamma_histories(hist_ranef_constant$log_gamma)  + labs(tag = "A) SBC") + tag_theme+ theme(axis.title.y = element_text(size = 9)))/ (
 (plot_log_p_histories(hist_ranef_constant$miscalibration)  + labs(tag = "B) Calibration") + tag_theme) + 
 (plot_log_p_histories(hist_ranef_constant$ttest)  + labs(tag = "C) DAP") + tag_theme))
 #TODO: uncertainty about red line?
@@ -193,7 +199,12 @@ hist_ranef_constant <- load_histories("ranef_constant", "lmbf_ranef_presence_pos
 
 ```{r fig-ranef-post}
 #| fig-cap: Result of calibration checks for random effect model using posterior SBC. A) empirical CDF difference plots for model parameters (g_Subject --- standard deviation of the random intercepts, model --- model index, mu --- overall intercept, sig2 --- residual variance, Subject --- merged plot for all random intercepts, x1 --- fixed effect) B) calibration plot.
-ecdf_ranef_post <- plot_ecdf_diff(res_ranef_post, combine_variables = combine_lmBF_arrays)
+
+subject_transl <- paste0("𝛾-",1:15)
+names(subject_transl) <- paste0("Subject-",1:15)
+ranef_post_name_transl <- c("g_Subject" = "𝜎√𝜏", "model" = "model", "mu" = "𝛼", "sig2" = "𝜎", subject_transl, "x1-A" = "𝛽")
+res_ranef_post_transl <- res_ranef_post$stats |> filter(!grepl("^\\.", variable)) |> mutate(variable = ranef_post_name_transl[variable])
+ecdf_ranef_post <- plot_ecdf_diff(res_ranef_post_transl, combine_variables = combine_lmBF_arrays) + scale_x_continuous(breaks = c(0, 0.5, 1))
 
 metrics_ranef_post <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100_metrics.rds"), "lmbf_ranef_presence_post_sbc.qmd")
 reliabilitydiag_post <- metrics_ranef_post$reliability_diag
@@ -212,10 +223,13 @@ ttest_fixed <- load_precomputed_file(here::here("cache/ttest_fixed_metrics.rds")
 
 ```{r fig-ttest-fixed}
 #| fig-cap: Results of SBC when using a fixed value of $\sigma$ when simulating datasets for Bayesian t-test. A) Histories of log gamma statistics for the model index, posterior mean (mu) and $f(i, y) = (i - \frac{1}{2})(\text{sd}(y) - 1)$ (model_sd_m1). We see that only the latter diagnoses any problems. B) Calibration plot across all simulations shows no problems. C) and D) Separate calibration plots for datasets with high/low standard deviation show problems.
+#| fig-width: 7
+#| fig-height: 4
 
-tag_theme_calib <- tag_theme + theme(plot.tag.position = c(0, 1.1))
 
-(plot_log_gamma_histories(ttest_fixed$hist |> mutate(variable = factor(variable, levels = c("model", "mu", "model_sd_m1")))) + labs(tag = "A) SBC") + tag_theme + theme(plot.margin = margin(10, 10, 20, 10))) /
+tag_theme_calib <- tag_theme + theme(plot.tag.position = c(0, 1.1), plot.margin = margin(l = 10, r = 10))
+
+(plot_log_gamma_histories(ttest_fixed$hist |> mutate(variable = factor(variable, levels = c("model", "mu", "model_sd_m1")))) + labs(tag = "A) SBC") + tag_theme + theme(plot.margin = margin(10, 10, 20, 10))+ theme(axis.title.y = element_text(size = 9))) /
 ((ttest_fixed$all$reliability_diag  + labs(tag = "B) Calibration - all") + tag_theme_calib) | (ttest_fixed$high$reliability_diag  + labs(tag = "C) Calibration - sd(y) ≥ 1") + tag_theme_calib) | 
    (ttest_fixed$low$reliability_diag  + labs(tag = "D) Calibration - sd(y) < 1") + tag_theme_calib))
 ```

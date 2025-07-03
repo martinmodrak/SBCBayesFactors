@@ -303,7 +303,6 @@ compute_brier_history <- function(...) {
   compute_calibration_history(compute_brier_history_single, ...)
 }
 
-
 #' @export
 compute_indep_history_single <- function(func, probs, true_model, step = 1, ...) {
   steps_to_include <- which(include_step(1:length(probs), step))
@@ -480,7 +479,7 @@ load_histories <- function(name, producer_script) {
 }
 
 
-dap_power_single <- function(id, probs_all, N, expected, B = 10000, rscale = 1/12) {
+dap_power_single <- function(id, probs_all, N, expected, B = 10000, rscale = c("1/12" = 1/12, "sqrt(2)/2" = sqrt(2)/2, "1.5" = 1.5)) {
   probs <- sample(probs_all, size = N, replace = TRUE)
   if(sd(probs) == 0) {
     if(abs(mean(probs) - expected) < 1e-8) {
@@ -491,9 +490,12 @@ dap_power_single <- function(id, probs_all, N, expected, B = 10000, rscale = 1/1
   } else {
     p_t <- t.test(probs, mu = expected)$p.value
   }
-  p_schad <- exp(schad_bf_wrapper(probs, expected, rscale = rscale))
+  p_schad <- numeric(length(rscale))
+  for(i in 1:length(rscale)) {
+    p_schad[i] <- exp(schad_bf_wrapper(probs, expected, rscale = rscale[i]))
+  }
   p_gaffke <- gaffke_p(probs, mu = expected)
-  data.frame(id = id, method = c("t", "schad", "gaffke"), p = c(p_t, p_schad, p_gaffke))
+  data.frame(id = id, method = c("t", "gaffke", paste0("schad_", names(rscale))), p = c(p_t, p_gaffke, p_schad))
 }
 
 dap_power_scenario <- function(scenario, N_sims, probs_all, N, expected, ...) {
@@ -508,7 +510,11 @@ dap_power_scenario <- function(scenario, N_sims, probs_all, N, expected, ...) {
 }
 
 dap_power_summary <- function(res_df) {
-  res_df |> group_by(scenario, N, method) |>
+  methods <- res_df$method[!duplicated(res_df$method)]
+
+  res_df |>
+    mutate(method = factor(method, levels = methods)) |>
+    group_by(scenario, N, method) |>
     summarise(n_total = n(), n_success = sum(p <= 0.05),
               power = n_success / n_total,
               ci_low = qbeta(0.025, n_success, n_total - n_success + 1),
@@ -537,12 +543,16 @@ plot_dap_power <- function(summary_df, highlight = NULL) {
 }
 
 dap_power_table <- function(summary_df) {
+  # Unique values, keeping original ordering
+  methods <- as.character(summary_df$method[!duplicated(summary_df$method)])
+  schad_methods <- methods[grepl("schad", methods)]
+  schad_r <- gsub("schad_", "", schad_methods)
   summary_df |> mutate(
     value = paste0(scales::percent(power, accuracy = 0.01)),
     method = factor(
-      method,
-      levels = c("t", "gaffke", "schad"),
-      labels = c("T-test", "Gaffke", "Bayesian t-test")
+      as.character(method),
+      levels = c("t", "gaffke", schad_methods),
+      labels = c("T-test", "Gaffke", paste0("Bayes t (r = ", schad_r, ")"))
     )
   ) |>
     select(N, scenario, method, value) |>
