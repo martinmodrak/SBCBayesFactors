@@ -247,6 +247,29 @@ precision --- we have run `r format(ttest_post$n_sim, big.mark  = " ")` simulati
 derived quantities  (`r report_success_metrics(ttest_post, dap_digits = 4)`). 
 
 
+### Results table 
+
+```{r results ='asis'}
+all_metrics <- list(
+  "bridgesampling + Stan" = list(
+    "Turtles" = turtles_metrics,
+    "Turtles - post SBC" = turtles_post_half_metrics
+  ),
+  "BayesFactor" = 
+    list("Random effect presence via lmBF" = ranef_test,
+         "Bayesian t-test via ttestBF" = ttest_post
+         )
+  )
+
+all_metrics |> purrr::imap_dfr(\(cases, package) {
+  purrr::map_dfr(cases, success_metrics_for_table) |> 
+    mutate(Package = c(package, rep("", times = length(cases) - 1)), Scenario = names(cases), .before = 1)
+}) |> knitr::kable(format = "latex", booktabs = TRUE, caption = "My cap") |> print()
+
+
+```
+
+
 ## Appendix
 
 ### Metrics to assess data-averaged posterior

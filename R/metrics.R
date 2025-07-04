@@ -62,3 +62,17 @@ report_success_metrics <- function(m, dap_digits = 3, miscalib_digits = 4, ecdf_
   }
   cat(text)
 }
+
+success_metrics_for_table <- function(m, dap_digits = 4, miscalib_digits = 4, ecdf_diff_digits = 3) {
+  my_format <- function(x, digits) {
+    format(round(x, digits), scientific = FALSE)
+  }
+  stopifnot(m$miscalibration_stats$alpha == 0.05)
+  data.frame(check.names = FALSE,
+    "#Sims" = m$n_sims,
+    "DAP 95% CI" = paste0(my_format(m$t$conf.int[1] - m$t$null.value, dap_digits), " -- ", my_format(m$t$conf.int[2] - m$t$null.value, dap_digits)),
+    "Miscalibration" = my_format(m$miscalibration_stats$observed, miscalib_digits),
+    "Miscalibration Q95%" = my_format(m$miscalibration_stats$rejection_limit, miscalib_digits),
+    "SBC sensitivivity" = my_format(m$max_ecdf_diff, ecdf_diff_digits)
+  ) |> tibble::remove_rownames()
+}
