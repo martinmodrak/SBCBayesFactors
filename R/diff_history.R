@@ -406,7 +406,7 @@ plot_log_gamma_histories <- function(histories_df, min_sim_id = 0, wrap_cols = 4
     geom_vline(aes(xintercept = first_power_sim_id), data = power_df, color = "orangered") +
     geom_line(alpha = alpha) +
     geom_hline(yintercept = 0, color = "lightblue", linewidth = 1) +
-    scale_y_continuous("Log Gamma - Threshold", limits = ylim) +
+    scale_y_continuous("Log γ - Threshold", limits = ylim) +
     scale_x_continuous("Number of simulations") +
     facet_wrap(~variable, ncol = wrap_cols)
 }
@@ -491,6 +491,7 @@ dap_power_single <- function(id, probs_all, N, expected, B = 10000, rscale = c("
     p_t <- t.test(probs, mu = expected)$p.value
   }
   p_schad <- numeric(length(rscale))
+  schad_bf <- numeric(length)
   for(i in 1:length(rscale)) {
     p_schad[i] <- exp(schad_bf_wrapper(probs, expected, rscale = rscale[i]))
   }
@@ -509,13 +510,16 @@ dap_power_scenario <- function(scenario, N_sims, probs_all, N, expected, ...) {
   res_df
 }
 
-dap_power_summary <- function(res_df) {
+dap_power_summary <- function(res_df, schad_bf_limit = 0.1) {
   methods <- res_df$method[!duplicated(res_df$method)]
+  # Translate BF limit into a limit on the posterior probability
+  schad_p_limit <- plogis(log(schad_bf_limit))
 
   res_df |>
-    mutate(method = factor(method, levels = methods)) |>
+    mutate(p_limit = if_else(grepl("schad", method), schad_p_limit, 0.05),
+           method = factor(method, levels = methods)) |>
     group_by(scenario, N, method) |>
-    summarise(n_total = n(), n_success = sum(p <= 0.05),
+    summarise(n_total = n(), n_success = sum(p <= p_limit),
               power = n_success / n_total,
               ci_low = qbeta(0.025, n_success, n_total - n_success + 1),
               ci_high = qbeta(0.975, n_success + 1, n_total - n_success),
@@ -555,9 +559,12 @@ dap_power_table <- function(summary_df) {
       labels = c("T-test", "Gaffke", paste0("Bayes t (r = ", schad_r, ")"))
     )
   ) |>
-    select(N, scenario, method, value) |>
+  #  select(N, scenario, method, value) |>
+    select(scenario, N, method, value) |>
     tidyr::pivot_wider(names_from = "method", values_from = "value", names_sort = TRUE) |>
-    arrange(N) |>
-    mutate(N = if_else(scenario == min(scenario), as.character(N), "")) |>
+    arrange(scenario, N) |>
+    mutate(scenario = if_else(N == min(N), scenario, "")) |>
+    # arrange(N) |>
+    # mutate(N = if_else(scenario == min(scenario), as.character(N), "")) |>
     knitr::kable()
 }

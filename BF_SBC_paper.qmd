@@ -4,15 +4,13 @@ author: Martin Modrák, Paul Bürkner
 pdf-engine: pdflatex
 format: 
   pdf:
-    fig-width: 7
-    fig-height: 4
     keep-tex: true
     
 execute: 
   echo: FALSE
   cache: true
 fig-width: 7
-fig-height: 4
+fig-height: 3
 editor: 
   markdown: 
     wrap: 90
@@ -34,7 +32,7 @@ devtools::load_all()
 
 cache_dir <- here::here("cache")
 
-theme_set(theme_minimal())
+theme_set(theme_minimal(base_size = 10) + theme(axis.title = element_text(size = 8.5)))
 
 format_p <- function(p) {
   case_when(p < 0.001 ~ "< 0.001",
@@ -54,21 +52,22 @@ format_t_test_diff <- function(t_res) {
 ### Single binary observation
 
 The various test statistics have the
-expected random behavior and only rarely drop below the relevant thresholds (@fig-binary-correct).
+expected random behavior and only rarely drop below the relevant thresholds  for correct
+model (@fig-binary).
 
 ```{r fig-binary-correct, message=FALSE}
 #| fig-cap: Histories of check statistics for the correct binary model. The horizontal blue line marks rejecting the hypothesis of calibration with 5% false positive rate. We see that in all cases, violations tend to be non-severe and short-lived A) shows the log gamma statistic of default SBC, B) is the p-value of the bootstrapped miscalabration test of Dimitraidis et al. and C) is the p-value from t-test for the data-averaged posterior.
-#| fig-height: 2.5
+#| fig-height: 1.7
 #| fig-width: 7
 
 hist_binary_correct <- load_histories("binary_correct", "binary_example.qmd")
 
-tag_theme <- theme(plot.tag.location = "plot", plot.tag.position = c(0, 1.01), plot.tag = element_text(hjust = 0, size = 12))
+tag_theme <- theme(plot.tag.location = "plot", plot.tag.position = c(0, 1.01), plot.tag = element_text(hjust = 0, size = 10))
 
 scale_x_correct <- scale_x_continuous("Number of simulations", breaks = c(0,500,1000))
 
 (plot_log_gamma_histories(hist_binary_correct$log_gamma) + scale_x_correct + labs(tag = "A) SBC") + tag_theme | 
-plot_log_p_histories(hist_binary_correct$miscalibration) + scale_x_correct + labs(tag = "B) Calibration") + tag_theme | 
+plot_log_p_histories(hist_binary_correct$miscalibration) + scale_x_correct + labs(tag = "B) Binary calibration") + tag_theme | 
 plot_log_p_histories(hist_binary_correct$ttest) + scale_x_correct + labs(tag = "C) DAP") + tag_theme)   + plot_layout(widths = c(2,1,1), axis_titles = "collect_x")
 ```
 
@@ -77,65 +76,92 @@ plot_log_p_histories(hist_binary_correct$ttest) + scale_x_correct + labs(tag = "
 ```{r fig-binary-flipped}
 #| fig-cap: Histories of check statistics for the flipped binary model. The horizontal blue line marks rejecting the hypothesis of calibration with 5% false positive rate. The vertical orange line marks the number of simulations when the check first attains 80% power. We see that SBC as well as miscalibration identify the problem very quickly, while data-averaged posterior (DAP) does not diagnose it (the rare low p-values arise from using a t-test on what is essentially binary data). Note that the p-values from the miscalibration test are capped at $\frac{1}{2000}$ due to the number of bootstrap samples used.
 #| fig-width: 7
-#| fig-height: 2.5
+#| fig-height: 1.7
 
 hist_binary_flip <- load_histories("binary_flip", "binary_example.qmd")
 ((plot_log_gamma_histories(hist_binary_flip$log_gamma) + labs(tag = "A) SBC") + tag_theme) | 
-(plot_log_p_histories(hist_binary_flip$miscalibration) + labs(tag = "B) Calibration") + tag_theme) | 
+(plot_log_p_histories(hist_binary_flip$miscalibration) + labs(tag = "B) Binary calibration") + tag_theme) | 
 (plot_log_p_histories(hist_binary_flip$ttest)) + labs(tag = "C) DAP") + tag_theme) + plot_layout(widths = c(2,1,1), axis_titles = "collect_x")
 ```
 
+
+```{r fig-binary, message=FALSE}
+#| fig-cap: Histories of check statistics for the binary model and the correct posterior (A - C) and flipped indices (D - F). The horizontal blue line marks rejecting the hypothesis of calibration with 5% false positive rate. The vertical orange line marks the number of simulations when the check first attains 80% power. We see that SBC as well as miscalibration identify the problem very quickly, while data-averaged posterior (DAP) does not diagnose it (the rare low p-values arise from using a t-test on what is essentially binary data). Note that the p-values from the miscalibration test are capped at $\frac{1}{2000}$ due to the number of bootstrap samples used.
+#| fig-height: 3.5
+#| fig-width: 7
+
+hist_binary_correct <- load_histories("binary_correct", "binary_example.qmd")
+
+tag_theme <- theme(plot.tag.location = "plot", plot.tag.position = c(0, 1.01), plot.tag = element_text(hjust = 0, size = 10))
+
+scale_x_correct <- scale_x_continuous("Number of simulations", breaks = c(0,500,1000))
+
+hist_binary_flip <- load_histories("binary_flip", "binary_example.qmd")
+
+(
+ (plot_log_gamma_histories(hist_binary_correct$log_gamma) + scale_x_correct + labs(tag = "A) Correct - SBC") + tag_theme) + 
+ (plot_log_p_histories(hist_binary_correct$miscalibration) + scale_x_correct + labs(tag = "B) Correct - Bin. calib.") + tag_theme) + 
+ (plot_log_p_histories(hist_binary_correct$ttest) + scale_x_correct + labs(tag = "C) Correct - DAP") + tag_theme) +
+   
+ (plot_log_gamma_histories(hist_binary_flip$log_gamma) + labs(tag = "D) Flipped - SBC") + tag_theme) + 
+ (plot_log_p_histories(hist_binary_flip$miscalibration) + labs(tag = "E) Flipped - Bin. calib.") + tag_theme) +
+ (plot_log_p_histories(hist_binary_flip$ttest) + labs(tag = "F) Flipped - DAP") + tag_theme)
+) + plot_layout(ncol = 3, widths = c(2,1,1), axis_titles = "collect_x")
+
+```
 
 ### Poisson vs. negative binomial
 
 
 
-```{r fig-pnb-ignore-all}
-#| fig-cap: "Histories of SBC gamma statistic for poisson-NB model ignoring all data in BF computation, the model index and two data-dependent derived quantities: the log likelihood (log_lik) and variance estimate (var_y)."
+```{r fig-pnb-ignore}
 #| fig-width: 7
-#| fig-height: 2.5
+#| fig-height: 3
 
 hist_pnb_ignore_all <- load_histories("pnb_ignore_all", "poisson_nb_example.qmd")
-plot_log_gamma_histories(hist_pnb_ignore_all$log_gamma) #/ (
-#plot_log_p_histories(hist_pnb_ignore_all$miscalibration, "Calibration") 
-#+
-#  plot_spacer()
-#) +
-#plot_log_p_histories(hist_pnb_ignore_all$ttest, "DAP - Schad et al.")) + 
-#  plot_annotation(tag_levels = "A")
-```
-
-
-```{r fig-pnb-ignore-half}
-#| fig-cap: Histories of SBC gamma statistics for poisson-NB model ignoring half the data in BF computation. 
-#| fig-width: 7
-#| fig-height: 2.5
-
-
 hist_pnb_ignore_half <- load_histories("pnb_ignore_half", "poisson_nb_example.qmd")
-plot_log_gamma_histories(hist_pnb_ignore_half$log_gamma) 
-#/ (
-#plot_log_p_histories(hist_pnb_ignore_half$miscalibration, "Calibration") + 
-#plot_log_p_histories(hist_pnb_ignore_half$ttest, "DAP - Schad et al.")) + plot_annotation(tag_levels = "A")
+
+(plot_log_gamma_histories(hist_pnb_ignore_all$log_gamma) + labs(tag = "A) Ignore all data") + tag_theme) +
+(plot_log_gamma_histories(hist_pnb_ignore_half$log_gamma) + labs(tag = "B) Ignore half of the data (10x simulations)") + tag_theme)  + 
+  plot_layout(ncol = 1, axis_titles = "collect_x")
 ```
 
-```{r fig-pnb-noise}
-#| fig-cap: Histories of check statistics for poisson-NB model with noise in BF.  A) shows the log gamma statistic of default SBC, B) is the p-value of the bootstrapped miscalabration test of Dimitraidis et al. and C) is the p-value from t-test for the data-averaged posterior.
+```{r fig-pnb-noise-bias}
+#| fig-width: 7
+#| fig-height: 6
 
 hist_pnb_vari <- load_histories("pnb_vari", "poisson_nb_example.qmd")
-(plot_log_gamma_histories(hist_pnb_vari$log_gamma) + labs(tag = "A) SBC") + tag_theme+ theme(axis.title.y = element_text(size = 9))) / (
-(plot_log_p_histories(hist_pnb_vari$miscalibration) + labs(tag = "B) Calibration") + tag_theme) + 
-(plot_log_p_histories(hist_pnb_vari$ttest)  + labs(tag = "C) DAP") + tag_theme))
-```
-
-
-```{r fig-pnb-bias}
-#| fig-cap: Histories of check statistics for biased poisson-NB model.  A) shows the log gamma statistic of default SBC, B) is the p-value of the bootstrapped miscalabration test of Dimitraidis et al. and C) is the p-value from t-test for the data-averaged posterior.
-
 hist_pnb_bias <- load_histories("pnb_bias", "poisson_nb_example.qmd")
-(plot_log_gamma_histories(hist_pnb_bias$log_gamma) + labs(tag = "A) SBC") + tag_theme + theme(axis.title.y = element_text(size = 9))) / (
-(plot_log_p_histories(hist_pnb_bias$miscalibration) + labs(tag = "B) Calibration") + tag_theme) + 
-(plot_log_p_histories(hist_pnb_bias$ttest)  + labs(tag = "C) DAP") + tag_theme))
+
+
+# (
+#   (plot_log_gamma_histories(hist_pnb_vari$log_gamma) + labs(tag = "A) SBC") + tag_theme+ theme(axis.title.y = element_text(size = 9))) / (
+#   (plot_log_p_histories(hist_pnb_vari$miscalibration) + labs(tag = "B) Binary calibration") + tag_theme) + 
+#   (plot_log_p_histories(hist_pnb_vari$ttest)  + labs(tag = "C) DAP") + tag_theme))
+# ) +
+# (
+#   (plot_log_gamma_histories(hist_pnb_bias$log_gamma) + labs(tag = "A) SBC") + tag_theme + theme(axis.title.y = element_text(size = 9))) / (
+#   (plot_log_p_histories(hist_pnb_bias$miscalibration) + labs(tag = "B) Binary calibration") + tag_theme) + 
+#   (plot_log_p_histories(hist_pnb_bias$ttest)  + labs(tag = "C) DAP") + tag_theme))
+# ) + plot_layout(ncol = 1, heights = c(0.5,0.5,1))
+
+pnb_layout <- "
+AA
+BC
+DD
+EF
+"
+
+(
+  (plot_log_gamma_histories(hist_pnb_vari$log_gamma) + labs(tag = "A) Noise - SBC") + tag_theme + theme(axis.title.y = element_text(size = 9))) + 
+  (plot_log_p_histories(hist_pnb_vari$miscalibration) + labs(tag = "B) Noise - Bin. calib.") + tag_theme) + 
+  (plot_log_p_histories(hist_pnb_vari$ttest)  + labs(tag = "C) Noise - DAP") + tag_theme) +
+    
+  (plot_log_gamma_histories(hist_pnb_bias$log_gamma) + labs(tag = "D) Bias - SBC") + tag_theme + theme(axis.title.y = element_text(size = 9))) + 
+  (plot_log_p_histories(hist_pnb_bias$miscalibration) + labs(tag = "E) Bias - Bin. calib.") + tag_theme) + 
+  (plot_log_p_histories(hist_pnb_bias$ttest)  + labs(tag = "F) Bias - DAP") + tag_theme)
+) + plot_layout(design = pnb_layout)
+
 ```
 
 
@@ -165,10 +191,12 @@ After running `r format(turtles_post_half_metrics$n_sims, big.mark = " ")` simul
 
 ```{r fig-turtles-bad-norm}
 #| fig-cap: Histories of check statistics for bad normalization constant in the turtles model.  A) shows the log gamma statistic of default SBC, B) is the p-value of the bootstrapped miscalabration test of Dimitraidis et al. and C) is the p-value from t-test for the data-averaged posterior.
+#| fig-width: 7
+#| fig-height: 3
 
 hist_turtles_norm_bad <- load_histories("turtles_norm_bad", "turtles.qmd")
 (plot_log_gamma_histories(hist_turtles_norm_bad$log_gamma) + labs(tag = "A) SBC") + tag_theme + theme(axis.title.y = element_text(size = 9))) / (
-(plot_log_p_histories(hist_turtles_norm_bad$miscalibration) + labs(tag = "B) Calibration") + tag_theme) + 
+(plot_log_p_histories(hist_turtles_norm_bad$miscalibration) + labs(tag = "B) Binary calibration") + tag_theme) + 
 (plot_log_p_histories(hist_turtles_norm_bad$ttest)  + labs(tag = "C) DAP") + tag_theme))
 ```
 
@@ -189,16 +217,22 @@ simulations (@fig-ranef-post; `r report_success_metrics(ranef_test)`).
 
 ```{r fig-ranef-constant}
 #| fig-cap: Histories of check statistics for random effect model using constant intercept and standard deviation. 
+#| fig-width: 7
+#| fig-height: 3
 
 hist_ranef_constant <- load_histories("ranef_constant", "lmbf_ranef_presence_post_sbc.qmd")
+hist_ranef_constant$log_gamma <- hist_ranef_constant$log_gamma |> 
+  mutate(variable = factor(variable, levels = c("model", "Subject-1", "Subject-2"), labels = c("model", "γ₁", "γ₂")))
 (plot_log_gamma_histories(hist_ranef_constant$log_gamma)  + labs(tag = "A) SBC") + tag_theme+ theme(axis.title.y = element_text(size = 9)))/ (
-(plot_log_p_histories(hist_ranef_constant$miscalibration)  + labs(tag = "B) Calibration") + tag_theme) + 
+(plot_log_p_histories(hist_ranef_constant$miscalibration)  + labs(tag = "B) Binary calibration") + tag_theme) + 
 (plot_log_p_histories(hist_ranef_constant$ttest)  + labs(tag = "C) DAP") + tag_theme))
 #TODO: uncertainty about red line?
 ```
 
 ```{r fig-ranef-post}
 #| fig-cap: Result of calibration checks for random effect model using posterior SBC. A) empirical CDF difference plots for model parameters (g_Subject --- standard deviation of the random intercepts, model --- model index, mu --- overall intercept, sig2 --- residual variance, Subject --- merged plot for all random intercepts, x1 --- fixed effect) B) calibration plot.
+#| fig-width: 7
+#| fig-height: 2.8
 
 subject_transl <- paste0("𝛾-",1:15)
 names(subject_transl) <- paste0("Subject-",1:15)
@@ -209,7 +243,7 @@ ecdf_ranef_post <- plot_ecdf_diff(res_ranef_post_transl, combine_variables = com
 metrics_ranef_post <- load_precomputed_file(here::here("cache/lmbf_ranef_post_presence_100_metrics.rds"), "lmbf_ranef_presence_post_sbc.qmd")
 reliabilitydiag_post <- metrics_ranef_post$reliability_diag
 
-((ecdf_ranef_post + theme(legend.position = "bottom")  + labs(tag = "A) SBC") + tag_theme) | (reliabilitydiag_post  + labs(tag = "B) Calibration") + tag_theme)) + plot_layout(widths = c(2,1)) 
+((ecdf_ranef_post + theme(legend.position = "bottom")  + labs(tag = "A) SBC") + tag_theme) | (reliabilitydiag_post  + labs(tag = "B) Binary calibration") + tag_theme)) + plot_layout(widths = c(2,1)) 
 ```
 
 
@@ -224,14 +258,14 @@ ttest_fixed <- load_precomputed_file(here::here("cache/ttest_fixed_metrics.rds")
 ```{r fig-ttest-fixed}
 #| fig-cap: Results of SBC when using a fixed value of $\sigma$ when simulating datasets for Bayesian t-test. A) Histories of log gamma statistics for the model index, posterior mean (mu) and $f(i, y) = (i - \frac{1}{2})(\text{sd}(y) - 1)$ (model_sd_m1). We see that only the latter diagnoses any problems. B) Calibration plot across all simulations shows no problems. C) and D) Separate calibration plots for datasets with high/low standard deviation show problems.
 #| fig-width: 7
-#| fig-height: 4
+#| fig-height: 3
 
 
-tag_theme_calib <- tag_theme + theme(plot.tag.position = c(0, 1.1), plot.margin = margin(l = 10, r = 10))
+tag_theme_calib <- tag_theme + theme(plot.tag.position = c(0, 1.1), plot.margin = margin(l = 24, r = 24))
 
 (plot_log_gamma_histories(ttest_fixed$hist |> mutate(variable = factor(variable, levels = c("model", "mu", "model_sd_m1")))) + labs(tag = "A) SBC") + tag_theme + theme(plot.margin = margin(10, 10, 20, 10))+ theme(axis.title.y = element_text(size = 9))) /
-((ttest_fixed$all$reliability_diag  + labs(tag = "B) Calibration - all") + tag_theme_calib) | (ttest_fixed$high$reliability_diag  + labs(tag = "C) Calibration - sd(y) ≥ 1") + tag_theme_calib) | 
-   (ttest_fixed$low$reliability_diag  + labs(tag = "D) Calibration - sd(y) < 1") + tag_theme_calib))
+((ttest_fixed$all$reliability_diag  + labs(tag = "B) Bin. calib., all") + tag_theme_calib) | (ttest_fixed$high$reliability_diag  + labs(tag = "C) Bin. calib., sd(y) ≥ 1") + tag_theme_calib) | 
+   (ttest_fixed$low$reliability_diag  + labs(tag = "D) Bin. calib., sd(y) < 1") + tag_theme_calib))
 ```
 
 
@@ -281,6 +315,9 @@ dap_wrong <- load_precomputed_file(here::here("cache/dap_metrics_wrong_summary.r
 ```
 
 ```{r fig-dap-probs}
+#| fig-width: 7
+#| fig-height: 3.5
+
 p_correct <- dap_correct$probs_df |>  ggplot(aes(x = prob)) + geom_histogram(binwidth = 0.05) + facet_wrap(~scenario, scales = "free_y") + scale_x_continuous("Posterior model probability")
 p_wrong <- dap_wrong$probs_df |>  ggplot(aes(x = prob)) + geom_histogram(binwidth = 0.05) + facet_wrap(~scenario, scales = "free_y")  + scale_x_continuous("Posterior model probability")
 
@@ -288,11 +325,13 @@ p_correct / p_wrong + plot_annotation(tag_levels = "A")
 ```
 
 ```{r tab-dap-correct}
-dap_correct$summary |> dap_power_table()
+dap_correct$summary |> 
+  dap_power_table() 
 ```
 
 ```{r}
-dap_wrong$summary |> dap_power_table()
+dap_wrong$summary |> 
+  dap_power_table()
 ```
 
 
@@ -315,7 +354,7 @@ Empirically, we can see the lack of any convergence for the Cauchy case and very
 #| fig-cap: | 
 #|   Convergence of the good check when a single datapoint is simulated from the standard normal and  A) $\mathcal{M}_0: y \sim \text{Cauchy}(0, 1)$ --- here the variance is infinite and we see no convergence at all or B) $\mathcal{M}_0: y \sim N(2, 1)$ where the average Bayes factor eventually converges, but 50 000 simulations are not enough for reliable convergence. Each line is the cumulative average from a single set of simulations. The highlighted area shows average BF 0.9 - 1.1. Means from first 1000 simulations are not shown.
 #| fig-width: 7
-#| fig-height: 2.5
+#| fig-height: 3
 plot_good_example <- function(n_sims, n_runs, m0, step = 10, start = 1, linealpha = 0.3) {
    y <- matrix(rnorm(n_sims * n_runs), nrow = n_sims)
    if(m0 == "cauchy") {
@@ -362,7 +401,7 @@ good_runs <- 20
 #| fig-cap: |
 #|   ECDF difference plots from SBC (A) and calibration diagrams (B, C) for Bayes factors when $\mathcal{M}_1: y \sim N(0, 1)$ and either $\mathcal{M}_0: y \sim \text{Cauchy}(0, 1)$ or $\mathcal{M}_0: y \sim N(2, 1)$.
 #| fig-width: 7
-#| fig-height: 4
+#| fig-height: 2
 res_good_cauchy <- load_precomputed_file(here::here("cache/good_cauchy.rds"), "good_check_examples.qmd")$result
 bp_good_cauchy <- binary_probabilities_from_stats(res_good_cauchy$stats)
 t_good_cauchy <- format_t_test_diff(t.test(bp_good_cauchy$prob, mu = 0.5))
@@ -413,24 +452,24 @@ First we instead use a proper prior with similar form $\pi_\text{prior}(\sigma^2
 
 ```{r fig-ttest-inv1psquared}
 #| fig-cap: Results of SBC when using a $\pi_\text{prior}(\sigma^2) = \frac{1}{1 + \sigma^2}$ when simulating datasets for Bayesian t-test. A) ECDF difference plot for the derived quantity $f(i, y) = (i - \frac{1}{2})(\text{sd}(y) - 1)$ (model_sd_m1). B) and C) Separate binary prediction calibration plots for datasets with high/low standard deviation.
-
+#| fig-width: 7
+#| fig-height: 3.2
 res_ttest_inv1psquared <- load_precomputed_file("cache/ttest_inv1psquared.rds", "ttestBF.qmd")$result
 
 
-((plot_ecdf_diff(res_ttest_inv1psquared, variables = "model_sd_m1")  + theme(legend.position = "bottom") + labs(tag = "A) SBC") + tag_theme_calib) | (ttest_inv1psquared$high$reliability_diag  + labs(tag = "B) Calibration - sd(y) ≥ 1") + tag_theme_calib) | 
-   (ttest_inv1psquared$low$reliability_diag  + labs(tag = "C) Calibration - sd(y) < 1") + tag_theme_calib))
+((plot_ecdf_diff(res_ttest_inv1psquared, variables = "model_sd_m1")  + theme(legend.position = "bottom") + labs(tag = "A) SBC") + tag_theme_calib) | (ttest_inv1psquared$high$reliability_diag  + labs(tag = "B) Bin. calib, sd(y) ≥ 1") + tag_theme_calib) | 
+   (ttest_inv1psquared$low$reliability_diag  + labs(tag = "C) Bin. calib, sd(y) < 1") + tag_theme_calib))
 ```
 
 ```{r fig-ttest-cauchy}
 #| fig-cap: Results of SBC when using a $\sigma \sim \text{HalfCauchy}(0,1)$ when simulating datasets for Bayesian t-test. A) ECDF difference plot for the derived quantity $f(i, y) = (i - \frac{1}{2})(\text{sd}(y) - 1)$ (model_sd_m1). B) and C) Separate binary prediction calibration plots for datasets with high/low standard deviation.
+#| fig-width: 7
+#| fig-height: 3.2
 
 res_ttest_cauchy <- load_precomputed_file("cache/ttest_cauchy.rds", "ttestBF.qmd")$result
 
 
-((plot_ecdf_diff(res_ttest_cauchy, variables = "model_sd_m1") + theme(legend.position = "bottom") + labs(tag = "A) SBC") + tag_theme_calib) | (ttest_cauchy$high$reliability_diag  + labs(tag = "B) Calibration - sd(y) ≥ 1") + tag_theme_calib) | 
-   (ttest_cauchy$low$reliability_diag  + labs(tag = "C) Calibration - sd(y) < 1") + tag_theme_calib))
+((plot_ecdf_diff(res_ttest_cauchy, variables = "model_sd_m1") + theme(legend.position = "bottom") + labs(tag = "A) SBC") + tag_theme_calib) | (ttest_cauchy$high$reliability_diag  + labs(tag = "B) Bin. calib, sd(y) ≥ 1") + tag_theme_calib) | 
+   (ttest_cauchy$low$reliability_diag  + labs(tag = "C) Bin. calib, sd(y) < 1") + tag_theme_calib))
 ```
-
-
-
 

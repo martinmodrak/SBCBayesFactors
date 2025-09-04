@@ -46,8 +46,14 @@ for(N in N_to_test){
   for(bp_name in names(bp_correct)) {
      probs <- bp_correct[[bp_name]]$bp$prob
      cache_file <- file.path(cache_dir, paste0("dap_metrics_correct_", rlang::hash(list(probs, N))))
-     res_correct_list[[length(res_correct_list) + 1]] <- 
-       dap_power_scenario(bp_name, N_sims = 1000,  probs, N = N, bp_correct[[bp_name]]$prob1_prior)
+     if(file.exists(cache_file)) {
+       dap_power_res <- readRDS(cache_file)
+     } else {
+       dap_power_res <- 
+         dap_power_scenario(bp_name, N_sims = 1000,  probs, N = N, bp_correct[[bp_name]]$prob1_prior)
+       saveRDS(dap_power_res, file = cache_file)
+     }
+     res_correct_list[[length(res_correct_list) + 1]] <- dap_power_res
   }
 }
 res_df_correct <- do.call(rbind, res_correct_list)
@@ -93,8 +99,16 @@ bp_wrong <- list("Poisson NB - bias" = list(bp = bp_pnb_bias, prob1_prior = 0.5)
 res_wrong_list <- list()
 for(N in N_to_test){
   for(bp_name in names(bp_wrong)) {
-     res_wrong_list[[length(res_wrong_list) + 1]] <- 
-       dap_power_scenario(bp_name, N_sims = 1000,  bp_wrong[[bp_name]]$bp$prob, N = N, bp_wrong[[bp_name]]$prob1_prior)
+     probs <- bp_wrong[[bp_name]]$bp$prob
+     cache_file <- file.path(cache_dir, paste0("dap_metrics_wrong_", rlang::hash(list(probs, N))))
+     if(file.exists(cache_file)) {
+       dap_power_res <- readRDS(cache_file)
+     } else {
+       dap_power_res <- 
+         dap_power_scenario(bp_name, N_sims = 1000,  probs, N = N, bp_wrong[[bp_name]]$prob1_prior)
+       saveRDS(dap_power_res, file = cache_file)
+     }
+     res_wrong_list[[length(res_wrong_list) + 1]] <- dap_power_res
   }
 }
 res_df_wrong <- do.call(rbind, res_wrong_list)

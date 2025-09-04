@@ -292,3 +292,35 @@ probs <- seq(0.1,0.8, length.out = 5)
 true_model <- rbinom(5, size = 1, prob = 0.5)
 ```
 
+
+## Testing bin calib
+
+```{r}
+set.seed(55621)
+py1_bad <- c(1/4,3/4)
+ds_bin_bad <- generate_datasets(SBC_generator_function(sim_binary, py1 = py1_bad), n_sims = 100)
+
+```
+
+```{r}
+cor_pm1_bad <- compute_correct_pm1(py1_bad)
+
+bad_candidate <- c(2/3, 0.75/1.625)
+cor_pm1_bad/bad_candidate
+mean(cor_pm1_bad/bad_candidate)
+mean((1 - cor_pm1_bad)/( 1 - bad_candidate))
+```
+
+
+```{r}
+res_bin_bad <- compute_SBC(ds_bin_bad, SBC_backend_bin_example(c(0,1), 100),
+                               dquants = dquants_bin,
+                               globals = binary_globals)
+                               #cache_mode = "results", cache_location = file.path(cache_dir, "binary_correct.rds"))
+```
+
+
+```{r}
+plot_ecdf_diff(res_bin_bad)
+my_reliability_diag(binary_probabilities_from_stats(res_bin_bad$stats))
+```
