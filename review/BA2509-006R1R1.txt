@@ -1,0 +1,11 @@
+The paper derives two simulation-based validation methods for numerically approximated Bayes factors (BFs). As BF is a fundamental concept in Bayesian model selection, this paper assumes the usefulness of BFs and develops methods for computing BF. I believe this endeavor is worthwhile. 
+
+This paper seems like the SBC paper (Modrak et al 2025 BA) tailored specifically for BF computation. Perhaps, the authors can explain how this paper departures from and improves upon SBC in significant ways. Also, the authors can review some literature on BF computation? The simulation based method seems more flexible than the methods developed in the 90s and 00s, as it does not require closed form expressions or direct numerical approximations.  
+
+The idea of posterior SBC looks very similar to the intrinsic BF proposed by Berger and Pericchi: use part of the sample to convert improper prior to a proper one. I was wondering if the authors could spend at least one paragraph explaining the difference and additional contribution. 
+
+I am curious about the scalibility (and accuracy) of the method. Let's say, we work with the Gaussian linear regression. The size of the model space is 2^p where p is the number of predictors. I am curious about the tricks you would suggest for, say p=100, as enumerating the full model space seems computationally prohibitive. 
+
+In the abstract, the authors write "but with finite resources, binary prediction calibration is typically more sensitive." I find it helpful if the authors could spell out what kind(s) of finite and what the calibration is sensitive to.
+
+Also, I find it helpful if the authors could move the algorithm 1 from the appendix to the main text, so that the readers know the whole procedure, with all pieces put together. 

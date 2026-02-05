@@ -1,0 +1,50 @@
+Two referees and I have read the paper. Both referees are generally positive and give some useful suggestions. Please consider incorporating those.
+
+
+I have some comments as well that I am listing here, followed by the comments of one referee. The comments of the other referee is in a separate file.
+
+1.The d\theta_i should be at the end of the integral sign instead of the front in (1).
+
+2. Before (2), please give a formula for Pr(M_i|y). 
+
+3. Is Categorical is referring to a multinomial distribution? Would be clearer to say that somewhere.
+
+4. In (3), is that theta_i given  M_i and y given Mi, theta_i, then the conditioning should be explicitly mentioned, otherwise it becomes difficult to follow.
+
+5. What is the reason for sometimes using i and sometimes using M_i, why not just stick to one of them?
+
+6. What is pi_post(y)? Please use usual notation for posterior with conditioning.
+
+7. Page 5, para 2: follow discrete uniform distribution: "a discrete ..."
+
+8. The dy_1  should come at the end in an integral on top of page 7, again in (13).
+
+9. Section 3.1, para 2: should phi_BMA(I |y) be a pmf instead of density?
+
+10. In (18) I don’t think \phi^{i_post}(y) was defined earlier. It looks like as if it is free of theta, but the LHS draws a \theta, so likely this is the possibly incorrect posterior of theta under model i. The notation should be explained and made clearer. 
+
+11. I also agree with one referee that the algorithm can be given in main text as it is one of the main contributions and with some explanation. I took a quick look at the Appendix and have a few clarification questions.
+- It seems there should be a log inside the parenthesis inside inv_logit pseudo code.
+- Is M the same as K in the previous page, number of models? Some explanation would be helpful.
+- What is changing over j=1 to J? Does f_j introduce randomness?
+- How is rank computed for a binary variable?
+
+12. It would be helpful to remind readers what is the \gamma statistic, in the last para of Section 4.
+
+13. Is \tau sd or variance in the normal distribution in Section 6? what is g_i?
+
+
+Please find below the comments by one reviewer:
+
+
+A clear and useful paper. It tightens the theory connecting simulation-based calibration (SBC) and binary prediction calibration (BPC) for Bayes-factor validation, shows where data-averaged posterior (DAP) checks and the “Good check” fall short, and offers a practical workflow (including posterior SBC) that works on real examples. I recommend the authors to improve the paper by focusing on clarity, reporting details, and a couple of extra comments.
+
+1. You recommend “hundreds” to “thousands” of simulations (Sec. 7.3), and figures show power curves, but readers could use rules of thumb: e.g., for noise in log-BF with sd is about 2 (Fig. 3A–C, p.18), how many sims for 80% power at \alpha=0.05? Consider summarizing these as a small table.
+
+2. You discuss loss of exact equivalence between SBC and BPC beyond K=2 (Sec. 3.2). A short experiment with K=3 (e.g., nested GLMs) comparing (i) one-vs-rest BPC, (ii) top-class calibration, and (iii) SBC on model index would strengthen the generality claims.
+
+3. You mention loss of power from random tie-breaking for discrete quantities (Sec. 7.1–7.2 allude to it). A brief ablation (e.g., mid-ranks or jittering) would be informative.
+
+4. You argue for frequentist tests over the Bayesian t-test and mention Gaffke’s test; it would help to standardize on one recommended DAP test (with code snippet) so users don’t have to choose. (Sec. 3.5)
+
+5. The “turtles” probit GLMM and BayesFactor examples are great. If space allows, adding one continuous-outcome hierarchical model (e.g., Gaussian LMM with non-conjugate priors) would broaden external validity.

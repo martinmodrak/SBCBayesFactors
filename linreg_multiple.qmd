@@ -1,0 +1,400 @@
+---
+title: "Turtles"
+format: html
+---
+
+Let's setup the environment (bridgesampling currently works only with rstan):
+
+```{r setup, message=FALSE,warning=FALSE, results="hide"}
+library(SBC)
+library(ggplot2)
+library(bridgesampling)
+library(brms)
+library(dplyr)
+library(tidyr)
+library(calibrationband)
+
+use_cmdstanr <- FALSE
+library(rstan)
+rstan_options(auto_write = TRUE)
+
+library(future)
+
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir)) {
+  dir.create(cache_dir)
+}
+
+do_tests <- FALSE
+
+options(SBC.min_chunk_size = 10)
+
+
+theme_set(theme_minimal())
+devtools::load_all()
+```
+
+```{r cluster}
+setup_cluster(max_server_workers = 110)
+```
+
+
+
+
+## Simulator
+
+```{r}
+prior_args <- list(
+  b_sd = 1,
+  intercept_mean = 2,
+  intercept_sd = 2,
+  sigma_sd = 3
+)
+
+one_sim_generator <- function(N, model, prior_args) {
+  x1 <- rnorm(N)
+  x2 <- rnorm(N)
+  
+  b_Intercept <- rnorm(1, prior_args$intercept_mean, prior_args$intercept_sd)   
+  sigma <- abs(rnorm(1, 0, prior_args$sigma_sd))
+
+  lprior <- dnorm(b_Intercept, prior_args$intercept_mean, prior_args$intercept_sd, log = TRUE) +
+    log(2) + dnorm(sigma, 0, prior_args$sigma_sd, log = TRUE)
+  
+  if( (model %% 2) == 1) {
+    b_x1 <- rnorm(1, 0, prior_args$b_sd)
+    lprior <- lprior + dnorm(b_x1, 0, sd = prior_args$b_sd, log = TRUE)
+  } else {
+    b_x1 <- 0
+  }
+  
+  if(model > 1) {
+    b_x2 <- rnorm(1, 0, prior_args$b_sd)
+    lprior <- lprior + dnorm(b_x2, 0, sd = prior_args$b_sd, log = TRUE)
+  } else {
+    b_x2 <- 0
+  }
+  
+  
+  predictor <- b_Intercept + x1 * b_x1 + x2 * b_x2
+  y <- rnorm(N, predictor, sigma)
+  
+  
+  ljacobian <- log(sigma)
+  lobs <- sum(dnorm(y, predictor, sigma, log = TRUE))
+  lp__ <- lprior + ljacobian + lobs
+    
+  variables <- list(
+      b_Intercept = b_Intercept,
+      sigma = sigma,
+      lprior = lprior,
+      lp__ = lp__
+    )
+  
+  if( (model %% 2) == 1) {
+    variables$b_x1 <- b_x1
+  }
+  
+  if(model > 1) {
+    variables$b_x2 <- b_x2
+  }
+
+  
+  list(
+    variables = variables,
+    generated = data.frame(y = y, x1 = x1, x2 = x2)
+  )
+}
+
+N <- 15
+n_sims <- 2000
+set.seed(42146213)
+gen_H0 <- SBC_generator_function(one_sim_generator, N = N, model = 0, prior_args = prior_args)
+gen_H1 <- SBC_generator_function(one_sim_generator, N = N, model = 1, prior_args = prior_args)
+gen_H2 <- SBC_generator_function(one_sim_generator, N = N, model = 2, prior_args = prior_args)
+gen_H3 <- SBC_generator_function(one_sim_generator, N = N, model = 3, prior_args = prior_args)
+
+datasets_H0 <- generate_datasets(n_sims = n_sims, gen_H0)
+datasets_H1 <- generate_datasets(n_sims = n_sims, gen_H1)
+datasets_H2 <- generate_datasets(n_sims = n_sims, gen_H2)
+datasets_H3 <- generate_datasets(n_sims = n_sims, gen_H3)
+
+```
+
+
+```{r backends}
+prior <- c(set_prior(paste0("normal(0,", prior_args$b_sd,")"), class = "b"),
+           set_prior(paste0("normal(0,", prior_args$sigma_sd,")"), class = "sigma"),
+           set_prior(paste0("normal(", prior_args$intercept_mean,", ", prior_args$intercept_sd,")"), class = "b", coef = "Intercept"))
+template_data <- one_sim_generator(N, 3, prior_args)$generated
+backend_H0 <- SBC_backend_brms(y ~ 0 + Intercept, prior = prior[2:3,], sample_prior = "yes", template_data = template_data, out_stan_file = file.path(cache_dir, "linreg_multiple_0.stan"))
+
+
+backend_H1 <- SBC_backend_brms(y ~ 0 + Intercept + x1, prior = prior, sample_prior = "yes", template_data = template_data, out_stan_file = file.path(cache_dir, "linreg_multiple_1.stan"))
+
+backend_H2 <- SBC_backend_brms(y ~ 0 + Intercept + x2, prior = prior, sample_prior = "yes", template_data = template_data, out_stan_file = file.path(cache_dir, "linreg_multiple_2.stan"))
+
+
+backend_H3 <- SBC_backend_brms(y ~ 0 + Intercept + x1 + x2, prior = prior, sample_prior = "yes", template_data = template_data, out_stan_file = file.path(cache_dir, "linreg_multiple_3.stan"))
+
+
+```
+
+
+## Test individual models
+
+```{r test0}
+if(do_tests) {
+  all_generators <- list("H0" = gen_H0, "H1" = gen_H1, "H2" = gen_H2, "H3" = gen_H3)
+  all_backends <- list("H0" = backend_H0, "H1" = backend_H1, "H2" = backend_H2, "H3" = backend_H3)
+  
+  for(m_name in names(all_generators)) {
+    cat("=========== Testing ", m_name, "===============\n")
+    set.seed(9654224)
+    ds_test <- generate_datasets(n_sims = 1000, all_generators[[m_name]])
+  res_test <- compute_SBC(ds_test, all_backends[[m_name]], 
+                           keep_fits = FALSE,
+                           cache_mode = "results",
+                           cache_location = file.path(cache_dir, paste0("SBC_linreg_",m_name,"_N", N, "_", length(ds_test), ".rds")))
+  
+  print(plot_ecdf_diff(res_test) + ggtitle(m_name))    
+  }
+
+}
+```
+
+## Correct version with bridgesampling
+
+```{r}
+set.seed(2164588)
+datasets_combined <- SBC_datasets_for_bf(
+  datasets_H0,
+  datasets_H1,
+  datasets_H2,
+  datasets_H3
+)
+```
+
+
+```{r}
+backend_bs <- 
+  SBC_backend_bridgesampling(
+    backend_H0,
+    backend_H1,
+    backend_H2,
+    backend_H3
+  )
+```
+
+
+```{r}
+results_bs <- compute_SBC(datasets_combined, backend_bs, 
+                          keep_fits = FALSE,
+                           cache_mode = "results",
+                           cache_location = file.path(cache_dir, paste0("SBC_linreg_bs_N", N, "_", length(datasets_combined), ".rds")))
+```
+
+```{r}
+plot_ecdf_diff(results_bs)
+```
+
+```{r calib-multiple}
+plot_binary_calibration(results_bs, region.method = "resampling")
+```
+
+Formal miscalibration tests also shows no problems for any of the variables:
+
+```{r}
+bp_bs <- binary_probabilities_from_stats(results_bs$stats)
+for(bp_var in unique(bp_bs$variable)) {
+  cat("=====", bp_var, "=====\n")
+  bp_bs_selected <- bp_bs |> filter(variable == bp_var)
+  print(miscalibration_resampling_test(bp_bs_selected$prob, bp_bs_selected$simulated_value))
+  print(brier_resampling_test(bp_bs_selected$prob, bp_bs_selected$simulated_value))
+}
+```
+
+
+And that data-averaged posterior? Both with t-test and the Gaffke test and for all variables, we see
+no problems and reasonably tight confidence intervals centered at the expected
+value of 0.25.
+
+```{r}
+for(bp_var in paste0("is_model", 0:3)) {
+  cat("=====", bp_var, "=====\n")
+  bp_bs_selected <- bp_bs |> filter(variable == bp_var)
+  print(t.test(bp_bs_selected$prob, mu = 0.25))
+  print(gaffke_test(bp_bs_selected$prob, mu = 0.25))
+}
+```
+
+```{r}
+bp_bs_selected <- bp_bs |> filter(variable == "top_model")
+t.test(bp_bs_selected$prob, bp_bs_selected$simulated_value)
+```
+
+
+## Savage-Dickey
+
+Via `hypothesis`
+
+
+```{r}
+SBC_backend_savage_dickey <- function(full_model_backend) {
+  structure(list(full_model_backend = full_model_backend), class = "SBC_backend_savage_dickey")
+}
+
+SBC_fit.SBC_backend_savage_dickey <- function(backend, generated, cores) {
+  fit <- SBC_fit(backend$full_model_backend, generated, cores)
+  structure(list(fit = fit), class = "SBC_fit_savage_dickey")
+}
+
+fit_savage_dickey_to_probs <- function(fit) {
+  h <- hypothesis(fit$fit, c("(x1 + x2)^2 = 0", "x2 = 0", "x1 = 0"))
+  probs <- c(h$hypothesis$Evid.Ratio, 1) / (sum(h$hypothesis$Evid.Ratio)+1)
+  probs
+}
+
+SBC_fit_to_draws_matrix.SBC_fit_savage_dickey <- function(fit) {
+  probs <- fit_savage_dickey_to_probs(fit)
+
+  ndraws <- posterior::ndraws(fit$fit)
+  model_draws <- sample(0:3, size  = ndraws, prob = probs, replace = TRUE)
+
+  empty_dm <- posterior::as_draws_matrix(matrix(nrow = ndraws, ncol = 0))
+  combined_draws <- SBC:::combine_draws_matrix_for_bf(rep(list(empty_dm), 4), model_draws, model_var = "model")
+  
+  combined_draws
+}
+
+SBC_backend_iid_draws.SBC_backend_savage_dickey <- function(backend) {
+  TRUE
+}
+
+#TODO delegate to SBC package version
+posterior_cdf_from_model_probs <- function(probs, model_var, variables) {
+  if(model_var %in% names(variables)) {
+    model_cdf <- SBC:::discrete_to_cdf(model_var, probs, variables[model_var])
+    if(length(probs) == 2) {
+      return(model_cdf)
+    } else {
+      is_model_cdf_list <- list()
+      for(i in 1:length(probs)) {
+        is_var_name <- paste0("is_", model_var, i - 1)
+        if(is_var_name %in% names(variables)) {
+          is_model_cdf_list[[i]] <- SBC:::binary_to_cdf(is_var_name, probs[i], variables[is_var_name])
+        } else {
+          is_model_cdf_list[[i]] <- NULL
+        }
+      }
+      is_model_cdf <- do.call(rbind, is_model_cdf_list)
+
+      max_index <- which.max(probs)
+      simulated_value_top <- variables[model_var] == max_index - 1
+      top_prediction_cdf <- SBC:::binary_to_cdf(paste0("top_", model_var), probs[max_index], simulated_value_top)
+
+      return(rbind(model_cdf, top_prediction_cdf, is_model_cdf))
+    }
+  } else {
+    return(NULL)
+  }
+}
+
+SBC_posterior_cdf.SBC_fit_savage_dickey <- function(fit, variables) {
+  probs <- fit_savage_dickey_to_probs(fit)
+  posterior_cdf_from_model_probs(probs, "model", variables)  
+}
+
+# TODO delegate to SBC package version
+top_model_dquants <- function(probs, model_var) {
+  max_index <- which.max(probs)
+  is_var_name <- paste0("is_", model_var, max_index - 1)
+  top_var_name <- paste0("top_", model_var)
+
+  dq_args <- list(rlang::parse_quo(is_var_name, rlang::current_env()))
+  names(dq_args) <- top_var_name
+  dq_args$.var_attributes <- SBC:::var_attributes_from_list(top_var_name, list(c(
+    binary_var_attribute(), possibly_constant_var_attribute()
+  )))
+  do.call(derived_quantities, dq_args)
+}
+
+SBC_fit_specific_dquants.SBC_fit_savage_dickey <- function(fit) {
+  probs <- fit_savage_dickey_to_probs(fit)
+  top_model_dquants(probs, "model")
+}
+
+```
+
+
+```{r}
+plan(sequential) 
+results_savd <- compute_SBC(datasets_combined, SBC_backend_savage_dickey(backend_H3), 
+                          keep_fits = TRUE,
+                          cache_mode = "results",
+                          cache_location = file.path(cache_dir, paste0("SBC_linreg_savage_dickey_N", N, "_", length(datasets_combined), ".rds"))
+                          )
+results_savd
+```
+
+```{r}
+plot_ecdf_diff(results_savd)
+```
+
+
+```{r calib-multiple-savd}
+plot_binary_calibration(results_savd, region.method = "resampling")
+```
+
+```{r}
+bp_savd <- binary_probabilities_from_stats(results_savd$stats)
+
+bp_savd_notop <- bp_savd |> filter(variable != "top_model")
+bp_bs_notop <- bp_bs |> filter(variable != "top_model")
+stopifnot(identical(bp_savd_notop$sim_id, bp_bs_notop$sim_id))
+stopifnot(identical(bp_savd_notop$variable, bp_bs_notop$variable))
+stopifnot(identical(bp_savd_notop$simulated_value, bp_bs_notop$simulated_value))
+
+bp_comparison <- bp_bs_notop |> 
+  select(sim_id, variable, simulated_value, prob) |> 
+  rename(prob_bs = prob) |> 
+  mutate(prob_savd = bp_savd_notop$prob)
+
+bp_comparison |> ggplot() + aes(x = prob_bs, y = prob_savd) + geom_abline(color = "orangered", intercept = 0, slope = 1) +
+  geom_point(alpha = 0.3) + facet_wrap(~variable) + coord_fixed()
+```
+
+
+```{r}
+for(bp_var in unique(bp_savd$variable)) {
+  cat("=====", bp_var, "=====\n")
+  bp_savd_selected <- bp_savd |> filter(variable == bp_var)
+  print(miscalibration_resampling_test(bp_savd_selected$prob, bp_savd_selected$simulated_value))
+  print(brier_resampling_test(bp_savd_selected$prob, bp_savd_selected$simulated_value))
+}
+```
+
+```{r}
+for(bp_var in paste0("is_model", 0:3)) {
+  cat("=====", bp_var, "=====\n")
+  bp_savd_selected <- bp_savd |> filter(variable == bp_var)
+  print(t.test(bp_savd_selected$prob, mu = 0.25))
+  print(gaffke_test(bp_savd_selected$prob, mu = 0.25))
+}
+```
+
+```{r}
+bp_savd_selected <- bp_savd |> filter(variable == "top_model")
+t.test(bp_savd_selected$prob, bp_savd_selected$simulated_value)
+```
+
+```{r}
+# h <- hypothesis(fit, c("(x1 + x2)^2 = 0", "x2 = 0", "x1 = 0"))
+# h$hypothesis$Evid.Ratio
+# h
+# probs <- c(h$hypothesis$Evid.Ratio, 1) / (sum(h$hypothesis$Evid.Ratio)+1)
+# probs
+# probs / probs[4]
+# #hypothesis(fit, "x2 = 0")
+```

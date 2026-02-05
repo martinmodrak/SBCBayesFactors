@@ -1,0 +1,280 @@
+---
+title: "Effect of nuisance priors"
+format: html
+editor: visual
+---
+
+A small example showing how different priors for nuisance parameters can affect the computed Bayes factor by a non-trivial margin for a real dataset.
+
+```{r setup, message=FALSE,warning=FALSE, results="hide"}
+library(SBC)
+library(ggplot2)
+library(bridgesampling)
+library(dplyr)
+library(tidyr)
+library(calibrationband)
+
+use_cmdstanr <- FALSE
+library(rstan)
+rstan_options(auto_write = TRUE)
+
+library(future)
+
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir)) {
+  dir.create(cache_dir)
+}
+
+
+theme_set(theme_minimal())
+devtools::load_all()
+```
+
+
+```{r}
+m_H0 <- stan_model("stan/turtles_H0.stan")
+m_H1 <- stan_model("stan/turtles_H1.stan")
+m_H0_prior <- stan_model("stan/turtles_H0_prior.stan")
+m_H1_prior <- stan_model("stan/turtles_H1_prior.stan")
+
+```
+
+```{r}
+data("turtles", package = "bridgesampling")
+
+stan_data <- list(y = turtles$y, x = turtles$x, N = nrow(turtles),
+                               C = max(turtles$clutch), clutch = turtles$clutch)
+                  
+fit_H0 <- sampling(m_H0, data = stan_data,
+                   iter = 15500, warmup = 500, chains = 4, seed = 1, cores = 4)
+
+fit_H1 <- sampling(m_H1, data = stan_data,
+                   iter = 15500, warmup = 500, chains = 4, seed = 1, cores = 4)
+
+```
+
+```{r}
+bridge_H0 <- bridge_sampler(fit_H0)
+bridge_H1 <- bridge_sampler(fit_H1)
+
+error_measures(bridge_H0)$percentage
+error_measures(bridge_H1)$percentage
+
+### summary ###
+summary(bridge_H0)
+summary(bridge_H1)
+
+```
+
+
+```{r}
+stan_data_prior <- stan_data
+stan_data_prior$alpha0_prior_width <- 1.5
+stan_data_prior$alpha1_prior_width <- 0.5
+fit_H0_prior <- sampling(m_H0_prior, data = stan_data_prior,
+                   iter = 15500, warmup = 500, chains = 4, seed = 1, cores = 4)
+
+fit_H1_prior <- sampling(m_H1_prior, data = stan_data_prior,
+                   iter = 15500, warmup = 500, chains = 4, seed = 1, cores = 4)
+
+```
+
+```{r}
+bridge_H0_prior <- bridge_sampler(fit_H0_prior)
+bridge_H1_prior <- bridge_sampler(fit_H1_prior)
+
+error_measures(bridge_H0_prior)$percentage
+error_measures(bridge_H1_prior)$percentage
+
+summary(bridge_H0_prior)
+summary(bridge_H1_prior)
+
+```
+
+
+```{r}
+### compute Bayes factor ("true" value: BF01 = 1.273) ###
+bf(bridge_H0, bridge_H1)
+bf(bridge_H0_prior, bridge_H1_prior)
+
+```
+
+## Pois
+
+```{r}
+m_H0 <- stan_model("stan/poisson_ranef_H0.stan")
+m_H1 <- stan_model("stan/poisson_ranef_H1.stan")
+```
+
+
+```{r}
+set.seed(5422335)
+N <- 40
+N_groups <- 20
+
+groups <- rep(1:N_groups, length.out = N)
+
+intercept <- 2 
+group_sd <- 0.35
+group_r <- rnorm(N_groups, sd = group_sd)
+
+mu <- intercept + group_r[groups]
+y <- rpois(N, exp(mu))
+
+stan_data <- list(N = N,
+                  N_groups = N_groups,
+                  groups = groups,
+                  y = y,
+                  intercept_prior_mean = intercept,
+                  intercept_prior_sd = 1)
+```
+
+
+
+```{r}
+fit_H0 <- sampling(m_H0, data = stan_data,
+                   iter = 15500, warmup = 500, chains = 4, seed = 1)
+
+fit_H1 <- sampling(m_H1, data = stan_data,
+                   iter = 15500, warmup = 500, chains = 4, seed = 1)
+
+```
+
+```{r}
+bridge_H0 <- bridge_sampler(fit_H0)
+bridge_H1 <- bridge_sampler(fit_H1)
+
+error_measures(bridge_H0)$percentage
+error_measures(bridge_H1)$percentage
+
+### summary ###
+summary(bridge_H0)
+summary(bridge_H1)
+
+```
+
+
+```{r}
+stan_data_prior <- stan_data
+stan_data_prior$intercept_prior_mean <- 0
+stan_data_prior$intercept_prior_sd <- 100
+fit_H0_prior <- sampling(m_H0, data = stan_data_prior,
+                   iter = 15500, warmup = 500, chains = 4, seed = 1)
+
+fit_H1_prior <- sampling(m_H1, data = stan_data_prior,
+                   iter = 15500, warmup = 500, chains = 4, seed = 1)
+
+```
+
+```{r}
+bridge_H0_prior <- bridge_sampler(fit_H0_prior)
+bridge_H1_prior <- bridge_sampler(fit_H1_prior)
+
+error_measures(bridge_H0_prior)$percentage
+error_measures(bridge_H1_prior)$percentage
+
+summary(bridge_H0_prior)
+summary(bridge_H1_prior)
+
+```
+
+
+```{r}
+### compute Bayes factor ("true" value: BF01 = 1.273) ###
+bf(bridge_H1, bridge_H0)
+bf(bridge_H1_prior, bridge_H0_prior)
+
+```
+
+```{r}
+stop("Break here")
+```
+
+
+## LM
+
+```{r}
+m_H0 <- stan_model("stan/lm_ranef_H0.stan")
+m_H1 <- stan_model("stan/lm_ranef_H1.stan")
+```
+
+
+```{r}
+#24965652
+#56719326
+seed <- sample.int(1e8, size = 1)
+#seed <- 73340663
+cat(seed)
+set.seed(52188948)
+N <- 40
+N_groups <- 20
+
+groups <- rep(1:N_groups, length.out = N)
+
+intercept <- 1 
+group_sd <- 0.6
+group_r <- rnorm(N_groups, sd = group_sd)
+
+sigma <- 0.5
+
+mu <- intercept + group_r[groups]
+y <- rnorm(N, mu, sigma)
+
+stan_data <- list(N = N,
+                  N_groups = N_groups,
+                  groups = groups,
+                  y = y,
+                  intercept_prior_sd = 0,
+                  sigma_prior = 0)
+```
+
+
+
+```{r}
+fit_H0 <- sampling(m_H0, data = stan_data,
+                   iter = 15500, warmup = 500, chains = 4, seed = 1, refresh = 0)
+
+fit_H1 <- sampling(m_H1, data = stan_data,
+                   iter = 15500, warmup = 500, chains = 4, seed = 1, refresh = 0, control = list(adapt_delta = 0.95))
+
+```
+
+```{r}
+bridge_H0 <- bridge_sampler(fit_H0)
+bridge_H1 <- bridge_sampler(fit_H1)
+```
+
+
+```{r}
+stan_data_prior <- stan_data
+stan_data_prior$intercept_prior_sd <- 1
+stan_data_prior$sigma_prior <- 1
+fit_H0_prior <- sampling(m_H0, data = stan_data_prior,
+                   iter = 15500, warmup = 500, chains = 4, seed = 1, refresh = 0)
+
+fit_H1_prior <- sampling(m_H1, data = stan_data_prior,
+                   iter = 15500, warmup = 500, chains = 4, seed = 1, refresh = 0, control = list(adapt_delta = 0.95))
+
+```
+
+```{r}
+bridge_H0_prior <- bridge_sampler(fit_H0_prior)
+bridge_H1_prior <- bridge_sampler(fit_H1_prior)
+```
+
+
+```{r}
+error_measures(bridge_H0)$percentage
+error_measures(bridge_H1)$percentage
+
+
+error_measures(bridge_H0_prior)$percentage
+error_measures(bridge_H1_prior)$percentage
+
+
+
+bf(bridge_H1, bridge_H0)
+bf(bridge_H1_prior, bridge_H0_prior)
+
+```

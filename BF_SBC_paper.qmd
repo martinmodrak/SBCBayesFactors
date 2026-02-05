@@ -281,6 +281,8 @@ precision --- we have run `r format(ttest_post$n_sim, big.mark  = " ")` simulati
 derived quantities  (`r report_success_metrics(ttest_post, dap_digits = 4)`). 
 
 
+### Multiple models
+
 ### Results table 
 
 ```{r results ='asis'}
