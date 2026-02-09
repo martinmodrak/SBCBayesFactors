@@ -35,9 +35,19 @@ get_precomputed_gamma_thresholds <- function(K, min_sims = 1, max_sims = 1000) {
     }
     # Computing time differs by N, randomly permute to get optimal division of work
     sims_to_compute <- sample(sims_to_compute)
-    thresholds <- future.apply::future_sapply(sims_to_compute, FUN = function(n_sims) {
-      SBC:::adjust_gamma(N = n_sims, L = 1, K = K)
-    })
+
+    if(requireNamespace("progressr", quietly = TRUE)) {
+      progressor <- progressr::progressor(along = sims_to_compute)
+    } else {
+      progressor <- NULL
+    }
+    thresholds <- future.apply::future_sapply(sims_to_compute, FUN = function(n_sims, progressor) {
+      res <- SBC:::adjust_gamma(N = n_sims, L = 1, K = K)
+      if(!is.null(progressor)) {
+        progressor()
+      }
+      res
+    }, progressor = progressor)
 
 
     if(interpolate) {
@@ -346,7 +356,7 @@ compute_bootstrapped_histories <- function(stats, history_length, n_histories, h
     } else {
       dotlist_hash <- paste0("_", rlang::hash(dotlist))
     }
-    cache_basename <- paste0(rlang::as_name(enquo(history_fun)), "_len", history_length, "_nhist",
+    cache_basename <- paste0(rlang::as_name(rlang::enquo(history_fun)), "_len", history_length, "_nhist",
                              n_histories, "_step", step, "_min", min_sim_id,
                              rlang::hash(stats), dotlist_hash, ".rds")
     cache_file <- file.path(cache_dir, cache_basename)
@@ -355,14 +365,25 @@ compute_bootstrapped_histories <- function(stats, history_length, n_histories, h
       return(readRDS(cache_file))
     }
   }
+
+  if(requireNamespace("progressr", quietly = TRUE)) {
+    progressor <- progressr::progressor(along = 1:n_histories)
+  } else {
+    progressor <- NULL
+  }
+
   res_list <- future.apply::future_lapply(1:n_histories, future.seed = TRUE,
-                                          FUN = function(history_id) {
+                                          progressor = progressor,
+                                          FUN = function(history_id, progressor) {
       stats_boot <- dplyr::group_by(stats, variable) |>
         dplyr::sample_n(history_length) |>
         dplyr::mutate(sim_id = 1:dplyr::n()) |>
         dplyr::ungroup()
       res_df <- history_fun(stats_boot, step = step, min_sim_id = min_sim_id, ...)
       res_df$history_id = history_id
+      if(!is.null(progressor)) {
+        progressor()
+      }
       return(res_df)
   })
   res <- do.call(rbind, res_list)
