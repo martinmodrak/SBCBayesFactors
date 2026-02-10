@@ -26,7 +26,7 @@ if(!dir.exists(cache_dir)) {
   dir.create(cache_dir)
 }
 
-do_tests <- FALSE
+
 
 options(SBC.min_chunk_size = 10)
 
@@ -34,6 +34,16 @@ options(SBC.min_chunk_size = 10)
 theme_set(theme_minimal())
 devtools::load_all()
 ```
+
+```{r}
+# Global settings for the scenario
+do_tests <- TRUE
+add_x0 <- FALSE
+N <- 60
+G <- 5
+n_sims <- 50
+```
+
 
 ```{r cluster}
 setup_cluster(max_server_workers = 110)
@@ -49,19 +59,33 @@ prior_args <- list(
   b_sd = 1,
   intercept_mean = 2,
   intercept_sd = 2,
-  sigma_sd = 3
+  sigma_sd = 3,
+  tau_sd = 0.5
 )
 
-one_sim_generator <- function(N, model, prior_args) {
+one_sim_generator <- function(N, G, model, prior_args, add_x0 = FALSE) {
+  if(add_x0) {
+    x0 <- rnorm(N)
+  }
   x1 <- rnorm(N)
   x2 <- rnorm(N)
+  
+  group = rep(1:G, length.out = N)
   
   b_Intercept <- rnorm(1, prior_args$intercept_mean, prior_args$intercept_sd)   
   sigma <- abs(rnorm(1, 0, prior_args$sigma_sd))
 
-  lprior <- dnorm(b_Intercept, prior_args$intercept_mean, prior_args$intercept_sd, log = TRUE) +
-    log(2) + dnorm(sigma, 0, prior_args$sigma_sd, log = TRUE)
+  tau <- abs(rnorm(1, 0, prior_args$tau_sd))
   
+  lprior <- dnorm(b_Intercept, prior_args$intercept_mean, prior_args$intercept_sd, log = TRUE) +
+    log(2) + dnorm(sigma, 0, prior_args$sigma_sd, log = TRUE) +
+    log(2) + dnorm(tau, 0, prior_args$tau_sd, log = TRUE)
+
+  if(add_x0) {
+    b_x0 <- rnorm(1, 0, prior_args$b_sd)
+    lprior <- lprior + dnorm(b_x0,  0, sd = prior_args$b_sd, log = TRUE)
+  }
+
   if( (model %% 2) == 1) {
     b_x1 <- rnorm(1, 0, prior_args$b_sd)
     lprior <- lprior + dnorm(b_x1, 0, sd = prior_args$b_sd, log = TRUE)
@@ -76,21 +100,33 @@ one_sim_generator <- function(N, model, prior_args) {
     b_x2 <- 0
   }
   
+  ranef_raw <- rnorm(G)
+  ranef <- ranef_raw * tau
   
-  predictor <- b_Intercept + x1 * b_x1 + x2 * b_x2
+  predictor <- b_Intercept + x1 * b_x1 + x2 * b_x2 + ranef[group]
+  if(add_x0) {
+    predictor <- predictor + x0 * b_x0
+  }
   y <- rnorm(N, predictor, sigma)
   
+  lranef <- sum(dnorm(ranef_raw, log = TRUE))
   
-  ljacobian <- log(sigma)
+  ljacobian <- log(sigma) + log(tau)
   lobs <- sum(dnorm(y, predictor, sigma, log = TRUE))
-  lp__ <- lprior + ljacobian + lobs
+  lp__ <- lprior + ljacobian + lobs + lranef
     
   variables <- list(
       b_Intercept = b_Intercept,
       sigma = sigma,
       lprior = lprior,
+      sd_group__Intercept = tau,
+      z_1 = matrix(ranef_raw, nrow = 1, ncol = G),
       lp__ = lp__
     )
+  
+  if(add_x0) {
+    variables$b_x0 <- b_x0
+  }
   
   if( (model %% 2) == 1) {
     variables$b_x1 <- b_x1
@@ -101,20 +137,22 @@ one_sim_generator <- function(N, model, prior_args) {
   }
 
   
+  generated <- data.frame(y = y, x1 = x1, x2 = x2, group = group)
+  if(add_x0) {
+    generated$x0 <- x0
+  }
   list(
     variables = variables,
-    generated = data.frame(y = y, x1 = x1, x2 = x2)
+    generated = generated
   )
 }
 
-N <- 60
-n_sims <- 2000
-set.seed(21485642)
-gen_H0 <- SBC_generator_function(one_sim_generator, N = N, model = 0, prior_args = prior_args)
-gen_H1 <- SBC_generator_function(one_sim_generator, N = N, model = 1, prior_args = prior_args)
-gen_H2 <- SBC_generator_function(one_sim_generator, N = N, model = 2, prior_args = prior_args)
-gen_H3 <- SBC_generator_function(one_sim_generator, N = N, model = 3, prior_args = prior_args)
+gen_H0 <- SBC_generator_function(one_sim_generator, N = N, G = G, model = 0, prior_args = prior_args, add_x0 = add_x0)
+gen_H1 <- SBC_generator_function(one_sim_generator, N = N, G = G, model = 1, prior_args = prior_args, add_x0 = add_x0)
+gen_H2 <- SBC_generator_function(one_sim_generator, N = N, G = G, model = 2, prior_args = prior_args, add_x0 = add_x0)
+gen_H3 <- SBC_generator_function(one_sim_generator, N = N, G = G, model = 3, prior_args = prior_args, add_x0 = add_x0)
 
+set.seed(21485642)
 datasets_H0 <- generate_datasets(n_sims = n_sims, gen_H0)
 datasets_H1 <- generate_datasets(n_sims = n_sims, gen_H1)
 datasets_H2 <- generate_datasets(n_sims = n_sims, gen_H2)
@@ -126,61 +164,73 @@ datasets_H3 <- generate_datasets(n_sims = n_sims, gen_H3)
 ```{r backends}
 prior <- c(set_prior(paste0("normal(0,", prior_args$b_sd,")"), class = "b"),
            set_prior(paste0("normal(0,", prior_args$sigma_sd,")"), class = "sigma"),
-           set_prior(paste0("normal(", prior_args$intercept_mean,", ", prior_args$intercept_sd,")"), class = "b", coef = "Intercept"))
+           set_prior(paste0("normal(", prior_args$intercept_mean,", ", prior_args$intercept_sd,")"), class = "b", coef = "Intercept"),
+           set_prior(paste0("normal(0,", prior_args$tau_sd,")"), class = "sd"))
 
-template_data <- one_sim_generator(N, 3, prior_args)$generated
+template_data <- one_sim_generator(N, 3, 3, prior_args)$generated
 
 chains <- 2
-iter <- 2500
+iter <- 16500
 warmup <- 500
+thin_ranks <- floor((iter - warmup) / 400)
 # chains <- 4
 # iter <- 2000
 # warmup <- 1000
+# thin_ranks <- 10
+
+H0_formula <- y ~ 0 + Intercept + (1 | group)
+if(add_x0) {
+  H0_formula <- update.formula(H0_formula, . ~ . + x0)
+  H0_prior <- prior
+} else {
+  H0_prior <- prior[2:nrow(prior),]
+}
 
 backend_H0 <- SBC_backend_brms(
-  y ~ 0 + Intercept,
-  prior = prior[2:3, ],
+  H0_formula,
+  prior = H0_prior,
   chains = chains,
   iter = iter,
   warmup = warmup,
   sample_prior = "yes",
+  control = list(adapt_delta = 0.99, max_treedepth = 11),
   template_data = template_data,
-  out_stan_file = file.path(cache_dir, "linreg_multiple_0.stan")
+  out_stan_file = file.path(cache_dir, "lmm_multiple_0.stan")
 )
 
 backend_H1 <- 
   SBC_backend_brms(
-    y ~ 0 + Intercept + x1,
+    update.formula(H0_formula, . ~ . + x1),
     prior = prior,
     chains = chains,
     iter = iter,
     warmup = warmup,
     sample_prior = "yes",
     template_data = template_data,
-    out_stan_file = file.path(cache_dir, "linreg_multiple_1.stan")
+    out_stan_file = file.path(cache_dir, "lmm_multiple_1.stan")
   )
 
 backend_H2 <- SBC_backend_brms(
-  y ~ 0 + Intercept + x2,
+    update.formula(H0_formula, . ~ . + x2),
   prior = prior,
   chains = chains,
   iter = iter,
   warmup = warmup,
   sample_prior = "yes",
   template_data = template_data,
-  out_stan_file = file.path(cache_dir, "linreg_multiple_2.stan")
+  out_stan_file = file.path(cache_dir, "lmm_multiple_2.stan")
 )
 
 backend_H3 <-
     SBC_backend_brms(
-      y ~ 0 + Intercept + x1 + x2,
+    update.formula(H0_formula, . ~ . + x1 + x2),
       prior = prior,
       chains = chains,
       iter = iter,
       warmup = warmup,
       sample_prior = "yes",
       template_data = template_data,
-      out_stan_file = file.path(cache_dir, "linreg_multiple_3.stan")
+      out_stan_file = file.path(cache_dir, "lmm_multiple_3.stan")
     )
   
     
@@ -192,23 +242,38 @@ backend_H3 <-
 
 ```{r test0}
 if(do_tests) {
+  #n_sims_for_test <- 1000 
+  n_sims_for_test <- 50 
   all_generators <- list("H0" = gen_H0, "H1" = gen_H1, "H2" = gen_H2, "H3" = gen_H3)
   all_backends <- list("H0" = backend_H0, "H1" = backend_H1, "H2" = backend_H2, "H3" = backend_H3)
   
   for(m_name in names(all_generators)) {
     cat("=========== Testing ", m_name, "===============\n")
     set.seed(9654224)
-    ds_test <- generate_datasets(n_sims = 1000, all_generators[[m_name]])
+    ds_test <- generate_datasets(n_sims = n_sims_for_test, all_generators[[m_name]])
   res_test <- compute_SBC(ds_test, all_backends[[m_name]], 
                            keep_fits = FALSE,
                            cache_mode = "results",
-                           cache_location = file.path(cache_dir, paste0("SBC_linreg_",m_name,"_N", N, "_", length(ds_test), ".rds")))
+                           cache_location = file.path(cache_dir, paste0("SBC_lmm_",m_name,"_N", N, "_G", G, "_", length(ds_test), ".rds")))
   
-  print(plot_ecdf_diff(res_test) + ggtitle(m_name))    
+  print(plot_ecdf_diff(res_test, combine_variables = SBC::combine_array_elements) + ggtitle(m_name))    
   }
 
 }
 ```
+
+```{r}
+id <- which.max(res_test$backend_diagnostics$n_divergent)
+fit <- SBC_fit(all_backends[[m_name]], ds_test$generated[[id]])
+#posterior::variables(fit)
+#"^b|^sd|sigma|z_1\\[1,1\\]"
+draws <- posterior::subset_draws(posterior::as_draws(fit), variable ="^b|^sd|^sigma|z_1\\[1,1\\]", regex = TRUE)
+bayesplot::mcmc_pairs(draws, np = nuts_params(fit), size = 1, alpha = 0.1)
+
+
+bayesplot::mcmc_scatter(draws, pars = c("sd_group__Intercept", "sigma"), np = nuts_params(fit), size = 1, alpha = 0.1, transformations = "log")
+```
+
 
 ## Correct version with bridgesampling
 
@@ -238,11 +303,11 @@ backend_bs <-
 results_bs <- compute_SBC(datasets_combined, backend_bs, 
                           keep_fits = FALSE,
                            cache_mode = "results",
-                           cache_location = file.path(cache_dir, paste0("SBC_linreg_bs_N", N, "_", length(datasets_combined), ".rds")))
+                           cache_location = file.path(cache_dir, paste0("SBC_lmm_bs_N", N, "_G", G, "_", length(datasets_combined), ".rds")))
 ```
 
 ```{r}
-plot_ecdf_diff(results_bs)
+plot_ecdf_diff(results_bs, combine_variables = SBC::combine_array_elements)
 ```
 
 ```{r calib-multiple}
@@ -446,13 +511,13 @@ datasets_combined_savd <- datasets_combined_savd
 
 ```{r}
 #plan(sequential)
-results_test <- compute_SBC(datasets_combined_savd[1:2], SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3),
-                          keep_fits = TRUE,
-                          globals = globals_savd
-                          )
-results_test
-
-binary_probabilities_from_stats(results_test$stat)
+# results_test <- compute_SBC(datasets_combined_savd[1:2], SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3),
+#                           keep_fits = TRUE,
+#                           globals = globals_savd
+#                           )
+# results_test
+# 
+# binary_probabilities_from_stats(results_test$stat)
 # 
 # vars <- as.numeric(datasets_combined_savd$variables[1,])
 # names(vars) = posterior::variables(datasets_combined_savd$variables)
@@ -466,7 +531,7 @@ binary_probabilities_from_stats(results_test$stat)
 results_savd <- compute_SBC(datasets_combined_savd, SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3), 
                           keep_fits = FALSE,
                           cache_mode = "results",
-                          cache_location = file.path(cache_dir, paste0("SBC_linreg_savage_dickey_v2_N", N, "_", length(datasets_combined_savd), ".rds")),
+                          cache_location = file.path(cache_dir, paste0("SBC_lmm_savage_dickey_N", N, "_G", G, "_", length(datasets_combined_savd), ".rds")),
                           globals = globals_savd
                           )
 results_savd
@@ -482,7 +547,7 @@ for(prefix in prefixes) {
 
 ```{r}
 purrr::iwalk(stats_by_prefix, \(stats_sub, prefix) {
-  print(plot_ecdf_diff(stats_sub) + ggtitle(prefix))
+  print(plot_ecdf_diff(stats_sub, combine_variables = SBC::combine_array_elements) + ggtitle(prefix))
 })
 ```
 
@@ -590,7 +655,7 @@ plot_log_p_histories(hist_noiseER_brier, "Brier resampling")
 plot_log_p_histories(hist_noiseER_ttest, "P - ttest")
 plot_log_p_histories(hist_noiseER_miscalibration, "Miscalibration resampling")
 
-save_histories("linreg_multiple_noiseER",
+save_histories("lmm_multiple_noiseER",
                log_gamma = hist_noiseER,
                brier = hist_noiseER_brier,
                ttest = hist_noiseER_ttest,
@@ -629,7 +694,7 @@ plot_log_p_histories(hist_stupid_brier, "Brier resampling")
 plot_log_p_histories(hist_stupid_ttest, "P - ttest")
 plot_log_p_histories(hist_stupid_miscalibration, "Miscalibration resampling")
 
-save_histories("linreg_multiple_stupid",
+save_histories("lmm_multiple_stupid",
                log_gamma = hist_stupid,
                brier = hist_stupid_brier,
                ttest = hist_stupid_ttest,
@@ -668,7 +733,7 @@ plot_log_p_histories(hist_noiseERtop_brier, "Brier resampling")
 plot_log_p_histories(hist_noiseERtop_ttest, "P - ttest")
 plot_log_p_histories(hist_noiseERtop_miscalibration, "Miscalibration resampling")
 
-save_histories("linreg_multiple_noiseERtop",
+save_histories("lmm_multiple_noiseERtop",
                log_gamma = hist_noiseERtop,
                brier = hist_noiseERtop_brier,
                ttest = hist_noiseERtop_ttest,
