@@ -40,7 +40,7 @@ devtools::load_all()
 do_tests <- TRUE
 add_x0 <- FALSE
 N <- 60
-G <- 5
+G <- 15
 n_sims <- 50
 ```
 
@@ -60,7 +60,8 @@ prior_args <- list(
   intercept_mean = 2,
   intercept_sd = 2,
   sigma_sd = 3,
-  tau_sd = 0.5
+  tau_shape = 8,
+  tau_rate = 4
 )
 
 one_sim_generator <- function(N, G, model, prior_args, add_x0 = FALSE) {
@@ -75,11 +76,11 @@ one_sim_generator <- function(N, G, model, prior_args, add_x0 = FALSE) {
   b_Intercept <- rnorm(1, prior_args$intercept_mean, prior_args$intercept_sd)   
   sigma <- abs(rnorm(1, 0, prior_args$sigma_sd))
 
-  tau <- abs(rnorm(1, 0, prior_args$tau_sd))
+  tau <- rgamma(1, shape = prior_args$tau_shape, rate = prior_args$tau_rate)
   
   lprior <- dnorm(b_Intercept, prior_args$intercept_mean, prior_args$intercept_sd, log = TRUE) +
     log(2) + dnorm(sigma, 0, prior_args$sigma_sd, log = TRUE) +
-    log(2) + dnorm(tau, 0, prior_args$tau_sd, log = TRUE)
+    dgamma(tau, sahpe = prior_args$tau_shape, rate = prior_args$tau_rate, log = TRUE)
 
   if(add_x0) {
     b_x0 <- rnorm(1, 0, prior_args$b_sd)
@@ -146,7 +147,9 @@ one_sim_generator <- function(N, G, model, prior_args, add_x0 = FALSE) {
     generated = generated
   )
 }
+```
 
+```{r}
 gen_H0 <- SBC_generator_function(one_sim_generator, N = N, G = G, model = 0, prior_args = prior_args, add_x0 = add_x0)
 gen_H1 <- SBC_generator_function(one_sim_generator, N = N, G = G, model = 1, prior_args = prior_args, add_x0 = add_x0)
 gen_H2 <- SBC_generator_function(one_sim_generator, N = N, G = G, model = 2, prior_args = prior_args, add_x0 = add_x0)
@@ -165,13 +168,15 @@ datasets_H3 <- generate_datasets(n_sims = n_sims, gen_H3)
 prior <- c(set_prior(paste0("normal(0,", prior_args$b_sd,")"), class = "b"),
            set_prior(paste0("normal(0,", prior_args$sigma_sd,")"), class = "sigma"),
            set_prior(paste0("normal(", prior_args$intercept_mean,", ", prior_args$intercept_sd,")"), class = "b", coef = "Intercept"),
-           set_prior(paste0("normal(0,", prior_args$tau_sd,")"), class = "sd"))
+           #set_prior(paste0("normal(0,", prior_args$tau_sd,")"), class = "sd")
+           set_prior(paste0("gamma(", prior_args$tau_shape, ",", prior_args$tau_rate,")"), class = "sd")
+           )
 
 template_data <- one_sim_generator(N, 3, 3, prior_args)$generated
 
 chains <- 2
-iter <- 16500
-warmup <- 500
+iter <- 17000
+warmup <- 1000
 thin_ranks <- floor((iter - warmup) / 400)
 # chains <- 4
 # iter <- 2000
@@ -193,9 +198,9 @@ backend_H0 <- SBC_backend_brms(
   iter = iter,
   warmup = warmup,
   sample_prior = "yes",
-  control = list(adapt_delta = 0.99, max_treedepth = 11),
+  control = list(adapt_delta = 0.9),
   template_data = template_data,
-  out_stan_file = file.path(cache_dir, "lmm_multiple_0.stan")
+  out_stan_file = file.path(cache_dir, paste0("lmm_multiple", if_else(add_x0, "_x0", ""),"_0.stan"))
 )
 
 backend_H1 <- 
@@ -206,8 +211,10 @@ backend_H1 <-
     iter = iter,
     warmup = warmup,
     sample_prior = "yes",
+  control = list(adapt_delta = 0.9),
+    #control = list(adapt_delta = 0.99, max_treedepth = 11),
     template_data = template_data,
-    out_stan_file = file.path(cache_dir, "lmm_multiple_1.stan")
+    out_stan_file = file.path(cache_dir, paste0("lmm_multiple", if_else(add_x0, "_x0", ""),"_1.stan"))
   )
 
 backend_H2 <- SBC_backend_brms(
@@ -217,8 +224,10 @@ backend_H2 <- SBC_backend_brms(
   iter = iter,
   warmup = warmup,
   sample_prior = "yes",
+  control = list(adapt_delta = 0.9),
+  #control = list(adapt_delta = 0.99, max_treedepth = 11),
   template_data = template_data,
-  out_stan_file = file.path(cache_dir, "lmm_multiple_2.stan")
+  out_stan_file = file.path(cache_dir, paste0("lmm_multiple", if_else(add_x0, "_x0", ""),"_2.stan"))
 )
 
 backend_H3 <-
@@ -229,8 +238,10 @@ backend_H3 <-
       iter = iter,
       warmup = warmup,
       sample_prior = "yes",
+  control = list(adapt_delta = 0.9),
+      #control = list(adapt_delta = 0.99, max_treedepth = 11),
       template_data = template_data,
-      out_stan_file = file.path(cache_dir, "lmm_multiple_3.stan")
+      out_stan_file = file.path(cache_dir, paste0("lmm_multiple", if_else(add_x0, "_x0", ""),"_3.stan"))
     )
   
     
@@ -249,29 +260,35 @@ if(do_tests) {
   
   for(m_name in names(all_generators)) {
     cat("=========== Testing ", m_name, "===============\n")
-    set.seed(9654224)
+    set.seed(321485652)
     ds_test <- generate_datasets(n_sims = n_sims_for_test, all_generators[[m_name]])
-  res_test <- compute_SBC(ds_test, all_backends[[m_name]], 
+    res_test <- compute_SBC(ds_test, all_backends[[m_name]], 
                            keep_fits = FALSE,
                            cache_mode = "results",
+                           thin_ranks = thin_ranks,
                            cache_location = file.path(cache_dir, paste0("SBC_lmm_",m_name,"_N", N, "_G", G, "_", length(ds_test), ".rds")))
   
-  print(plot_ecdf_diff(res_test, combine_variables = SBC::combine_array_elements) + ggtitle(m_name))    
+    print(res_test)
+    print(plot_ecdf_diff(res_test, combine_variables = SBC::combine_array_elements) + ggtitle(m_name))    
   }
 
 }
 ```
 
+
+
 ```{r}
-id <- which.max(res_test$backend_diagnostics$n_divergent)
-fit <- SBC_fit(all_backends[[m_name]], ds_test$generated[[id]])
-#posterior::variables(fit)
-#"^b|^sd|sigma|z_1\\[1,1\\]"
-draws <- posterior::subset_draws(posterior::as_draws(fit), variable ="^b|^sd|^sigma|z_1\\[1,1\\]", regex = TRUE)
-bayesplot::mcmc_pairs(draws, np = nuts_params(fit), size = 1, alpha = 0.1)
-
-
-bayesplot::mcmc_scatter(draws, pars = c("sd_group__Intercept", "sigma"), np = nuts_params(fit), size = 1, alpha = 0.1, transformations = "log")
+# id <- which.min(res_test$default_diagnostics$min_ess_to_rank)
+# fit <- SBC_fit(all_backends[[m_name]], ds_test$generated[[id]])
+# #posterior::variables(fit)
+# #"^b|^sd|sigma|z_1\\[1,1\\]"
+# posterior::summarise_draws(posterior::as_draws(fit))
+# draws <- posterior::subset_draws(posterior::as_draws(fit), variable ="^b|^sd|^sigma|z_1\\[1,1\\]", regex = TRUE)
+# bayesplot::mcmc_pairs(draws, np = nuts_params(fit))
+# 
+# res_test$stats |> filter(sim_id == id)
+# 
+# bayesplot::mcmc_scatter(draws, pars = c("sd_group__Intercept", "sigma"), np = nuts_params(fit), size = 1, alpha = 0.1, transformations = "log")
 ```
 
 
@@ -361,19 +378,26 @@ SBC_backend_savage_dickey <- function(backend_H0, backend_H1, backend_H2, backen
 }
 
 SBC_fit.SBC_backend_savage_dickey <- function(backend, generated, cores) {
-  fit <- list(few_draws = backend$few_draws)
-  fit$H0 <- SBC_fit(backend$backend_H0, generated, cores)
-  fit$H1 <- SBC_fit(backend$backend_H1, generated, cores)
-  fit$H2 <- SBC_fit(backend$backend_H2, generated, cores)
-  fit$H3 <- SBC_fit(backend$backend_H3, generated, cores)
-  
+  backend_bs <- SBC_backend_bridgesampling(backend$backend_H0,
+                                           backend$backend_H1,
+                                           backend$backend_H2,
+                                           backend$backend_H3)
+  fit <- list(few_draws = backend$few_draws,
+              fit_bs = SBC_fit(backend_bs, generated, cores))
   structure(fit, class = "SBC_fit_savage_dickey")
 }
 
-prefixes <- c("OK", "stupid", "OKfew", "stupidfew", "noiseprob", "noiseER", "noiseERtop")
+prefixes <- c("bs", "OK", "stupid", "OKfew", "stupidfew", "noiseprob", "noiseER", "noiseERtop")
 
 fit_savage_dickey_to_probs <- function(fit) {
   probs <- list()
+  
+  probs$bs <- SBC:::SBC_fit_bridgesampling_to_probs(fit$fit_bs)
+  
+  fit_H0 <- fit$fit_bs$fits[[1]]
+  fit_H1 <- fit$fit_bs$fits[[2]]
+  fit_H2 <- fit$fit_bs$fits[[3]]
+  fit_H3 <- fit$fit_bs$fits[[4]]
   
   probs_correct <- function(fit_H1, fit_H3) {
     h_H3 <- brms::hypothesis(fit_H3, c("x2 = 0", "x1 = 0"))
@@ -389,13 +413,13 @@ fit_savage_dickey_to_probs <- function(fit) {
   }
   
   # Correct probs
-  probs$OK <- probs_correct(fit$H1, fit$H3)
+  probs$OK <- probs_correct(fit_H1, fit_H3)
   
   # Stupid trick
-  probs$stupid <-probs_stupid(fit$H3)
+  probs$stupid <-probs_stupid(fit_H3)
   
-  H1_shred <- shredder::stan_slice(fit$H1, 1:fit$few_draws)
-  H3_shred <- shredder::stan_slice(fit$H3, 1:fit$few_draws)
+  H1_shred <- shredder::stan_slice(fit_H1, 1:fit$few_draws)
+  H3_shred <- shredder::stan_slice(fit_H3, 1:fit$few_draws)
 
   probs$OKfew <- probs_correct(H1_shred, H3_shred)
   probs$stupidfew <- probs_stupid(H3_shred)
@@ -415,8 +439,8 @@ fit_savage_dickey_to_probs <- function(fit) {
 SBC_fit_to_draws_matrix.SBC_fit_savage_dickey <- function(fit) {
   probs <- fit_savage_dickey_to_probs(fit)
 
-  ndraws <- posterior::ndraws(fit$H3)
-  draws_list <- purrr::map(fit[paste0("H", 0:3)], function(x) posterior::merge_chains(SBC_fit_to_draws_matrix(x)))
+  ndraws <- posterior::ndraws(fit$fit_bs$fits[[1]])
+  draws_list <- purrr::map(fit$fit_bs$fits, function(x) posterior::merge_chains(SBC_fit_to_draws_matrix(x)))
   combined_draws_list <- list()
   for(name_prefix in names(probs)) {
     model_draws <- sample(0:3, size  = ndraws, prob = probs[[name_prefix]], replace = TRUE)
@@ -515,7 +539,7 @@ datasets_combined_savd <- datasets_combined_savd
 #                           keep_fits = TRUE,
 #                           globals = globals_savd
 #                           )
-# results_test
+# results_test$errors
 # 
 # binary_probabilities_from_stats(results_test$stat)
 # 
@@ -559,12 +583,16 @@ purrr::iwalk(stats_by_prefix, \(stats_sub, prefix) {
 ```
 
 ```{r}
+bp_bs <- binary_probabilities_from_stats(stats_by_prefix$bs)
 purrr::iwalk(stats_by_prefix, \(stats_sub, prefix) {
-
+  if(prefix == "bs") {
+    return
+  }
+  
   bp_savd <- binary_probabilities_from_stats(stats_sub)
 
-bp_savd_notop <- bp_savd |> filter(variable != "top_model")
-bp_bs_notop <- bp_bs |> filter(variable != "top_model", sim_id %in% bp_savd$sim_id)
+  bp_savd_notop <- bp_savd |> filter(variable != "top_model")
+  bp_bs_notop <- bp_bs |> filter(variable != "top_model", sim_id %in% bp_savd$sim_id)
 
 
 stopifnot(identical(bp_savd_notop$sim_id, bp_bs_notop$sim_id))
