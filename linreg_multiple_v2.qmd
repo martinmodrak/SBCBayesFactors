@@ -41,7 +41,7 @@ do_tests <- TRUE
 add_x0 <- FALSE
 N <- 60
 G <- 15
-n_sims <- 50
+n_sims <- 1000
 ```
 
 
@@ -56,7 +56,7 @@ setup_cluster(max_server_workers = 110)
 
 ```{r}
 prior_args <- list(
-  b_sd = 1,
+  b_sd = 0.25,
   intercept_mean = 2,
   intercept_sd = 2,
   sigma_sd = 3,
@@ -80,7 +80,7 @@ one_sim_generator <- function(N, G, model, prior_args, add_x0 = FALSE) {
   
   lprior <- dnorm(b_Intercept, prior_args$intercept_mean, prior_args$intercept_sd, log = TRUE) +
     log(2) + dnorm(sigma, 0, prior_args$sigma_sd, log = TRUE) +
-    dgamma(tau, sahpe = prior_args$tau_shape, rate = prior_args$tau_rate, log = TRUE)
+    dgamma(tau, shape = prior_args$tau_shape, rate = prior_args$tau_rate, log = TRUE)
 
   if(add_x0) {
     b_x0 <- rnorm(1, 0, prior_args$b_sd)
@@ -175,13 +175,15 @@ prior <- c(set_prior(paste0("normal(0,", prior_args$b_sd,")"), class = "b"),
 template_data <- one_sim_generator(N, 3, 3, prior_args)$generated
 
 chains <- 2
-iter <- 17000
+iter <- 21000
 warmup <- 1000
 thin_ranks <- floor((iter - warmup) / 400)
 # chains <- 4
 # iter <- 2000
 # warmup <- 1000
 # thin_ranks <- 10
+
+control <- list(adapt_delta = 0.9, max_treedepth = 11)
 
 H0_formula <- y ~ 0 + Intercept + (1 | group)
 if(add_x0) {
@@ -198,7 +200,7 @@ backend_H0 <- SBC_backend_brms(
   iter = iter,
   warmup = warmup,
   sample_prior = "yes",
-  control = list(adapt_delta = 0.9),
+  control = control,
   template_data = template_data,
   out_stan_file = file.path(cache_dir, paste0("lmm_multiple", if_else(add_x0, "_x0", ""),"_0.stan"))
 )
@@ -211,8 +213,7 @@ backend_H1 <-
     iter = iter,
     warmup = warmup,
     sample_prior = "yes",
-  control = list(adapt_delta = 0.9),
-    #control = list(adapt_delta = 0.99, max_treedepth = 11),
+    control = control,
     template_data = template_data,
     out_stan_file = file.path(cache_dir, paste0("lmm_multiple", if_else(add_x0, "_x0", ""),"_1.stan"))
   )
@@ -224,8 +225,7 @@ backend_H2 <- SBC_backend_brms(
   iter = iter,
   warmup = warmup,
   sample_prior = "yes",
-  control = list(adapt_delta = 0.9),
-  #control = list(adapt_delta = 0.99, max_treedepth = 11),
+  control = control,
   template_data = template_data,
   out_stan_file = file.path(cache_dir, paste0("lmm_multiple", if_else(add_x0, "_x0", ""),"_2.stan"))
 )
@@ -238,8 +238,7 @@ backend_H3 <-
       iter = iter,
       warmup = warmup,
       sample_prior = "yes",
-  control = list(adapt_delta = 0.9),
-      #control = list(adapt_delta = 0.99, max_treedepth = 11),
+      control = control,
       template_data = template_data,
       out_stan_file = file.path(cache_dir, paste0("lmm_multiple", if_else(add_x0, "_x0", ""),"_3.stan"))
     )
@@ -253,8 +252,7 @@ backend_H3 <-
 
 ```{r test0}
 if(do_tests) {
-  #n_sims_for_test <- 1000 
-  n_sims_for_test <- 50 
+  n_sims_for_test <- 1000 
   all_generators <- list("H0" = gen_H0, "H1" = gen_H1, "H2" = gen_H2, "H3" = gen_H3)
   all_backends <- list("H0" = backend_H0, "H1" = backend_H1, "H2" = backend_H2, "H3" = backend_H3)
   
@@ -292,80 +290,8 @@ if(do_tests) {
 ```
 
 
-## Correct version with bridgesampling
 
-```{r}
-set.seed(6321485)
-datasets_combined <- SBC_datasets_for_bf(
-  datasets_H0,
-  datasets_H1,
-  datasets_H2,
-  datasets_H3
-)
-```
-
-
-```{r}
-backend_bs <- 
-  SBC_backend_bridgesampling(
-    backend_H0,
-    backend_H1,
-    backend_H2,
-    backend_H3
-  )
-```
-
-
-```{r}
-results_bs <- compute_SBC(datasets_combined, backend_bs, 
-                          keep_fits = FALSE,
-                           cache_mode = "results",
-                           cache_location = file.path(cache_dir, paste0("SBC_lmm_bs_N", N, "_G", G, "_", length(datasets_combined), ".rds")))
-```
-
-```{r}
-plot_ecdf_diff(results_bs, combine_variables = SBC::combine_array_elements)
-```
-
-```{r calib-multiple}
-plot_binary_calibration(results_bs, region.method = "resampling")
-plot_binary_calibration_diff(results_bs, region.method = "resampling")
-```
-
-Formal miscalibration tests also shows no problems for any of the variables:
-
-```{r}
-bp_bs <- binary_probabilities_from_stats(results_bs$stats)
-#bp_bs |> group_by(variable) |> summarise(mean(prob < 0.01), mean(prob > 0.1 & prob < 0.9))
-for(bp_var in unique(bp_bs$variable)) {
-  cat("=====", bp_var, "=====\n")
-  bp_bs_selected <- bp_bs |> filter(variable == bp_var)
-  print(miscalibration_resampling_test(bp_bs_selected$prob, bp_bs_selected$simulated_value))
-  print(brier_resampling_test(bp_bs_selected$prob, bp_bs_selected$simulated_value))
-}
-```
-
-
-
-And that data-averaged posterior? We see
-no problems and reasonably tight confidence intervals centered at the expected
-value of 0.25.
-
-```{r}
-for(bp_var in paste0("is_model", 0:3)) {
-  cat("=====", bp_var, "=====\n")
-  bp_bs_selected <- bp_bs |> filter(variable == bp_var)
-  print(t.test(bp_bs_selected$prob, mu = 0.25))
-}
-```
-
-```{r}
-bp_bs_selected <- bp_bs |> filter(variable == "top_model")
-t.test(bp_bs_selected$prob, bp_bs_selected$simulated_value)
-```
-
-
-## Savage-Dickey - combined
+## Savage-Dickey + bridgesampling - combined
 
 Via `hypothesis`
 
@@ -492,6 +418,9 @@ SBC_backend_hash_for_cache.SBC_backend_savage_dickey <- function(backend) {
   rlang::hash(backend_for_hash)
 }
 
+SBC_fit_to_diagnostics.SBC_fit_savage_dickey <- function(fit, fit_output, fit_messages, fit_warnings) {
+  SBC_fit_to_diagnostics(fit$fit_bs, fit_output, fit_messages, fit_warnings)
+}
 
 globals_savd <- c("prefixes",
                   "SBC_fit.SBC_backend_savage_dickey",
@@ -499,7 +428,8 @@ globals_savd <- c("prefixes",
                   "SBC_fit_to_draws_matrix.SBC_fit_savage_dickey",
                   "SBC_posterior_cdf.SBC_fit_savage_dickey",
                   "SBC_fit_specific_dquants.SBC_fit_savage_dickey",
-                  "SBC_backend_hash_for_cache.SBC_backend_savage_dickey")
+                  "SBC_backend_hash_for_cache.SBC_backend_savage_dickey",
+                  "SBC_fit_to_diagnostics.SBC_fit_savage_dickey")
 ```
 
 
@@ -535,10 +465,11 @@ datasets_combined_savd <- datasets_combined_savd
 
 ```{r}
 #plan(sequential)
-# results_test <- compute_SBC(datasets_combined_savd[1:2], SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3),
-#                           keep_fits = TRUE,
-#                           globals = globals_savd
-#                           )
+results_test <- compute_SBC(datasets_combined_savd[1:2], SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3),
+                          keep_fits = TRUE,
+                          globals = globals_savd
+                          )
+results_test
 # results_test$errors
 # 
 # binary_probabilities_from_stats(results_test$stat)
@@ -586,7 +517,7 @@ purrr::iwalk(stats_by_prefix, \(stats_sub, prefix) {
 bp_bs <- binary_probabilities_from_stats(stats_by_prefix$bs)
 purrr::iwalk(stats_by_prefix, \(stats_sub, prefix) {
   if(prefix == "bs") {
-    return
+    return()
   }
   
   bp_savd <- binary_probabilities_from_stats(stats_sub)
