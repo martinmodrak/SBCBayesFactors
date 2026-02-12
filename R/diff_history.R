@@ -373,8 +373,7 @@ compute_bootstrapped_histories <- function(stats, history_length, n_histories, h
   }
 
   res_list <- future.apply::future_lapply(1:n_histories, future.seed = TRUE,
-                                          progressor = progressor,
-                                          FUN = function(history_id, progressor) {
+                                          FUN = function(history_id) {
       stats_boot <- dplyr::group_by(stats, variable) |>
         dplyr::sample_n(history_length) |>
         dplyr::mutate(sim_id = 1:dplyr::n()) |>
