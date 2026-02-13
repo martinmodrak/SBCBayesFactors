@@ -49,7 +49,7 @@ n_sims <- 1000
 
 
 ```{r cluster}
-setup_cluster(max_server_workers = 110, max_local_workers = 10)
+setup_cluster(max_server_workers = 60, max_local_workers = 10)
 ```
 
 
@@ -302,8 +302,8 @@ dm_thin <- 25
 stopifnot(thin_ranks / dm_thin == floor(thin_ranks / dm_thin))
 
 # Set H1_backend to NULL to do the stupid square trick
-SBC_backend_savage_dickey <- function(backend_H0, backend_H1, backend_H2, backend_H3, few_draws = 15) {
-  structure(list(backend_H0 = backend_H0, backend_H1 = backend_H1, backend_H2 = backend_H2, backend_H3 = backend_H3, few_draws = few_draws), class = "SBC_backend_savage_dickey")
+SBC_backend_savage_dickey <- function(backend_H0, backend_H1, backend_H2, backend_H3, savd_draws = 2000, few_draws = 15) {
+  structure(list(backend_H0 = backend_H0, backend_H1 = backend_H1, backend_H2 = backend_H2, backend_H3 = backend_H3, savd_draws = savd_draws, few_draws = few_draws), class = "SBC_backend_savage_dickey")
 }
 
 SBC_fit.SBC_backend_savage_dickey <- function(backend, generated, cores) {
@@ -311,22 +311,31 @@ SBC_fit.SBC_backend_savage_dickey <- function(backend, generated, cores) {
                                            backend$backend_H1,
                                            backend$backend_H2,
                                            backend$backend_H3)
-  fit <- list(few_draws = backend$few_draws,
+  fit <- list(savd_draws = backend$savd_draws, 
+              few_draws = backend$few_draws,
               fit_bs = SBC_fit(backend_bs, generated, cores))
   structure(fit, class = "SBC_fit_savage_dickey")
 }
 
-prefixes <- c("bs", "OK", "stupid", "OKfew", "stupidfew", "noiseprob", "noiseER", "noiseERtop")
+#prefixes <- c("bs", "OK", "stupid", "OKfew", "stupidfew", "noiseprob", "noiseER", "noiseERtop")
+prefixes <- c("bs", "OK", "stupid", "OKfew", "noiseprob", "noiseER", "noiseERtop")
 
 fit_savage_dickey_to_probs <- function(fit) {
   probs <- list()
   
   probs$bs <- SBC:::SBC_fit_bridgesampling_to_probs(fit$fit_bs)
-  
-  fit_H0 <- fit$fit_bs$fits[[1]]
-  fit_H1 <- fit$fit_bs$fits[[2]]
-  fit_H2 <- fit$fit_bs$fits[[3]]
-  fit_H3 <- fit$fit_bs$fits[[4]]
+
+  if(!is.null(fit$savd_draws)) {
+    fit_H0 <- shredder::stan_slice(fit$fit_bs$fits[[1]], 1:fit$savd_draws)
+    fit_H1 <- shredder::stan_slice(fit$fit_bs$fits[[2]], 1:fit$savd_draws)
+    fit_H2 <- shredder::stan_slice(fit$fit_bs$fits[[3]], 1:fit$savd_draws)
+    fit_H3 <- shredder::stan_slice(fit$fit_bs$fits[[4]], 1:fit$savd_draws)
+  } else {
+    fit_H0 <- fit$fit_bs$fits[[1]]
+    fit_H1 <- fit$fit_bs$fits[[2]]
+    fit_H2 <- fit$fit_bs$fits[[3]]
+    fit_H3 <- fit$fit_bs$fits[[4]]
+  }
   
   probs_correct <- function(fit_H1, fit_H3) {
     h_H3 <- brms::hypothesis(fit_H3, c("x2 = 0", "x1 = 0"))
@@ -347,12 +356,11 @@ fit_savage_dickey_to_probs <- function(fit) {
   # Stupid trick
   probs$stupid <-probs_stupid(fit_H3)
   
-  H1_shred <- shredder::stan_slice(fit_H1, 1:fit$few_draws)
-  H3_shred <- shredder::stan_slice(fit_H3, 1:fit$few_draws)
+  H1_shred_few <- shredder::stan_slice(fit_H1, 1:fit$few_draws)
+  H3_shred_few <- shredder::stan_slice(fit_H3, 1:fit$few_draws)
 
-  probs$OKfew <- probs_correct(H1_shred, H3_shred)
-  probs$stupidfew <- probs_stupid(H3_shred)
-  
+  probs$OKfew <- probs_correct(H1_shred_few, H3_shred_few)
+
   probs$noiseprob <- as.numeric(MCMCpack::rdirichlet(1, 9 * probs$OK))
 
   evidRatiosNoise2 <- exp(log(probs$OK / probs$OK[4]) + rnorm(4, sd = 0.5)) 
