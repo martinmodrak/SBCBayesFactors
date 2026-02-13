@@ -38,6 +38,12 @@ theme_set(theme_minimal())
 pkgload::load_all()
 ```
 
+
+```{r cluster, results='hide', warning=FALSE, message=FALSE}
+setup_cluster(max_server_workers = 90, max_local_workers = 10)
+```
+
+
 ```{r}
 # Global settings for the scenario
 do_tests <- FALSE
@@ -46,13 +52,6 @@ N <- 60
 G <- 15
 n_sims <- 1000
 ```
-
-
-```{r cluster}
-setup_cluster(max_server_workers = 60, max_local_workers = 10)
-```
-
-
 
 
 ## Simulator
@@ -174,7 +173,7 @@ template_data <- one_sim_generator(N, 3, 3, prior_args)$generated
 chains <- 2
 iter <- 21000
 warmup <- 1000
-thin_ranks <- floor((iter - warmup) / 400)
+thin_ranks <- floor((iter - warmup) * chains / 400)
 # chains <- 4
 # iter <- 2000
 # warmup <- 1000
@@ -551,7 +550,83 @@ results_savd2
 
 
 ```{r}
-results_savd <- bind_results(results_savd1, results_savd2)
+set.seed(658373202)
+n_sims3 <- 12000
+datasets_combined_savd3 <- generator_combined_savd(n_sims3)
+
+```
+
+```{r}
+results_savd3 <- compute_SBC(datasets_combined_savd3, SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3), 
+                          keep_fits = FALSE,
+                          cache_mode = "results",
+                          cache_location = file.path(cache_dir, paste0("SBC_lmm_savage_dickey3_N", N, "_G", G, "_", length(datasets_combined_savd3), ".rds")),
+                          thin_ranks = thin_ranks / dm_thin,
+                          globals = globals_savd
+                          )
+results_savd3
+```
+
+
+```{r}
+set.seed(313802390)
+n_sims4 <- 7000
+datasets_combined_savd4 <- generator_combined_savd(n_sims4)
+
+```
+
+```{r}
+results_savd4 <- compute_SBC(datasets_combined_savd4, SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3), 
+                          keep_fits = FALSE,
+                          cache_mode = "results",
+                          cache_location = file.path(cache_dir, paste0("SBC_lmm_savage_dickey4_N", N, "_G", G, "_", length(datasets_combined_savd4), ".rds")),
+                          thin_ranks = thin_ranks / dm_thin,
+                          globals = globals_savd
+                          )
+results_savd4
+```
+
+
+```{r}
+set.seed(250943836)
+n_sims5 <- 4000
+datasets_combined_savd5 <- generator_combined_savd(n_sims5)
+
+```
+
+```{r}
+results_savd5 <- compute_SBC(datasets_combined_savd5, SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3), 
+                          keep_fits = FALSE,
+                          cache_mode = "results",
+                          cache_location = file.path(cache_dir, paste0("SBC_lmm_savage_dickey5_N", N, "_G", G, "_", length(datasets_combined_savd5), ".rds")),
+                          thin_ranks = thin_ranks / dm_thin,
+                          globals = globals_savd
+                          )
+results_savd5
+```
+
+
+```{r}
+set.seed(962347563)
+n_sims6 <- 4000
+datasets_combined_savd6 <- generator_combined_savd(n_sims6)
+
+```
+
+```{r}
+results_savd6 <- compute_SBC(datasets_combined_savd6, SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3), 
+                          keep_fits = FALSE,
+                          cache_mode = "results",
+                          cache_location = file.path(cache_dir, paste0("SBC_lmm_savage_dickey6_N", N, "_G", G, "_", length(datasets_combined_savd6), ".rds")),
+                          thin_ranks = thin_ranks / dm_thin,
+                          globals = globals_savd
+                          )
+results_savd6
+```
+
+
+```{r}
+results_savd <- bind_results(results_savd1, results_savd2, results_savd3, results_savd4, results_savd5, results_savd6)
 
 stats_by_prefix <- list()
 for(prefix in prefixes) {
