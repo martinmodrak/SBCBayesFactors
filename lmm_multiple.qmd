@@ -3,6 +3,8 @@ title: "Linear regression - multiple models"
 format: html
 ---
 
+Note - this computation is particularly expensive (about 200 - 300 CPU days)
+
 TODO: SBC bind_results and submodel classes, dependency on MCMCpack,
 BF diags - always start with HX:
 
@@ -663,7 +665,8 @@ attr(results_savd$backend_diagnostics, "submodel_classes") <- attr(results_savd1
 results_savd
 
 stats_by_prefix <- list()
-for(prefix in prefixes) {
+prefixes_main <- c("bs", "OK", "stupid", "OKfew")
+for(prefix in prefixes_main) {
   prefix_regex <- paste0("^", prefix,"_")
   stats_by_prefix[[prefix]] <- results_savd$stats |> filter(grepl(prefix_regex, variable)) |> 
     mutate(variable = gsub(prefix_regex, "", variable))
@@ -708,7 +711,7 @@ bp_comparison <- bp_bs_notop |>
 
 print(
 bp_comparison |> ggplot() + aes(x = prob_bs, y = prob_savd) + geom_abline(color = "orangered", intercept = 0, slope = 1) +
-  geom_point(alpha = 0.3) + facet_wrap(~variable) + coord_fixed() + 
+  ggpointdensity::geom_pointdensity() + facet_wrap(~variable) + coord_fixed() + 
   ggtitle(prefix)
 )
 print(bp_comparison |> group_by(sim_id) |> 
@@ -722,33 +725,51 @@ print(bp_comparison |> group_by(sim_id) |>
 ```
 
 
+```{r}
+bp_by_prefix <- purrr::map(stats_by_prefix, binary_probabilities_from_stats)
+unique_vars <- unique(bp_by_prefix$bs$variable)
+prefixes_rep <- rep(names(stats_by_prefix), each = length(unique_vars))
+vars_rep <- rep(unique_vars, times = length(stats_by_prefix))
 
+bp_by_prefix_and_var <- purrr::map2(prefixes_rep, vars_rep, \(prefix, var) {
+  bp_by_prefix[[prefix]] |> filter(variable == var)
+})
+names(bp_by_prefix_and_var) <- paste0(prefixes_rep, ".", vars_rep)
+
+
+calib_by_prefix_and_var <- furrr::future_map(bp_by_prefix_and_var, \(bp_sub) {
+  var <- unique(bp_sub$variable)
+  if (var == "top_model") {
+    prob1_prior <- bp_sub$simulated_value
+  } else {
+    prob1_prior <- 0.25
+  }
+  SBCBayesFactors:::calibration_metrics(bp_sub, prob1_prior)
+}, .options = furrr::furrr_options(seed = TRUE))
+
+saveRDS(calib_by_prefix_and_var, file.path("cache", "lmm_multiple_calibration.rds"))
+```
 
 ```{r}
-test_results <- furrr::future_imap_dfr(stats_by_prefix, \(stats_sub, prefix) {
-  bp <- binary_probabilities_from_stats(stats_sub)
-  purrr::map_dfr(c("top_model", paste0("is_model", 0:3)), \(var) {
-    bp_selected <- bp |> filter(variable == var)
-    miscalib_test <- miscalibration_resampling_test(bp_selected$prob, bp_selected$simulated_value)
-    brier_test <- brier_resampling_test(bp_selected$prob, bp_selected$simulated_value)
-    if(var == "top_model") {
-      dap_test <- t.test(bp_selected$prob, bp_selected$simulated_value)
-    } else {
-      dap_test <- t.test(bp_selected$prob, mu = 0.25)
-    }
+test_results <- purrr::imap_dfr(calib_by_prefix_and_var, \(calib, prefix_and_var) {
+  prefix <- gsub("\\..*$", "", prefix_and_var)
+  var <- gsub("^.*\\.", "", prefix_and_var)
     data.frame(
       prefix = prefix,
       variable = var,
-      miscalib = miscalib_test$p.value,
-      brier = brier_test$p.value,
-      dap = dap_test$p.value
+      miscalib = calib$miscalibration_stats$p,
+      dap = calib$t$p.value
     ) 
   })
-}, .options = furrr::furrr_options(seed = TRUE))
 
-test_results |> pivot_longer(c("miscalib", "brier", "dap"), names_to = "test", values_to = "p") |>  
+test_results |> pivot_longer(c("miscalib", "dap"), names_to = "test", values_to = "p") |>  
   mutate(p = pmax(5e-05, p)) |>  # Avoid p-values lower than the lowest possible for the resampling tests
   ggplot() + aes(x = test, y = p, group = variable, color = variable)  + geom_hline(yintercept = 0.05, color = "orangered", linewidth = 1) + geom_point() + geom_line()+ scale_y_log10() + facet_wrap(~prefix, scales = "free_y")
+
+```
+
+
+```{r}
 
 ```
 

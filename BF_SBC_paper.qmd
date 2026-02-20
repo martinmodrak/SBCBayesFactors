@@ -283,13 +283,54 @@ derived quantities  (`r report_success_metrics(ttest_post, dap_digits = 4)`).
 
 ### Multiple models
 
+```{r}
+mult_calib_by_prefix_var <- load_precomputed_file(here::here("cache/lmm_multiple_calibration.rds"), "lmm_multiple.qmd")
+```
+
+
+```{r}
+hist_lmm_multiple_stupid <- load_precomputed_file(here::here("cache/hist_lmm_multiple_stupid.rds"), "lmm_multiple.qmd")
+hist_lmm_multiple_OKfew <- load_precomputed_file(here::here("cache/hist_lmm_multiple_OKfew.rds"), "lmm_multiple.qmd")
+```
+
+
+```{r fig-lmm-multiple}
+#| fig-width: 7
+#| fig-height: 8
+
+x_labels_lmm <- function(x) {
+  dplyr::if_else(x == 0, "0", paste0(x / 1000, "K"))
+}
+
+lmm_multiple_stupid_log_gamma_prepared <- hist_lmm_multiple_stupid$log_gamma |> filter(grepl("model", variable), variable != "is_model3") |> 
+  mutate(variable = factor(variable, levels = c(paste0("is_model", 0:2), "model", "top_model")))
+
+lmm_multiple_OKfew_log_gamma_prepared <- hist_lmm_multiple_OKfew$log_gamma |> filter(grepl("model", variable), variable != "is_model3") |> 
+  mutate(variable = factor(variable, levels = c(paste0("is_model", 0:2), "model", "top_model")))
+
+
+((plot_log_gamma_histories(lmm_multiple_stupid_log_gamma_prepared, wrap_cols = 5, x_labels = x_labels_lmm, keep_order = TRUE) +  labs(tag = "A) Trick - SBC") + tag_theme ) /
+(plot_log_p_histories(hist_lmm_multiple_stupid$miscalibration, wrap_cols = 5, x_labels = x_labels_lmm) + labs(tag = "B) Trick - Binary calibration")+ tag_theme) /
+(plot_log_p_histories(hist_lmm_multiple_stupid$ttest, wrap_cols = 5, x_labels = x_labels_lmm) + labs(tag = "C) Trick - DAP")+ tag_theme) +
+  plot_layout(ncol = 1, axes = "collect_x")) - 
+((plot_log_gamma_histories(lmm_multiple_OKfew_log_gamma_prepared, wrap_cols = 5, x_labels = x_labels_lmm, keep_order = TRUE) +  labs(tag = "D) Few draws - SBC") + tag_theme )/
+(plot_log_p_histories(hist_lmm_multiple_OKfew$miscalibration, wrap_cols = 5, x_labels = x_labels_lmm) + labs(tag = "E) Few draws - Binary calibration")+ tag_theme) /
+(plot_log_p_histories(hist_lmm_multiple_OKfew$ttest, wrap_cols = 5, x_labels = x_labels_lmm) + labs(tag = "F) Few draws - DAP")+ tag_theme) +
+  plot_layout(ncol = 1, axes = "collect_x")) +
+  plot_layout(ncol = 1)
+  
+```
+
+
 ### Results table 
 
 ```{r results ='asis'}
 all_metrics <- list(
   "bridgesampling + Stan" = list(
     "Turtles" = turtles_metrics,
-    "Turtles - post SBC" = turtles_post_half_metrics
+    "Turtles - post SBC" = turtles_post_half_metrics,
+    "Multiple models - M0 indicator " = mult_calib_by_prefix_var$bs.is_model0,
+    "Multiple models - top model " = mult_calib_by_prefix_var$bs.top_model
   ),
   "BayesFactor" = 
     list("Random effect presence via lmBF" = ranef_test,
@@ -310,30 +351,41 @@ all_metrics |> purrr::imap_dfr(\(cases, package) {
 
 ```{r}
 power_table <- rbind(
-  calculate_power_df_log_gamma(hist_pnb_ignore_all$log_gamma |> filter(variable == "log_lik")) |> mutate(scenario = "Poisson vs. NB, ignore all data", method = paste0("SBC for ", variable)),
-  calculate_power_df_log_gamma(hist_pnb_ignore_half$log_gamma |> filter(variable == "log_lik")) |> mutate(scenario = "Poisson vs. NB, ignore half of data", method = paste0("SBC for ", variable)),
+  calculate_power_df_log_gamma(hist_pnb_ignore_all$log_gamma |> filter(variable == "log_lik")) |> mutate(scenario = "Poisson vs. NB, ignore all data", method = "SBC"),
+  calculate_power_df_log_gamma(hist_pnb_ignore_half$log_gamma |> filter(variable == "log_lik")) |> mutate(scenario = "Poisson vs. NB, ignore half of data", method = "SBC"),
   
-  calculate_power_df_log_gamma(hist_pnb_vari$log_gamma |> filter(variable != "var_y")) |> mutate(scenario = c("Poisson vs. NB, log BF noise with SD = 2", rep("", n() -1)), method = paste0("SBC for ", variable)),
+  calculate_power_df_log_gamma(hist_pnb_vari$log_gamma |> filter(variable != "var_y")) |> mutate(scenario = c("Poisson vs. NB, log BF noise with SD = 2", rep("", n() -1)), method = "SBC"),
   calculate_power_df_log_p(hist_pnb_vari$miscalibration) |> mutate(scenario = "", method = "Binary calibration"),
   
   
-  calculate_power_df_log_gamma(hist_pnb_bias$log_gamma |> filter(variable != "var_y")) |> mutate(scenario = c("Poisson vs. NB, log BF bias = +2", rep("", n() -1)), method = paste0("SBC for ", variable)),
+  calculate_power_df_log_gamma(hist_pnb_bias$log_gamma |> filter(variable != "var_y")) |> mutate(scenario = c("Poisson vs. NB, log BF bias = +2", rep("", n() -1)), method = "SBC"),
   calculate_power_df_log_p(hist_pnb_bias$miscalibration) |> mutate(scenario = "", method = "Binary calibration"),
   calculate_power_df_log_p(hist_pnb_bias$ttest) |> mutate(scenario = "", method = "DAP"),
   
-  calculate_power_df_log_gamma(hist_turtles_norm_bad$log_gamma |> filter(variable != "lp__")) |> mutate(scenario = c("Turtles, normalization constant divided by 2", rep("", n() -1)), method = paste0("SBC for ", variable)),
+  calculate_power_df_log_gamma(hist_turtles_norm_bad$log_gamma |> filter(variable != "lp__")) |> mutate(scenario = c("Turtles, normalization constant divided by 2", rep("", n() -1)), method = "SBC"),
   calculate_power_df_log_p(hist_turtles_norm_bad$miscalibration) |> mutate(scenario = "", method = "Binary calibration"),
   calculate_power_df_log_p(hist_turtles_norm_bad$ttest) |> mutate(scenario = "", method = "DAP"),
   
   
-calculate_power_df_log_gamma(hist_ranef_constant$log_gamma |> filter(variable == "model")) |> mutate(scenario = "Presence of random effects, constant prior", method = paste0("SBC for ", variable)),
+calculate_power_df_log_gamma(hist_ranef_constant$log_gamma |> filter(variable == "model")) |> mutate(scenario = "Presence of random effects, constant prior", method = "SBC"),
   calculate_power_df_log_p(hist_ranef_constant$miscalibration) |> mutate(scenario = "", method = "Binary calibration"),
   calculate_power_df_log_p(hist_ranef_constant$ttest) |> mutate(scenario = "", method = "DAP"),
 
 
-calculate_power_df_log_gamma(ttest_fixed$hist |> filter(variable == "model_sd_m1")) |> mutate(scenario = "JZS t-test, constant prior", method = paste0("SBC for ", variable))
+calculate_power_df_log_gamma(ttest_fixed$hist |> filter(variable == "model_sd_m1")) |> mutate(scenario = "JZS t-test, constant prior", method = "SBC"),
+
+calculate_power_df_log_gamma(hist_lmm_multiple_stupid$log_gamma |> filter(variable %in% c("model", "is_model0"))) |> mutate(scenario = c("Multiple models, trick",  rep("", n() -1)), method = "SBC"),
+  calculate_power_df_log_p(hist_lmm_multiple_stupid$miscalibration |> filter(variable == "is_model0")) |> mutate(scenario = "", method = "Binary calibration"),
+  calculate_power_df_log_p(hist_lmm_multiple_stupid$ttest_short) |> mutate(scenario = "", method = "DAP"),
+  calculate_power_df_log_p(hist_lmm_multiple_stupid$ttest |> filter(variable == "is_model2")) |> mutate(scenario = "", method = "DAP"),
+
+calculate_power_df_log_gamma(hist_lmm_multiple_OKfew$log_gamma |> filter(variable %in% c("top_model"))) |> mutate(scenario = c("Multiple models, few draws",  rep("", n() -1)), method = "SBC"),
+  calculate_power_df_log_p(hist_lmm_multiple_OKfew$miscalibration |> filter(variable %in% c("is_model0", "top_model"))) |> mutate(scenario = "", method ="Binary calibration"),
+  calculate_power_df_log_p(hist_lmm_multiple_OKfew$ttest |> filter(variable == "top_model")) |> mutate(scenario = "", method = "DAP")
 ) |> 
-  transmute(Scenario = scenario, Method = method, `# of simulations (95% CI)` = paste0(first_power_sim_id, " (", first_power_sim_id_low, " -- ", first_power_sim_id_high, ")"))
+  transmute(Scenario = scenario, Method = method, Variable = variable, `# of simulations (95% CI)` = paste0(first_power_sim_id, " (", first_power_sim_id_low, " -- ", first_power_sim_id_high, ")"))
+
+
 
 power_table
 ```
@@ -506,5 +558,29 @@ res_ttest_cauchy <- load_precomputed_file("cache/ttest_cauchy.rds", "ttestBF.qmd
 
 ((plot_ecdf_diff(res_ttest_cauchy, variables = "model_sd_m1") + theme(legend.position = "bottom") + labs(tag = "A) SBC") + tag_theme_calib) | (ttest_cauchy$high$reliability_diag  + labs(tag = "B) Bin. calib, sd(y) ≥ 1") + tag_theme_calib) | 
    (ttest_cauchy$low$reliability_diag  + labs(tag = "C) Bin. calib, sd(y) < 1") + tag_theme_calib))
+```
+
+
+### Extra results for multiple models
+
+
+```{r}
+mult_stats_by_prefix <- load_precomputed_file(here::here("cache/lmm_multiple_stats_by_prefix.rds"), "lmm_multiple.qmd")
+mult_bp_by_prefix <- purrr::map(mult_stats_by_prefix, binary_probabilities_from_stats)
+```
+
+
+
+
+```{r fig-multiple-bf-comparison}
+#| fig-width: 7
+#| fig-height: 8
+mult_bp_by_prefix_notop <- purrr::map(mult_bp_by_prefix, \(x) x |> filter(variable != "top_model") |> 
+  mutate(variable = paste0(gsub("is_model", "BF", variable), "3"))) 
+
+compare_binary_probs(mult_bp_by_prefix_notop$bs, mult_bp_by_prefix_notop$OK, lab1 = "BF - Bridgesampling", lab2 = "BF - Savage-Dickey", scale = "BF", ref = "BF33") +
+compare_binary_probs(mult_bp_by_prefix_notop$bs, mult_bp_by_prefix_notop$stupid, lab1 = "BF - Bridgesampling", lab2 = "BF - Savage-Dickey - trick", scale = "BF", ref = "BF33") +
+compare_binary_probs(mult_bp_by_prefix_notop$bs, mult_bp_by_prefix_notop$OKfew, lab1 = "BF - Bridgesampling", lab2 = "BF - Savage-Dickey - few draws", scale = "BF", ref = "BF33") + 
+  plot_layout(ncol = 1) + plot_annotation(tag_levels = "A")
 ```
 

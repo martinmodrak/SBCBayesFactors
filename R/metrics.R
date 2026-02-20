@@ -1,9 +1,20 @@
 calibration_metrics <- function(res, prob1_prior = 0.5) {
-  bp <- binary_probabilities_from_stats(res$stats)
+  if(is.data.frame(res)) {
+    stats <- res
+  } else if(inherits(res, "SBC_results")) {
+    stats <- res$stats
+  } else {
+    stop("Invalid res")
+  }
+  if(!("prob" %in% names(stats))) {
+    bp <- binary_probabilities_from_stats(stats)
+  } else {
+    bp <- stats
+  }
   if(length(prob1_prior) == 1) {
     t_res <- t.test(bp$prob, mu = prob1_prior)
   } else if(all(prob1_prior %in% c(0,1))) {
-    stopifnot(length(prob1_prior) == length(res))
+    stopifnot(length(prob1_prior) == nrow(stats))
     t_res <- t.test(bp$prob, prob1_prior)
   } else {
     stop("Invalid prob1_prior")
@@ -11,13 +22,13 @@ calibration_metrics <- function(res, prob1_prior = 0.5) {
   miscalibration_stats <- miscalibration_resampling_stats(bp$prob, bp$simulated_value)
   reliability_diag <- my_reliability_diag(bp)
 
-  max_rank <- unique(res$stats$max_rank)
+  max_rank <- unique(stats$max_rank)
   stopifnot(length(max_rank) == 1)
 
-  n_sims <- length(res)
-  log_gammas <- res$stats |> group_by(variable) |>
-    filter(all(!is.na(rank))) |>
-    summarise(log_gamma = log_gamma_stat(rank, !!max_rank))
+  n_sims <- nrow(stats)
+  log_gammas <- stats |> dplyr::group_by(variable) |>
+    dplyr::filter(all(!is.na(rank))) |>
+    dplyr::summarise(log_gamma = SBCBayesFactors:::log_gamma_stat(rank, !!max_rank))
 
 
   gamma_limit <- SBC:::adjust_gamma(N = n_sims, L = 1, K = max_rank + 1)

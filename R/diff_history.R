@@ -449,12 +449,14 @@ calculate_power_df_log_gamma <- function(histories_df, power_limit = 0.8) {
     select(- n_histories)
 }
 
-plot_log_gamma_histories <- function(histories_df, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
+plot_log_gamma_histories <- function(histories_df, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL, x_labels = waiver(), keep_order = FALSE) {
   alpha <- sqrt(1/length(unique(histories_df$history_id)))
 
-  variable_order <- as.integer(factor(histories_df$variable))
-  variable_order[histories_df$variable == "model"] <- -1
-  histories_df$variable <- forcats::fct_reorder(histories_df$variable, variable_order)
+  if(!keep_order) {
+    variable_order <- as.integer(factor(histories_df$variable))
+    variable_order[histories_df$variable == "model"] <- -1
+    histories_df$variable <- forcats::fct_reorder(histories_df$variable, variable_order)
+  }
 
   power_df <- calculate_power_df_log_gamma(histories_df) |> filter(is.finite(first_power_sim_id))
 
@@ -466,7 +468,7 @@ plot_log_gamma_histories <- function(histories_df, min_sim_id = 0, wrap_cols = 4
     geom_line(alpha = alpha) +
     geom_hline(yintercept = 0, color = "lightblue", linewidth = 1) +
     scale_y_continuous("Log γ - Threshold", limits = ylim) +
-    scale_x_continuous("Number of simulations") +
+    scale_x_continuous("Number of simulations", labels = x_labels) +
     facet_wrap(~variable, ncol = wrap_cols)
 }
 
@@ -504,7 +506,7 @@ calculate_power_df_log_p <- function(histories_df, power_limit = 0.8) {
 
 }
 
-plot_log_p_histories <- function(histories_df, title = NULL, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
+plot_log_p_histories <- function(histories_df, title = NULL, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL, x_labels = waiver()) {
   alpha <- sqrt(1/length(unique(histories_df$history_id)))
 
   if(is.null(title)) {
@@ -531,7 +533,7 @@ plot_log_p_histories <- function(histories_df, title = NULL, min_sim_id = 0, wra
     geom_line(alpha = alpha) +
     geom_hline(yintercept = log(0.05), color = "lightblue", linewidth = 1) +
     scale_y_continuous(y_label, limits = ylim, breaks = log_p_breaks, labels = log_p_labels) +
-    scale_x_continuous("Number of simulations") +
+    scale_x_continuous("Number of simulations", labels = x_labels) +
     facet_wrap(~variable, ncol = wrap_cols)
 }
 
