@@ -112,6 +112,7 @@ step_id <- function(sim_id, step) {
   sim_id[include_step(sim_id, step)] / step
 }
 
+#' @export
 compute_log_gamma_history_single <- function(ranks, max_rank, step = 1) {
   rank_t <- rep(0, max_rank + 1)
   log_gamma <- rep(NA_real_, floor(length(ranks) / step))
@@ -132,17 +133,17 @@ compute_log_gamma_history <- function(stats, step = step, min_sim_id = 1) {
     stop("Requires all max_rank to be equal")
   }
 
-  max_n_sims <- stats %>% group_by(variable) %>% summarise(n = n()) %>% pull(n) %>% max()
+  max_n_sims <- stats |> dplyr::group_by(variable) |> dplyr::summarise(n = dplyr::n()) |> dplyr::pull(n) |> max()
   gamma_thresholds_df <- get_precomputed_gamma_thresholds(K = unique_max_rank + 1,
                                                           min_sims = 1, max_sims = max(max_n_sims, 1000))
-  stats %>%
-    group_by(variable) %>%
-    reframe(
+  stats |>
+    dplyr::group_by(variable) |>
+    dplyr::reframe(
       sim_id = sim_id[include_step(sim_id, step)],
       log_gamma = compute_log_gamma_history_single(rank, unique_max_rank, step = step)
-      ) %>%
-    filter(sim_id >= min_sim_id) %>%
-    inner_join(gamma_thresholds_df, by = c("sim_id" = "N_sims"))
+      ) |>
+    dplyr::filter(sim_id >= min_sim_id) |>
+    dplyr::inner_join(gamma_thresholds_df, by = c("sim_id" = "N_sims"))
 }
 
 schad_bf_wrapper <- function(probs_to_test, expected, rscale = sqrt(1/12)) {
@@ -372,9 +373,15 @@ compute_bootstrapped_histories <- function(stats, history_length, n_histories, h
     progressor <- NULL
   }
 
+  # Reduce size
+  stats_for_history <- stats |> dplyr::filter(!SBC::attribute_present_stats("hidden", attributes)) |> dplyr::select(-tidyselect::any_of(c("z_score", "mean", "sd", "q5", "median", "q95", "rhat", "ess_bulk", "ess_tail", "has_na", "all_na", "all_inf")))
+
   res_list <- future.apply::future_lapply(1:n_histories, future.seed = TRUE,
-                                          FUN = function(history_id) {
-      stats_boot <- dplyr::group_by(stats, variable) |>
+                                          future.globals = c("stats_for_history", "history_length", "progressor", "step", "min_sim_id", "history_fun"),
+                                          ...,
+                                          FUN = function(history_id, ...) {
+      library(SBCBayesFactors)
+      stats_boot <- dplyr::group_by(stats_for_history, variable) |>
         dplyr::sample_n(history_length) |>
         dplyr::mutate(sim_id = 1:dplyr::n()) |>
         dplyr::ungroup()
@@ -449,11 +456,11 @@ plot_log_gamma_histories <- function(histories_df, min_sim_id = 0, wrap_cols = 4
   variable_order[histories_df$variable == "model"] <- -1
   histories_df$variable <- forcats::fct_reorder(histories_df$variable, variable_order)
 
-  power_df <- calculate_power_df_log_gamma(histories_df) |>filter(is.finite(first_power_sim_id))
+  power_df <- calculate_power_df_log_gamma(histories_df) |> filter(is.finite(first_power_sim_id))
 
 
-  histories_df %>%
-    filter(sim_id >= min_sim_id) %>%
+  histories_df |>
+    filter(sim_id >= min_sim_id) |>
     ggplot(aes(x = sim_id, y = log_gamma - log_gamma_threshold, group = history_id)) +
     geom_vline(aes(xintercept = first_power_sim_id), data = power_df, color = "orangered") +
     geom_line(alpha = alpha) +
@@ -515,11 +522,10 @@ plot_log_p_histories <- function(histories_df, title = NULL, min_sim_id = 0, wra
     histories_df$variable <- forcats::fct_reorder(histories_df$variable, variable_order)
   }
 
-  power_df <- calculate_power_df_log_p(histories_df) |>filter(is.finite(first_power_sim_id))
+  power_df <- calculate_power_df_log_p(histories_df) |> filter(is.finite(first_power_sim_id))
 
-
-  histories_df %>%
-    filter(sim_id >= min_sim_id) %>%
+  histories_df |>
+    filter(sim_id >= min_sim_id) |>
     ggplot(aes(x = sim_id, y = log_p, group = history_id)) +
     geom_vline(aes(xintercept = first_power_sim_id), data = power_df, color = "orangered") +
     geom_line(alpha = alpha) +

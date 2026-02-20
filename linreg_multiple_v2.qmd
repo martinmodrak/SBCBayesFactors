@@ -3,7 +3,7 @@ title: "Linear regression - multiple models"
 format: html
 ---
 
-TODO: SBC progressr signal errors, dependency on MCMCpack,
+TODO: SBC bind_results and submodel classes, dependency on MCMCpack,
 BF diags - always start with HX:
 
 Let's setup the environment (bridgesampling currently works only with rstan):
@@ -38,6 +38,12 @@ theme_set(theme_minimal())
 pkgload::load_all()
 ```
 
+
+```{r cluster, results='hide', warning=FALSE, message=FALSE}
+setup_cluster(max_server_workers = 90, max_local_workers = 10)
+```
+
+
 ```{r}
 # Global settings for the scenario
 do_tests <- FALSE
@@ -48,18 +54,11 @@ n_sims <- 1000
 ```
 
 
-```{r cluster}
-setup_cluster(max_server_workers = 60, max_local_workers = 10)
-```
-
-
-
-
 ## Simulator
 
 ```{r}
 prior_args <- list(
-  b_sd = 0.25,
+  b_sd = 0.5,
   intercept_mean = 2,
   intercept_sd = 2,
   sigma_sd = 3,
@@ -174,7 +173,7 @@ template_data <- one_sim_generator(N, 3, 3, prior_args)$generated
 chains <- 2
 iter <- 21000
 warmup <- 1000
-thin_ranks <- floor((iter - warmup) / 400)
+thin_ranks <- floor((iter - warmup) * chains / 400)
 # chains <- 4
 # iter <- 2000
 # warmup <- 1000
@@ -530,6 +529,8 @@ results_savd1
 
 ```
 
+
+
 ```{r}
 set.seed(86548266)
 n_sims2 <- 2000
@@ -551,7 +552,115 @@ results_savd2
 
 
 ```{r}
-results_savd <- bind_results(results_savd1, results_savd2)
+set.seed(658373202)
+n_sims3 <- 12000
+datasets_combined_savd3 <- generator_combined_savd(n_sims3)
+
+```
+
+```{r}
+results_savd3 <- compute_SBC(datasets_combined_savd3, SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3), 
+                          keep_fits = FALSE,
+                          cache_mode = "results",
+                          cache_location = file.path(cache_dir, paste0("SBC_lmm_savage_dickey3_N", N, "_G", G, "_", length(datasets_combined_savd3), ".rds")),
+                          thin_ranks = thin_ranks / dm_thin,
+                          globals = globals_savd
+                          )
+results_savd3
+```
+
+
+```{r}
+set.seed(313802390)
+n_sims4 <- 7000
+datasets_combined_savd4 <- generator_combined_savd(n_sims4)
+
+```
+
+```{r}
+results_savd4 <- compute_SBC(datasets_combined_savd4, SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3), 
+                          keep_fits = FALSE,
+                          cache_mode = "results",
+                          cache_location = file.path(cache_dir, paste0("SBC_lmm_savage_dickey4_N", N, "_G", G, "_", length(datasets_combined_savd4), ".rds")),
+                          thin_ranks = thin_ranks / dm_thin,
+                          globals = globals_savd
+                          )
+results_savd4
+```
+
+
+```{r}
+set.seed(250943836)
+n_sims5 <- 14000
+datasets_combined_savd5 <- generator_combined_savd(n_sims5)
+
+```
+
+```{r}
+results_savd5 <- compute_SBC(datasets_combined_savd5, SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3), 
+                          keep_fits = FALSE,
+                          cache_mode = "results",
+                          cache_location = file.path(cache_dir, paste0("SBC_lmm_savage_dickey5_N", N, "_G", G, "_", length(datasets_combined_savd5), ".rds")),
+                          thin_ranks = thin_ranks / dm_thin,
+                          globals = globals_savd
+                          )
+results_savd5
+```
+
+
+```{r}
+set.seed(962347563)
+n_sims6 <- 14000
+datasets_combined_savd6 <- generator_combined_savd(n_sims6)
+
+```
+
+```{r}
+results_savd6 <- compute_SBC(datasets_combined_savd6, SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3), 
+                          keep_fits = FALSE,
+                          cache_mode = "results",
+                          cache_location = file.path(cache_dir, paste0("SBC_lmm_savage_dickey6_N", N, "_G", G, "_", length(datasets_combined_savd6), ".rds")),
+                          thin_ranks = thin_ranks / dm_thin,
+                          globals = globals_savd
+                          )
+results_savd6
+```
+
+```{r}
+set.seed(200043180)
+n_sims7 <- 10000
+datasets_combined_savd7 <- generator_combined_savd(n_sims7)
+
+```
+
+```{r}
+results_savd7 <- compute_SBC(datasets_combined_savd7, SBC_backend_savage_dickey(backend_H0, backend_H1, backend_H2, backend_H3), 
+                          keep_fits = FALSE,
+                          cache_mode = "results",
+                          cache_location = file.path(cache_dir, paste0("SBC_lmm_savage_dickey7_N", N, "_G", G, "_", length(datasets_combined_savd7), ".rds")),
+                          thin_ranks = thin_ranks / dm_thin,
+                          globals = globals_savd
+                          )
+results_savd7
+```
+
+```{r}
+results_savd_with_errors <- bind_results(results_savd1, results_savd2, results_savd3, results_savd4, results_savd5, results_savd6, results_savd7)
+
+attr(results_savd_with_errors$backend_diagnostics, "submodel_classes") <- attr(results_savd1$backend_diagnostics, "submodel_classes")
+
+# This implicitly omits all fits with errors as they don't have a row in 
+# backend_diagnostics
+fit_ok <- results_savd_with_errors$backend_diagnostics |>
+  filter(if_all(starts_with("bs_error"), \(x) x <= 5),
+         if_all(starts_with("n_divergent"), \(x) x == 0)) |> pull(sim_id) 
+
+cat("Omitting ", length(results_savd_with_errors) - length(fit_ok), "fits due to errors/divergences.")
+
+results_savd <- results_savd_with_errors[fit_ok]
+attr(results_savd$backend_diagnostics, "submodel_classes") <- attr(results_savd1$backend_diagnostics, "submodel_classes")
+
+results_savd
 
 stats_by_prefix <- list()
 for(prefix in prefixes) {
@@ -652,53 +761,56 @@ test_results
 
 ```{r}
 n_histories <- 100
-hist_length_noiseER <- 800
-invisible(get_precomputed_gamma_thresholds(unique(stats_by_prefix$noiseER$max_rank) + 1,min_sims = 1, max_sims = hist_length_noiseER))
-
-hist_step_noiseER <- 100
-hist_noiseER <- compute_bootstrapped_histories(stats_by_prefix$noiseER, history_length = hist_length_noiseER, n_histories = n_histories, step = hist_step_noiseER,
-                                             compute_log_gamma_history)
-
-bp_noiseER <- binary_probabilities_from_stats(stats_by_prefix$noiseER)
-
-hist_noiseER_ttest_notop <- compute_bootstrapped_histories(bp_noiseER |> filter(variable != "top_model"), history_length = hist_length_noiseER, n_histories = n_histories, step = hist_step_noiseER,
-                                            compute_ttest_history, expected = 0.25)
-
-hist_noiseER_ttest_top <- compute_bootstrapped_histories(bp_noiseER  |> filter(variable == "top_model"), history_length = hist_length_noiseER, n_histories = n_histories, step = hist_step_noiseER,
-                                            compute_ttest_history, expected = "avg_true")
-
-hist_noiseER_ttest <- rbind(hist_noiseER_ttest_notop, hist_noiseER_ttest_top)
-
-hist_noiseER_brier <- compute_bootstrapped_histories(bp_noiseER, history_length = hist_length_noiseER, n_histories = n_histories, step = hist_step_noiseER,
-                                            compute_brier_history, min_sim_id = 10)
-
-
-hist_noiseER_miscalibration <- compute_bootstrapped_histories(bp_noiseER, history_length = hist_length_noiseER, n_histories = n_histories, step = hist_step_noiseER,
-                                                           compute_miscalibration_history, min_sim_id = 10)
-
-
-
 main_vars <- c("model", paste0("is_model", 0:3), "top_model", "lp__", "lprior", "b_x1", "b_x2")
-plot_log_gamma_histories(hist_noiseER |> filter(variable %in% main_vars))
-plot_log_p_histories(hist_noiseER_brier, "Brier resampling")
-plot_log_p_histories(hist_noiseER_ttest, "P - ttest")
-plot_log_p_histories(hist_noiseER_miscalibration, "Miscalibration resampling")
-
-save_histories("lmm_multiple_noiseER",
-               log_gamma = hist_noiseER,
-               brier = hist_noiseER_brier,
-               ttest = hist_noiseER_ttest,
-               miscalibration = hist_noiseER_miscalibration)
 ```
 
 
 ```{r}
-n_histories <- 100
-hist_length_stupid <- 1000
+# hist_length_noiseER <- 800
+# invisible(get_precomputed_gamma_thresholds(unique(stats_by_prefix$noiseER$max_rank) + 1,min_sims = 1, max_sims = hist_length_noiseER))
+# 
+# hist_step_noiseER <- 100
+# hist_noiseER <- compute_bootstrapped_histories(stats_by_prefix$noiseER, history_length = hist_length_noiseER, n_histories = n_histories, step = hist_step_noiseER,
+#                                              compute_log_gamma_history)
+# 
+# bp_noiseER <- binary_probabilities_from_stats(stats_by_prefix$noiseER)
+# 
+# hist_noiseER_ttest_notop <- compute_bootstrapped_histories(bp_noiseER |> filter(variable != "top_model"), history_length = hist_length_noiseER, n_histories = n_histories, step = hist_step_noiseER,
+#                                             compute_ttest_history, expected = 0.25)
+# 
+# hist_noiseER_ttest_top <- compute_bootstrapped_histories(bp_noiseER  |> filter(variable == "top_model"), history_length = hist_length_noiseER, n_histories = n_histories, step = hist_step_noiseER,
+#                                             compute_ttest_history, expected = "avg_true")
+# 
+# hist_noiseER_ttest <- rbind(hist_noiseER_ttest_notop, hist_noiseER_ttest_top)
+# 
+# hist_noiseER_brier <- compute_bootstrapped_histories(bp_noiseER, history_length = hist_length_noiseER, n_histories = n_histories, step = hist_step_noiseER,
+#                                             compute_brier_history, min_sim_id = 10)
+# 
+# 
+# hist_noiseER_miscalibration <- compute_bootstrapped_histories(bp_noiseER, history_length = hist_length_noiseER, n_histories = n_histories, step = hist_step_noiseER,
+#                                                            compute_miscalibration_history, min_sim_id = 10)
+# 
+# 
+# 
+# plot_log_gamma_histories(hist_noiseER |> filter(variable %in% main_vars))
+# plot_log_p_histories(hist_noiseER_brier, "Brier resampling")
+# plot_log_p_histories(hist_noiseER_ttest, "P - ttest")
+# plot_log_p_histories(hist_noiseER_miscalibration, "Miscalibration resampling")
+# 
+# save_histories("lmm_multiple_noiseER",
+#                log_gamma = hist_noiseER,
+#                brier = hist_noiseER_brier,
+#                ttest = hist_noiseER_ttest,
+#                miscalibration = hist_noiseER_miscalibration)
+```
+
+
+```{r}
+hist_length_stupid <- 20000
 invisible(get_precomputed_gamma_thresholds(unique(stats_by_prefix$stupid$max_rank) + 1,min_sims = 1, max_sims = hist_length_stupid))
 
-hist_step_stupid <- 20
-hist_stupid <- compute_bootstrapped_histories(stats_by_prefix$stupid, history_length = hist_length_stupid, n_histories = n_histories, step = hist_step_stupid,
+hist_step_stupid <- 200
+hist_stupid <- compute_bootstrapped_histories(stats_by_prefix$stupid |> filter(variable %in% main_vars), history_length = hist_length_stupid, n_histories = n_histories, step = hist_step_stupid,
                                             compute_log_gamma_history)
 
 bp_stupid <- binary_probabilities_from_stats(stats_by_prefix$stupid)
@@ -713,6 +825,10 @@ hist_stupid_ttest <- rbind(hist_stupid_ttest_notop, hist_stupid_ttest_top)
 
 
 
+hist_stupid_ttest_short <- compute_bootstrapped_histories(bp_stupid |> filter(variable == "is_model0"), history_length = 2000, n_histories = n_histories, step = 5,
+                                            compute_ttest_history, expected = 0.25)
+
+
 hist_stupid_brier <- compute_bootstrapped_histories(bp_stupid, history_length = hist_length_stupid, n_histories = n_histories, step = hist_step_stupid,
                                             compute_brier_history, min_sim_id = 10)
 
@@ -723,25 +839,28 @@ hist_stupid_miscalibration <- compute_bootstrapped_histories(bp_stupid, history_
 
 
 
-plot_log_gamma_histories(hist_stupid |> filter(variable %in% main_vars))
+plot_log_gamma_histories(hist_stupid)
 plot_log_p_histories(hist_stupid_brier, "Brier resampling")
 plot_log_p_histories(hist_stupid_ttest, "P - ttest")
+plot_log_p_histories(hist_stupid_ttest_short, "P - ttest (short)")
 plot_log_p_histories(hist_stupid_miscalibration, "Miscalibration resampling")
 
 save_histories("lmm_multiple_stupid",
                log_gamma = hist_stupid,
                brier = hist_stupid_brier,
                ttest = hist_stupid_ttest,
+               ttest_short = hist_stupid_ttest_short,
                miscalibration = hist_stupid_miscalibration)
 ```
 
+
 ```{r}
 n_histories <- 100
-hist_length_OKfew <- 1000
+hist_length_OKfew <- 5000
 invisible(get_precomputed_gamma_thresholds(unique(stats_by_prefix$OKfew$max_rank) + 1,min_sims = 1, max_sims = hist_length_OKfew))
 
 hist_step_OKfew <- 20
-hist_OKfew <- compute_bootstrapped_histories(stats_by_prefix$OKfew, history_length = hist_length_OKfew, n_histories = n_histories, step = hist_step_OKfew,
+hist_OKfew <- compute_bootstrapped_histories(stats_by_prefix$OKfew |> filter(variable %in% main_vars), history_length = hist_length_OKfew, n_histories = n_histories, step = hist_step_OKfew,
                                             compute_log_gamma_history)
 
 bp_OKfew <- binary_probabilities_from_stats(stats_by_prefix$OKfew)
@@ -780,42 +899,42 @@ save_histories("lmm_multiple_OKfew",
 
 
 ```{r}
-n_histories <- 100
-hist_length_noiseERtop <- 500
-invisible(get_precomputed_gamma_thresholds(unique(stats_by_prefix$noiseERtop$max_rank) + 1,min_sims = 1, max_sims = hist_length_noiseERtop))
-
-hist_step_noiseERtop <- 5
-hist_noiseERtop <- compute_bootstrapped_histories(stats_by_prefix$noiseERtop, history_length = hist_length_noiseERtop, n_histories = n_histories, step = hist_step_noiseERtop,
-                                             compute_log_gamma_history)
-
-bp_noiseERtop <- binary_probabilities_from_stats(stats_by_prefix$noiseERtop)
-
-hist_noiseERtop_ttest_notop <- compute_bootstrapped_histories(bp_noiseERtop |> filter(variable != "top_model"), history_length = hist_length_noiseERtop, n_histories = n_histories, step = hist_step_noiseERtop,
-                                            compute_ttest_history, expected = 0.25)
-
-hist_noiseERtop_ttest_top <- compute_bootstrapped_histories(bp_noiseERtop  |> filter(variable == "top_model"), history_length = hist_length_noiseERtop, n_histories = n_histories, step = hist_step_noiseERtop,
-                                            compute_ttest_history, expected = "avg_true")
-
-
-
-hist_noiseERtop_brier <- compute_bootstrapped_histories(bp_noiseERtop, history_length = hist_length_noiseERtop, n_histories = n_histories, step = hist_step_noiseERtop,
-                                            compute_brier_history, min_sim_id = 10)
-
-
-hist_noiseERtop_miscalibration <- compute_bootstrapped_histories(bp_noiseERtop, history_length = hist_length_noiseERtop, n_histories = n_histories, step = hist_step_noiseERtop,
-                                                           compute_miscalibration_history, min_sim_id = 10)
-
-
-
-
-plot_log_gamma_histories(hist_noiseERtop |> filter(variable %in% main_vars))
-plot_log_p_histories(hist_noiseERtop_brier, "Brier resampling")
-plot_log_p_histories(hist_noiseERtop_ttest, "P - ttest")
-plot_log_p_histories(hist_noiseERtop_miscalibration, "Miscalibration resampling")
-
-save_histories("lmm_multiple_noiseERtop",
-               log_gamma = hist_noiseERtop,
-               brier = hist_noiseERtop_brier,
-               ttest = hist_noiseERtop_ttest,
-               miscalibration = hist_noiseERtop_miscalibration)
+# n_histories <- 100
+# hist_length_noiseERtop <- 500
+# invisible(get_precomputed_gamma_thresholds(unique(stats_by_prefix$noiseERtop$max_rank) + 1,min_sims = 1, max_sims = hist_length_noiseERtop))
+# 
+# hist_step_noiseERtop <- 5
+# hist_noiseERtop <- compute_bootstrapped_histories(stats_by_prefix$noiseERtop, history_length = hist_length_noiseERtop, n_histories = n_histories, step = hist_step_noiseERtop,
+#                                              compute_log_gamma_history)
+# 
+# bp_noiseERtop <- binary_probabilities_from_stats(stats_by_prefix$noiseERtop)
+# 
+# hist_noiseERtop_ttest_notop <- compute_bootstrapped_histories(bp_noiseERtop |> filter(variable != "top_model"), history_length = hist_length_noiseERtop, n_histories = n_histories, step = hist_step_noiseERtop,
+#                                             compute_ttest_history, expected = 0.25)
+# 
+# hist_noiseERtop_ttest_top <- compute_bootstrapped_histories(bp_noiseERtop  |> filter(variable == "top_model"), history_length = hist_length_noiseERtop, n_histories = n_histories, step = hist_step_noiseERtop,
+#                                             compute_ttest_history, expected = "avg_true")
+# 
+# 
+# 
+# hist_noiseERtop_brier <- compute_bootstrapped_histories(bp_noiseERtop, history_length = hist_length_noiseERtop, n_histories = n_histories, step = hist_step_noiseERtop,
+#                                             compute_brier_history, min_sim_id = 10)
+# 
+# 
+# hist_noiseERtop_miscalibration <- compute_bootstrapped_histories(bp_noiseERtop, history_length = hist_length_noiseERtop, n_histories = n_histories, step = hist_step_noiseERtop,
+#                                                            compute_miscalibration_history, min_sim_id = 10)
+# 
+# 
+# 
+# 
+# plot_log_gamma_histories(hist_noiseERtop |> filter(variable %in% main_vars))
+# plot_log_p_histories(hist_noiseERtop_brier, "Brier resampling")
+# plot_log_p_histories(hist_noiseERtop_ttest, "P - ttest")
+# plot_log_p_histories(hist_noiseERtop_miscalibration, "Miscalibration resampling")
+# 
+# save_histories("lmm_multiple_noiseERtop",
+#                log_gamma = hist_noiseERtop,
+#                brier = hist_noiseERtop_brier,
+#                ttest = hist_noiseERtop_ttest,
+#                miscalibration = hist_noiseERtop_miscalibration)
 ```
