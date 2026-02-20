@@ -305,6 +305,39 @@ all_metrics |> purrr::imap_dfr(\(cases, package) {
 
 ```
 
+### Power table
+
+
+```{r}
+power_table <- rbind(
+  calculate_power_df_log_gamma(hist_pnb_ignore_all$log_gamma |> filter(variable == "log_lik")) |> mutate(scenario = "Poisson vs. NB, ignore all data", method = paste0("SBC for ", variable)),
+  calculate_power_df_log_gamma(hist_pnb_ignore_half$log_gamma |> filter(variable == "log_lik")) |> mutate(scenario = "Poisson vs. NB, ignore half of data", method = paste0("SBC for ", variable)),
+  
+  calculate_power_df_log_gamma(hist_pnb_vari$log_gamma |> filter(variable != "var_y")) |> mutate(scenario = c("Poisson vs. NB, log BF noise with SD = 2", rep("", n() -1)), method = paste0("SBC for ", variable)),
+  calculate_power_df_log_p(hist_pnb_vari$miscalibration) |> mutate(scenario = "", method = "Binary calibration"),
+  
+  
+  calculate_power_df_log_gamma(hist_pnb_bias$log_gamma |> filter(variable != "var_y")) |> mutate(scenario = c("Poisson vs. NB, log BF bias = +2", rep("", n() -1)), method = paste0("SBC for ", variable)),
+  calculate_power_df_log_p(hist_pnb_bias$miscalibration) |> mutate(scenario = "", method = "Binary calibration"),
+  calculate_power_df_log_p(hist_pnb_bias$ttest) |> mutate(scenario = "", method = "DAP"),
+  
+  calculate_power_df_log_gamma(hist_turtles_norm_bad$log_gamma |> filter(variable != "lp__")) |> mutate(scenario = c("Turtles, normalization constant divided by 2", rep("", n() -1)), method = paste0("SBC for ", variable)),
+  calculate_power_df_log_p(hist_turtles_norm_bad$miscalibration) |> mutate(scenario = "", method = "Binary calibration"),
+  calculate_power_df_log_p(hist_turtles_norm_bad$ttest) |> mutate(scenario = "", method = "DAP"),
+  
+  
+calculate_power_df_log_gamma(hist_ranef_constant$log_gamma |> filter(variable == "model")) |> mutate(scenario = "Presence of random effects, constant prior", method = paste0("SBC for ", variable)),
+  calculate_power_df_log_p(hist_ranef_constant$miscalibration) |> mutate(scenario = "", method = "Binary calibration"),
+  calculate_power_df_log_p(hist_ranef_constant$ttest) |> mutate(scenario = "", method = "DAP"),
+
+
+calculate_power_df_log_gamma(ttest_fixed$hist |> filter(variable == "model_sd_m1")) |> mutate(scenario = "JZS t-test, constant prior", method = paste0("SBC for ", variable))
+) |> 
+  transmute(Scenario = scenario, Method = method, `# of simulations (95% CI)` = paste0(first_power_sim_id, " (", first_power_sim_id_low, " -- ", first_power_sim_id_high, ")"))
+
+power_table
+```
+
 
 ## Appendix
 
