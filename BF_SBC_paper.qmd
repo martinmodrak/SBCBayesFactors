@@ -8,7 +8,7 @@ format:
     
 execute: 
   echo: FALSE
-  cache: true
+  cache: false
 fig-width: 7
 fig-height: 3
 editor: 
@@ -349,7 +349,7 @@ all_metrics |> purrr::imap_dfr(\(cases, package) {
 ### Power table
 
 
-```{r}
+```{r results = 'asis'}
 power_table <- rbind(
   calculate_power_df_log_gamma(hist_pnb_ignore_all$log_gamma |> filter(variable == "log_lik")) |> mutate(scenario = "Poisson vs. NB, ignore all data", method = "SBC"),
   calculate_power_df_log_gamma(hist_pnb_ignore_half$log_gamma |> filter(variable == "log_lik")) |> mutate(scenario = "Poisson vs. NB, ignore half of data", method = "SBC"),
@@ -387,7 +387,7 @@ calculate_power_df_log_gamma(hist_lmm_multiple_OKfew$log_gamma |> filter(variabl
 
 
 
-power_table
+power_table |> knitr::kable(format = "latex", booktabs = TRUE, caption = "My cap") |> print()
 ```
 
 
@@ -488,10 +488,13 @@ good_runs <- 20
 #| fig-cap: |
 #|   ECDF difference plots from SBC (A) and calibration diagrams (B, C) for Bayes factors when $\mathcal{M}_1: y \sim N(0, 1)$ and either $\mathcal{M}_0: y \sim \text{Cauchy}(0, 1)$ or $\mathcal{M}_0: y \sim N(2, 1)$.
 #| fig-width: 7
-#| fig-height: 2
+#| fig-height: 4
 res_good_cauchy <- load_precomputed_file(here::here("cache/good_cauchy.rds"), "good_check_examples.qmd")$result
 bp_good_cauchy <- binary_probabilities_from_stats(res_good_cauchy$stats)
 t_good_cauchy <- format_t_test_diff(t.test(bp_good_cauchy$prob, mu = 0.5))
+
+good_cauchy_metrics <- load_precomputed_file(here::here("cache/good_cauchy_metrics.rds"), "good_check_examples.qmd")
+good_norm2_metrics <- load_precomputed_file(here::here("cache/good_norm2_metrics.rds"), "good_check_examples.qmd")
 
 res_good_norm2 <- load_precomputed_file(here::here("cache/good_norm2.rds"), "good_check_examples.qmd")$result
 bp_good_norm2 <- binary_probabilities_from_stats(res_good_norm2$stats)
@@ -501,25 +504,20 @@ stats_good_combined <- rbind(
   res_good_cauchy$stats |> mutate(variable = "Model - Cauchy"),
   res_good_norm2$stats |> mutate(variable = "Model - Normal"))
 
-rel_good_cauchy <- my_reliability_diag(bp_good_cauchy)
-rel_good_norm2 <- my_reliability_diag(bp_good_norm2)
-
 tag_loc <- theme(plot.tag.location = "panel", plot.tag.position = c(-0.05,1.1))
 
-((plot_ecdf_diff(stats_good_combined) + facet_wrap(~variable, ncol = 1) + labs(tag = "A") + theme(legend.position = "bottom") + tag_loc)  | (rel_good_cauchy + labs(tag = "B - Cauchy") + tag_loc) | (rel_good_norm2 + labs(tag = "C - Normal") + tag_loc)) + plot_layout(axis_titles = "collect_x")
+((plot_ecdf_diff(stats_good_combined) + facet_wrap(~variable, ncol = 1) + labs(tag = "A") + theme(legend.position = "bottom") + tag_loc)  | (good_cauchy_metrics$reliability_diag + labs(tag = "B - Cauchy") + tag_loc) | (good_norm2_metrics$reliability_diag + labs(tag = "C - Normal") + tag_loc)) + plot_layout(axis_titles = "collect_x")
 
 n_sims_good <- nrow(bp_good_norm2)
 stopifnot(n_sims_good == nrow(bp_good_cauchy))
 ```
 
 ```{r}
-good_cauchy_metrics <- load_precomputed_file(here::here("cache/good_cauchy_metrics.rds"), "good_check_examples.qmd")
 cat("N sims Cauchy: ", good_cauchy_metrics$n_sims,"\n")
 report_success_metrics(good_cauchy_metrics,dap_digits = 4)
 ```
 
 ```{r}
-good_norm2_metrics <- load_precomputed_file(here::here("cache/good_norm2_metrics.rds"), "good_check_examples.qmd")
 cat("N sims norm2: ", good_norm2_metrics$n_sims, "\n")
 report_success_metrics(good_norm2_metrics,dap_digits = 4)
 ```
@@ -565,6 +563,7 @@ res_ttest_cauchy <- load_precomputed_file("cache/ttest_cauchy.rds", "ttestBF.qmd
 
 
 ```{r}
+#| cache: false
 mult_stats_by_prefix <- load_precomputed_file(here::here("cache/lmm_multiple_stats_by_prefix.rds"), "lmm_multiple.qmd")
 mult_bp_by_prefix <- purrr::map(mult_stats_by_prefix, binary_probabilities_from_stats)
 ```
@@ -578,9 +577,9 @@ mult_bp_by_prefix <- purrr::map(mult_stats_by_prefix, binary_probabilities_from_
 mult_bp_by_prefix_notop <- purrr::map(mult_bp_by_prefix, \(x) x |> filter(variable != "top_model") |> 
   mutate(variable = paste0(gsub("is_model", "BF", variable), "3"))) 
 
-compare_binary_probs(mult_bp_by_prefix_notop$bs, mult_bp_by_prefix_notop$OK, lab1 = "BF - Bridgesampling", lab2 = "BF - Savage-Dickey", scale = "BF", ref = "BF33") +
-compare_binary_probs(mult_bp_by_prefix_notop$bs, mult_bp_by_prefix_notop$stupid, lab1 = "BF - Bridgesampling", lab2 = "BF - Savage-Dickey - trick", scale = "BF", ref = "BF33") +
-compare_binary_probs(mult_bp_by_prefix_notop$bs, mult_bp_by_prefix_notop$OKfew, lab1 = "BF - Bridgesampling", lab2 = "BF - Savage-Dickey - few draws", scale = "BF", ref = "BF33") + 
+compare_binary_probs(mult_bp_by_prefix_notop$bs, mult_bp_by_prefix_notop$OK, lab1 = "BF - Bridgesampling", lab2 = "BF - Savage-Dickey", scale = "BF", ref = "BF33", rasterize = TRUE) +
+compare_binary_probs(mult_bp_by_prefix_notop$bs, mult_bp_by_prefix_notop$stupid, lab1 = "BF - Bridgesampling", lab2 = "BF - Savage-Dickey - trick", scale = "BF", ref = "BF33", rasterize = TRUE) +
+compare_binary_probs(mult_bp_by_prefix_notop$bs, mult_bp_by_prefix_notop$OKfew, lab1 = "BF - Bridgesampling", lab2 = "BF - Savage-Dickey - few draws", scale = "BF", ref = "BF33", rasterize = TRUE) + 
   plot_layout(ncol = 1) + plot_annotation(tag_levels = "A")
 ```
 

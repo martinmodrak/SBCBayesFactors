@@ -22,7 +22,7 @@ my_reliability_diag <- function(binary_probs, region.method = "resampling") {
   res
 }
 
-compare_binary_probs <- function(bp1, bp2, scale = c("prob", "BF"), lab1 = waiver(), lab2 = waiver(), title = NULL, reference = NULL) {
+compare_binary_probs <- function(bp1, bp2, scale = c("prob", "BF"), lab1 = waiver(), lab2 = waiver(), title = NULL, reference = NULL, rasterize = FALSE) {
   stopifnot(identical(bp1$sim_id, bp2$sim_id))
   stopifnot(identical(bp1$variable, bp2$variable))
   stopifnot(identical(bp1$simulated_value, bp2$simulated_value))
@@ -50,9 +50,15 @@ compare_binary_probs <- function(bp1, bp2, scale = c("prob", "BF"), lab1 = waive
       scale_x_log10(lab1) +
       scale_y_log10(lab2)
   }
+
+  main_geom <- geom_point(alpha = 0.03)
+  if(rasterize) {
+    main_geom <- ggrastr::rasterize(main_geom, dpi = 600)
+  }
+
   base_plot  + geom_abline(color = "orangered", intercept = 0, slope = 1) +
     #ggpointdensity::geom_pointdensity(adjust = 4)  +
-    geom_point(alpha = 0.03) +
+    main_geom +
     facet_wrap(~variable, nrow = 1) + coord_fixed() + scale_color_viridis_c("relative density") +  ggtitle(title)
 
 }
