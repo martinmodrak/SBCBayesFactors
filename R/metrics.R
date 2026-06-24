@@ -1,4 +1,19 @@
-calibration_metrics <- function(res, prob1_prior = 0.5) {
+binary_probabilities_from_stats_empirical <- function(stats) {
+  if (!("cdf_low" %in% names(stats)) || !("cdf_high" %in%
+                                           names(stats))) {
+    bp <- dplyr::filter(stats, SBC::attribute_present_stats(SBC::binary_var_attribute(), attributes)) |>
+      dplyr::mutate(prob = mean)
+
+  } else {
+    bp <- binary_probabilities_from_stats(stats)
+  }
+
+  bp
+}
+
+
+calibration_metrics <- function(res, prob1_prior = 0.5, include_reliability_diag = TRUE) {
+
   if(is.data.frame(res)) {
     stats <- res
   } else if(inherits(res, "SBC_results")) {
@@ -7,20 +22,27 @@ calibration_metrics <- function(res, prob1_prior = 0.5) {
     stop("Invalid res")
   }
   if(!("prob" %in% names(stats))) {
-    bp <- binary_probabilities_from_stats(stats)
+    bp <- binary_probabilities_from_stats_empirical(stats)
   } else {
     bp <- stats
   }
+  stopifnot(length(unique(bp$variable)) == 1)
+
   if(length(prob1_prior) == 1) {
     t_res <- t.test(bp$prob, mu = prob1_prior)
   } else if(all(prob1_prior %in% c(0,1))) {
-    stopifnot(length(prob1_prior) == nrow(stats))
-    t_res <- t.test(bp$prob, prob1_prior)
+    stopifnot(length(prob1_prior) == nrow(bp))
+    t_res <- t.test(bp$prob, prob1_prior, paired = TRUE)
   } else {
     stop("Invalid prob1_prior")
   }
   miscalibration_stats <- miscalibration_resampling_stats(bp$prob, bp$simulated_value)
-  reliability_diag <- my_reliability_diag(bp)
+  if(include_reliability_diag) {
+    reliability_diag <- my_reliability_diag(bp)
+  } else {
+    reliability_diag <- NULL
+  }
+
 
   max_rank <- unique(stats$max_rank)
   stopifnot(length(max_rank) == 1)
@@ -58,6 +80,25 @@ print.calibration_metrics <- function(m) {
   print(m$reliability_diag)
 }
 
+#' @export
+calibration_metrics_to_df <- function(m) {
+  stopifnot(length(m$log_gammas$log_gamma) == 1)
+  data.frame(
+    n_sims = m$n_sims,
+    DAP_method = m$t$method,
+    DAP_null_value = m$t$null.value,
+    DAP_CI_low = m$t$conf.int[1] - m$t$null.value,
+    DAP_CI_high = m$t$conf.int[2] - m$t$null.value,
+    DAP_p = m$t$p.value,
+    miscalibration = m$miscalibration_stats$observed,
+    miscalibration_Q = 1 - m$miscalibration_stats$alpha,
+    miscalibration_rejection_limit = m$miscalibration_stats$rejection_limit,
+    miscalibration_p = m$miscalibration_stats$p,
+    log_gamma = m$log_gammas$log_gamma,
+    log_gamma_limit = m$log_gamma_limit,
+    max_ecdf_diff = m$max_ecdf_diff)
+}
+
 
 report_success_metrics <- function(m, dap_digits = 3, miscalib_digits = 4, ecdf_diff_digits = 3, tex = FALSE) {
   my_format <- function(x, digits) {
@@ -86,4 +127,25 @@ success_metrics_for_table <- function(m, dap_digits = 4, miscalib_digits = 4, ec
     "Miscalibration Q95%" = my_format(m$miscalibration_stats$rejection_limit, miscalib_digits),
     "SBC sensitivivity" = my_format(m$max_ecdf_diff, ecdf_diff_digits)
   ) |> tibble::remove_rownames()
+}
+
+
+calibration_metrics_per_variable <- function(stats, prob1_prior_base = 0.5, include_reliability_diag = TRUE) {
+  vars <- unique(stats$variable)
+  bp_by_var <- purrr::map(vars, \(var) {
+    dplyr::filter(stats, variable == var)
+  })
+
+  names(bp_by_var) <- vars
+
+
+  furrr::future_map(bp_by_var, \(bp_sub) {
+    var <- unique(bp_sub$variable)
+    if (var == "top_model") {
+      prob1_prior <- bp_sub$simulated_value
+    } else {
+      prob1_prior <- prob1_prior_base
+    }
+    SBCBayesFactors:::calibration_metrics(bp_sub, prob1_prior, include_reliability_diag = include_reliability_diag)
+  }, .options = furrr::furrr_options(seed = TRUE))
 }

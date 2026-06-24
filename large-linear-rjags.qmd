@@ -1,0 +1,147 @@
+---
+title: "Large model space selection with rjags"
+format: html
+editor: visual
+---
+
+```{r setup, message=FALSE,warning=FALSE, results="hide"}
+library(SBC)
+library(ggplot2)
+library(bridgesampling)
+library(brms)
+library(dplyr)
+library(tidyr)
+library(calibrationband)
+
+library(future)
+
+
+cache_dir <- here::here("cache")
+if(!dir.exists(cache_dir)) {
+  dir.create(cache_dir)
+}
+
+
+
+
+
+theme_set(theme_minimal())
+pkgload::load_all()
+```
+
+
+```{r cluster, results='hide', warning=FALSE, message=FALSE}
+setup_cluster(max_server_workers = 90, max_local_workers = 10)
+```
+
+
+```{r}
+one_sim_generator <- function(N, P, rho = 0) {
+  beta <- rnorm(P, 0, 1)
+  m <- rbinom(P, size = 1, prob = 0.5)
+  betaMod <- beta * m
+  
+  cor_m <- matrix(rho, nrow = P, ncol = P)
+  diag(cor_m) <- 1
+  X <- mvtnorm::rmvnorm(N,sigma = cor_m)
+  X[,1] <- 1
+  
+  mu <- X %*% betaMod
+  
+  sd <- rexp(1)
+  
+  y <- rnorm(N, mu, sd)
+
+  list(
+    variables = list(beta = beta, m = m, sd = sd),
+    generated = list(X = X, n = N, p = P, y = y),
+    var_attributes = var_attributes(m = c(binary_var_attribute(), possibly_constant_var_attribute()))
+  )
+}
+
+dq <- derived_quantities(
+  model_index = as.numeric(paste0("0.", paste0(m, collapse = ""))),
+  graded_model_index = as.numeric(paste0(sum(m), paste0(m, collapse = ""))),
+  .var_attributes = var_attributes(model_index = possibly_constant_var_attribute(), graded_model_index = possibly_constant_var_attribute())
+)
+
+rho <- 0.6
+rho_cache_text <- if_else(rho == 0, "", paste0("_rho_", rho))
+```
+
+```{r}
+backend_small <- SBC_backend_rjags("linear-selection.jags", n.iter = 20000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd"))
+```
+
+
+```{r}
+set.seed(655223142)
+ds_small <- generate_datasets(SBC_generator_function(one_sim_generator, N = 50, P = 2, rho = rho, future.chunk.size = Inf), n_sims = 10000)
+```
+
+```{r}
+
+res_small <- compute_SBC(ds_small, backend_small, 
+                         keep_fits = FALSE,
+                         dquants = dq,
+                         cache_mode = "results",
+                         cache_location = file.path(cache_dir, paste0("SBC_linear_rjags_small_N", length(ds_small), rho_cache_text, ".rds")))
+```
+
+
+```{r}
+plot_ecdf_diff(res_small)
+
+bp_small <- binary_probabilities_from_stats_empirical(res_small$stats)
+
+
+metrics_small <- SBCBayesFactors:::calibration_metrics_per_variable(bp_small)
+purrr::iwalk(metrics_small, \(metrics, name) {cat("\n=====", name, "====\n"); print(metrics)})
+```
+
+
+```{r}
+backend_large <- SBC_backend_rjags("linear-selection.jags", n.iter = 20000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd"))
+```
+
+```{r}
+set.seed(2465223)
+ds_large <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 100, rho = rho, future.chunk.size = Inf), n_sims = 10)
+```
+
+
+```{r}
+res_large <- compute_SBC(ds_large, backend_large, 
+                         keep_fits = FALSE,
+                         dquants = dq,
+                         cache_mode = "results",
+                         cache_location = file.path(cache_dir, paste0("SBC_linear_rjags_large_N", length(ds_large), rho_cache_text, ".rds")))
+
+```
+
+
+```{r}
+plot_ecdf_diff(res_large, combine_variables = combine_array_elements)
+
+bp_large <- binary_probabilities_from_stats_empirical(res_large$stats)
+
+
+metrics_large <- SBCBayesFactors:::calibration_metrics_per_variable(bp_large, include_reliability_diag = FALSE)
+metrics_large_df <- purrr::map_dfr(metrics_large, calibration_metrics_to_df)
+
+metrics_large_df |> summarise(
+  min_DAP_p = min(DAP_p),
+  DAP_rejection = mean(DAP_p < 0.05),
+  min_miscalibration_p = min(miscalibration_p),
+  miscalibration_rejection = mean(miscalibration_p < 0.05),
+  min_log_gamma_m_threshold = min(log_gamma - log_gamma_limit),
+  log_gamma_rejection = mean(log_gamma < log_gamma_limit)
+)
+```
+
+```{r}
+bp_large |> filter(grepl("m\\[[0-9]\\]", variable)) |> plot_binary_calibration()
+hist(bp_large$prob)
+min(p.adjust(metrics_large_df$miscalibration_p, method = "BH"))
+```
+

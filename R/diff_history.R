@@ -218,7 +218,7 @@ compute_ttest_history_single <- function(probs, true_model, step = 1, expected =
 
     } else {
       if(expected == "avg_true") {
-        t <- t.test(probs_to_test, true_model[1:i])
+        t <- t.test(probs_to_test, true_model[1:i], paired = TRUE)
       } else {
         t <- t.test(probs_to_test, mu = expected)
       }

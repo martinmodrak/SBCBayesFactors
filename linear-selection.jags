@@ -1,0 +1,17 @@
+model{
+  # Likelihood
+  for(i in 1:p) {
+    betaMod[i] <- beta[i] * m[i]
+  }
+  mu <- X %*% betaMod
+  tau <- sd^-2
+  for(i in 1:n) {
+    y[i] ~ dnorm(mu[i], tau)
+  }
+  # Priors
+  for(i in 1:p) {
+    beta[i] ~ dnorm(0, 1)
+    m[i] ~ dbern(0.5)
+  }
+  sd ~ dexp(1)
+}
