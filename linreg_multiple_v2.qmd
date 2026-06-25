@@ -663,11 +663,13 @@ attr(results_savd$backend_diagnostics, "submodel_classes") <- attr(results_savd1
 results_savd
 
 stats_by_prefix <- list()
-for(prefix in prefixes) {
+prefixes_main <- c("bs", "OK", "stupid", "OKfew")
+for(prefix in prefixes_main) {
   prefix_regex <- paste0("^", prefix,"_")
   stats_by_prefix[[prefix]] <- results_savd$stats |> filter(grepl(prefix_regex, variable)) |> 
     mutate(variable = gsub(prefix_regex, "", variable))
 }
+saveRDS(stats_by_prefix, file.path(cache_dir, "lmm_multiple_stats_by_prefix.rds"))
 ```
 
 
