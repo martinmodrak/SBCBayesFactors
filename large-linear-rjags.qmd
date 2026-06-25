@@ -4,6 +4,8 @@ format: html
 editor: visual
 ---
 
+Ideas: change to uniform/Beta binomial to build dependence into the model indicators
+
 ```{r setup, message=FALSE,warning=FALSE, results="hide"}
 library(SBC)
 library(ggplot2)
@@ -65,7 +67,7 @@ dq <- derived_quantities(
   .var_attributes = var_attributes(model_index = possibly_constant_var_attribute(), graded_model_index = possibly_constant_var_attribute())
 )
 
-rho <- 0.6
+rho <- 0.8
 rho_cache_text <- if_else(rho == 0, "", paste0("_rho_", rho))
 ```
 
@@ -79,7 +81,7 @@ set.seed(655223142)
 ds_small <- generate_datasets(SBC_generator_function(one_sim_generator, N = 50, P = 2, rho = rho, future.chunk.size = Inf), n_sims = 10000)
 ```
 
-```{r}
+```{r small}
 
 res_small <- compute_SBC(ds_small, backend_small, 
                          keep_fits = FALSE,
@@ -101,22 +103,27 @@ purrr::iwalk(metrics_small, \(metrics, name) {cat("\n=====", name, "====\n"); pr
 
 
 ```{r}
-backend_large <- SBC_backend_rjags("linear-selection.jags", n.iter = 20000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd"))
+backend_large <- SBC_backend_rjags("linear-selection.jags", n.iter = 
+                                     400000, n.burnin = 50000, n.chains = 4, thin = 100, variable.names = c("beta", "m", "sd"))
 ```
 
 ```{r}
 set.seed(2465223)
-ds_large <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 100, rho = rho, future.chunk.size = Inf), n_sims = 10)
+ds_large <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 100, rho = rho, future.chunk.size = Inf), n_sims = 500)
 ```
 
 
-```{r}
-res_large <- compute_SBC(ds_large, backend_large, 
+```{r large-all}
+res_large_all <- compute_SBC_cache_blocks(ds_large, backend_large, 
                          keep_fits = FALSE,
                          dquants = dq,
-                         cache_mode = "results",
-                         cache_location = file.path(cache_dir, paste0("SBC_linear_rjags_large_N", length(ds_large), rho_cache_text, ".rds")))
+                         cache_prefix = file.path(cache_dir, paste0("SBC_linear_rjags_large_N", length(ds_large), rho_cache_text,"_")),
+                         block_size = 20)
 
+```
+
+```{r}
+res_large <- res_large[res_large$default_diagnostics$max_rhat < 1.01 & res_large$default_diagnostics$min_ess_to_rank >= 0.5]
 ```
 
 
@@ -142,6 +149,16 @@ metrics_large_df |> summarise(
 ```{r}
 bp_large |> filter(grepl("m\\[[0-9]\\]", variable)) |> plot_binary_calibration()
 hist(bp_large$prob)
-min(p.adjust(metrics_large_df$miscalibration_p, method = "BH"))
+min(p.adjust(metrics_large_df$miscalibration_p, method = "holm"))
+min(p.adjust(metrics_large_df$DAP_p, method = "holm"))
+hist(metrics_large_df$DAP_p)
+```
+
+```{r}
+res_large$stats |> filter(variable == "model_index")
+```
+
+```{r}
+test <- SBC_fit(backend_large, ds_large$generated[[11]], cores = 4)
 ```
 

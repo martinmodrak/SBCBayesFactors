@@ -47,11 +47,14 @@ calibration_metrics <- function(res, prob1_prior = 0.5, include_reliability_diag
   max_rank <- unique(stats$max_rank)
   stopifnot(length(max_rank) == 1)
 
-  n_sims <- nrow(stats)
   log_gammas <- stats |> dplyr::group_by(variable) |>
     dplyr::filter(all(!is.na(rank))) |>
-    dplyr::summarise(log_gamma = SBCBayesFactors:::log_gamma_stat(rank, !!max_rank))
+    dplyr::summarise(log_gamma = SBCBayesFactors:::log_gamma_stat(rank, !!max_rank),
+                     n_sims = n())
 
+
+  n_sims <- unique(log_gammas$n_sims)
+  stopifnot(length(n_sims) == 1)
 
   gamma_limit <- SBC:::adjust_gamma(N = n_sims, L = 1, K = max_rank + 1)
   max_ecdf_diff <- max(abs(qbinom(c(gamma_limit / 2, 1 - gamma_limit), size = n_sims, prob = 0.5) / n_sims - 0.5))

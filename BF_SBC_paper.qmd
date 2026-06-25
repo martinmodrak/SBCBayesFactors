@@ -87,7 +87,7 @@ hist_binary_flip <- load_histories("binary_flip", "binary_example.qmd")
 
 ```{r fig-binary, message=FALSE}
 #| fig-cap: Histories of check statistics for the binary model and the correct posterior (A - C) and flipped indices (D - F). The horizontal blue line marks rejecting the hypothesis of calibration with 5% false positive rate. The vertical orange line marks the number of simulations when the check first attains 80% power. We see that SBC as well as miscalibration identify the problem very quickly, while data-averaged posterior (DAP) does not diagnose it (the rare low p-values arise from using a t-test on what is essentially binary data). Note that the p-values from the miscalibration test are capped at $\frac{1}{2000}$ due to the number of bootstrap samples used.
-#| fig-height: 3.5
+#| fig-height: 3
 #| fig-width: 7
 
 hist_binary_correct <- load_histories("binary_correct", "binary_example.qmd")
@@ -125,6 +125,23 @@ hist_pnb_ignore_half <- load_histories("pnb_ignore_half", "poisson_nb_example.qm
 (plot_log_gamma_histories(hist_pnb_ignore_half$log_gamma) + labs(tag = "B) Ignore half of the data (10x simulations)") + tag_theme)  + 
   plot_layout(ncol = 1, axis_titles = "collect_x")
 ```
+
+Combined plot for space savings
+
+```{r fig-flipped-pnb-ignore}
+#| fig-width: 7
+#| fig-height: 3
+
+ ((((plot_log_gamma_histories(hist_binary_flip$log_gamma) + labs(tag = "A) Flipped - SBC") + tag_theme + theme(axis.title.x = element_blank())) + 
+ (plot_log_p_histories(hist_binary_flip$miscalibration) + labs(tag = "B) Flipped - Bin. calib.") + tag_theme + theme(axis.title.x = element_blank())) +
+ (plot_log_p_histories(hist_binary_flip$ttest) + labs(tag = "C) Flipped - DAP") + tag_theme + theme(axis.title.x = element_blank()))
+) + plot_layout(ncol = 3, widths = c(2,1,1)) ) /
+
+((plot_log_gamma_histories(hist_pnb_ignore_all$log_gamma) + labs(tag = "D) Ignore all data - SBC") + tag_theme) +
+(plot_log_gamma_histories(hist_pnb_ignore_half$log_gamma) + scale_x_continuous("Number of simulations", breaks = c(0, 500, 1000)) + labs(tag = "E) Ignore half of the data (10x simulations) - SBC") + tag_theme) ) + 
+  plot_layout(ncol = 1, axis_titles = "collect_x"))
+```
+
 
 ```{r fig-pnb-noise-bias}
 #| fig-width: 7
@@ -228,6 +245,23 @@ hist_ranef_constant$log_gamma <- hist_ranef_constant$log_gamma |>
 (plot_log_p_histories(hist_ranef_constant$ttest)  + labs(tag = "C) DAP") + tag_theme))
 #TODO: uncertainty about red line?
 ```
+
+
+Combination of the two previous plots for reduced size
+
+```{r fig-turtles-bad-ranef-constant}
+#| fig-cap: Histories of check statistics for random effect model using constant intercept and standard deviation. 
+#| fig-width: 7
+#| fig-height: 6
+(plot_log_gamma_histories(hist_turtles_norm_bad$log_gamma) + labs(tag = "A) Turtles - SBC") + tag_theme + theme(axis.title.y = element_text(size = 9))) / (
+(plot_log_p_histories(hist_turtles_norm_bad$miscalibration) + labs(tag = "B) Turtles - Bin. calib.") + tag_theme) + 
+(plot_log_p_histories(hist_turtles_norm_bad$ttest)  + labs(tag = "C) Turtles - DAP") + tag_theme) ) /
+
+(plot_log_gamma_histories(hist_ranef_constant$log_gamma)  + labs(tag = "D) Ranef - SBC") + tag_theme+ theme(axis.title.y = element_text(size = 9)))/ (
+(plot_log_p_histories(hist_ranef_constant$miscalibration)  + labs(tag = "E) Ranef - Bin. calib.") + tag_theme) + 
+(plot_log_p_histories(hist_ranef_constant$ttest)  + labs(tag = "F) Ranef - DAP") + tag_theme))
+```
+
 
 ```{r fig-ranef-post}
 #| fig-cap: Result of calibration checks for random effect model using posterior SBC. A) empirical CDF difference plots for model parameters (g_Subject --- standard deviation of the random intercepts, model --- model index, mu --- overall intercept, sig2 --- residual variance, Subject --- merged plot for all random intercepts, x1 --- fixed effect) B) calibration plot.
