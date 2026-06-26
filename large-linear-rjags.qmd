@@ -33,14 +33,15 @@ pkgload::load_all()
 
 
 ```{r cluster, results='hide', warning=FALSE, message=FALSE}
-setup_cluster(max_server_workers = 90, max_local_workers = 10)
+setup_cluster(max_server_workers = 100, max_local_workers = 10)
 ```
 
 
 ```{r}
-one_sim_generator <- function(N, P, rho = 0) {
+one_sim_generator <- function(N, P, rho = 0, shape1 = 1, shape2 = 1) {
   beta <- rnorm(P, 0, 1)
-  m <- rbinom(P, size = 1, prob = 0.5)
+  prob <- rbeta(1, shape1, shape2)
+  m <- rbinom(P, size = 1, prob = prob)
   betaMod <- beta * m
   
   cor_m <- matrix(rho, nrow = P, ncol = P)
@@ -55,8 +56,8 @@ one_sim_generator <- function(N, P, rho = 0) {
   y <- rnorm(N, mu, sd)
 
   list(
-    variables = list(beta = beta, m = m, sd = sd),
-    generated = list(X = X, n = N, p = P, y = y),
+    variables = list(beta = beta, m = m, sd = sd, prob = prob),
+    generated = list(X = X, n = N, p = P, y = y, shape1 = shape1, shape2 = shape2),
     var_attributes = var_attributes(m = c(binary_var_attribute(), possibly_constant_var_attribute()))
   )
 }
@@ -68,7 +69,9 @@ dq <- derived_quantities(
 )
 
 rho <- 0.8
-rho_cache_text <- if_else(rho == 0, "", paste0("_rho_", rho))
+shape1 <- 1
+shape2 <- 1
+param_cache_text <- paste0(if_else(rho == 0, "", paste0("_rho_", rho)), "_sh_", shape1, "_", shape2)
 ```
 
 ```{r}
@@ -78,7 +81,7 @@ backend_small <- SBC_backend_rjags("linear-selection.jags", n.iter = 20000, n.bu
 
 ```{r}
 set.seed(655223142)
-ds_small <- generate_datasets(SBC_generator_function(one_sim_generator, N = 50, P = 2, rho = rho, future.chunk.size = Inf), n_sims = 10000)
+ds_small <- generate_datasets(SBC_generator_function(one_sim_generator, N = 50, P = 2, rho = rho, shape1 = shape1, shape2 = shape2, future.chunk.size = Inf), n_sims = 10000)
 ```
 
 ```{r small}
@@ -87,7 +90,7 @@ res_small <- compute_SBC(ds_small, backend_small,
                          keep_fits = FALSE,
                          dquants = dq,
                          cache_mode = "results",
-                         cache_location = file.path(cache_dir, paste0("SBC_linear_rjags_small_N", length(ds_small), rho_cache_text, ".rds")))
+                         cache_location = file.path(cache_dir, paste0("SBC_linear_rjags_small_N", length(ds_small), param_cache_text, ".rds")))
 ```
 
 
@@ -109,7 +112,7 @@ backend_large <- SBC_backend_rjags("linear-selection.jags", n.iter =
 
 ```{r}
 set.seed(2465223)
-ds_large <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 100, rho = rho, future.chunk.size = Inf), n_sims = 500)
+ds_large <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 100, rho = rho, shape1 = shape1, shape2 = shape2, future.chunk.size = Inf), n_sims = 500)
 ```
 
 
@@ -117,7 +120,7 @@ ds_large <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, 
 res_large_all <- compute_SBC_cache_blocks(ds_large, backend_large, 
                          keep_fits = FALSE,
                          dquants = dq,
-                         cache_prefix = file.path(cache_dir, paste0("SBC_linear_rjags_large_N", length(ds_large), rho_cache_text,"_")),
+                         cache_prefix = file.path(cache_dir, paste0("SBC_linear_rjags_large", param_cache_text,"_")),
                          block_size = 20)
 
 ```
@@ -159,6 +162,25 @@ res_large$stats |> filter(variable == "model_index")
 ```
 
 ```{r}
-test <- SBC_fit(backend_large, ds_large$generated[[11]], cores = 4)
+set.seed(8555855)
+ds_large_test <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 100, rho = rho, future.chunk.size = Inf), n_sims = 10)
+```
+
+
+```{r large-all}
+res_large_test <- compute_SBC(ds_large_test, backend_large, 
+                         keep_fits = TRUE,
+                         dquants = dq,
+                         cache_mode  = "results",
+                         cache_location = file.path(cache_dir, paste0("SBC_linear_rjags_large_test_", param_cache_text,".rds")))
+
+```
+
+```{r}
+# Distribution of number of samples belonging to the top model
+
+res_large_test$fits |> purrr::map_int(\(fit) {
+full_model_samples <- as.matrix(fit$samples)[, paste0("m[", 1:100, "]")] |> apply(MARGIN = 1, FUN = paste0, collapse = "")
+max(table(full_model_samples))})
 ```
 

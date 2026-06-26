@@ -11,7 +11,8 @@ model{
   # Priors
   for(i in 1:p) {
     beta[i] ~ dnorm(0, 1)
-    m[i] ~ dbern(0.5)
+    m[i] ~ dbern(prob)
   }
   sd ~ dexp(1)
+  prob ~ dbeta(shape1, shape2)
 }
