@@ -12,6 +12,7 @@ library(BayesFactor)
 library(ggplot2)
 library(dplyr)
 library(rstan)
+library(future)
 
 options(SBC.min_chunk_size = 50)
 rstan_options(auto_write = TRUE)

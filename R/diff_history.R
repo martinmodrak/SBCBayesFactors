@@ -218,7 +218,7 @@ compute_ttest_history_single <- function(probs, true_model, step = 1, expected =
 
     } else {
       if(expected == "avg_true") {
-        t <- t.test(probs_to_test, true_model[1:i])
+        t <- t.test(probs_to_test, true_model[1:i], paired = TRUE)
       } else {
         t <- t.test(probs_to_test, mu = expected)
       }
@@ -412,19 +412,53 @@ compute_bootstrapped_histories <- function(stats, history_length, n_histories, h
   # do.call(rbind, res_df)
 }
 
+# upper -> upper bound of the interval for iterations, so the point where the lower part of CI is above the power target
+power_with_uncertainty_target <- function(n_histories, power_target, upper, alpha = 0.05) {
+  if(upper) {
+    q <- alpha / 2
+    alpha0 <- 0
+    beta0 <- 1
+  } else {
+    q <- 1 - alpha / 2
+    alpha0 <- 1
+    beta0 <- 0
+  }
+  ur <- uniroot(function(x) {
+    qbeta(q, alpha0 + x, beta0 + n_histories - x) - power_target
+  },
+  interval = c(0, n_histories))
 
-plot_log_gamma_histories <- function(histories_df, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
+  ceiling(ur$root) / n_histories
+}
+
+calculate_power_df_log_gamma <- function(histories_df, power_limit = 0.8) {
+  histories_df %>% group_by(sim_id, variable) %>%
+    summarise(power = mean(log_gamma < log_gamma_threshold),
+              n_histories = length(unique(history_id)),
+              .groups = "drop") %>%
+    group_by(variable) %>%
+    summarise(
+      n_histories = unique(n_histories),
+      power_target = power_limit,
+      power_target_low = power_with_uncertainty_target(n_histories, power_limit, upper = FALSE),
+      power_target_high = power_with_uncertainty_target(n_histories, power_limit, upper = TRUE),
+      first_power_sim_id = min(c(Inf,sim_id[power >= power_limit])),
+      first_power_sim_id_low = min(c(Inf,sim_id[power >= power_target_low])),
+      first_power_sim_id_high = min(c(Inf,sim_id[power >= power_target_high])),
+    ) |>
+    select(- n_histories)
+}
+
+plot_log_gamma_histories <- function(histories_df, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL, x_labels = waiver(), keep_order = FALSE) {
   alpha <- sqrt(1/length(unique(histories_df$history_id)))
 
-  variable_order <- as.integer(factor(histories_df$variable))
-  variable_order[histories_df$variable == "model"] <- -1
-  histories_df$variable <- forcats::fct_reorder(histories_df$variable, variable_order)
+  if(!keep_order) {
+    variable_order <- as.integer(factor(histories_df$variable))
+    variable_order[histories_df$variable == "model"] <- -1
+    histories_df$variable <- forcats::fct_reorder(histories_df$variable, variable_order)
+  }
 
-  power_df <- histories_df |> group_by(sim_id, variable) |>
-    summarise(power = mean(log_gamma < log_gamma_threshold), .groups = "drop") |>
-    filter(power >= 0.8) |>
-    group_by(variable) |>
-    summarise(first_power_sim_id = min(c(Inf,sim_id)))
+  power_df <- calculate_power_df_log_gamma(histories_df) |> filter(is.finite(first_power_sim_id))
 
 
   histories_df |>
@@ -434,7 +468,7 @@ plot_log_gamma_histories <- function(histories_df, min_sim_id = 0, wrap_cols = 4
     geom_line(alpha = alpha) +
     geom_hline(yintercept = 0, color = "lightblue", linewidth = 1) +
     scale_y_continuous("Log γ - Threshold", limits = ylim) +
-    scale_x_continuous("Number of simulations") +
+    scale_x_continuous("Number of simulations", labels = x_labels) +
     facet_wrap(~variable, ncol = wrap_cols)
 }
 
@@ -453,7 +487,26 @@ log_p_labels <- function(breaks) {
   signif(exp(breaks), digits = 3)
 }
 
-plot_log_p_histories <- function(histories_df, title = NULL, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL) {
+calculate_power_df_log_p <- function(histories_df, power_limit = 0.8) {
+  histories_df %>% group_by(sim_id, variable) %>%
+    summarise(power = mean(log_p < log(0.05)),
+              n_histories = length(unique(history_id)),
+              .groups = "drop") %>%
+    group_by(variable) %>%
+    summarise(
+      n_histories = unique(n_histories),
+      power_target = power_limit,
+      power_target_low = power_with_uncertainty_target(n_histories, power_limit, upper = FALSE),
+      power_target_high = power_with_uncertainty_target(n_histories, power_limit, upper = TRUE),
+      first_power_sim_id = min(c(Inf,sim_id[power >= power_limit])),
+      first_power_sim_id_low = min(c(Inf,sim_id[power >= power_target_low])),
+      first_power_sim_id_high = min(c(Inf,sim_id[power >= power_target_high])),
+    ) |>
+    select(- n_histories)
+
+}
+
+plot_log_p_histories <- function(histories_df, title = NULL, min_sim_id = 0, wrap_cols = 4, variables_regex = NULL, ylim = NULL, x_labels = waiver()) {
   alpha <- sqrt(1/length(unique(histories_df$history_id)))
 
   if(is.null(title)) {
@@ -471,12 +524,7 @@ plot_log_p_histories <- function(histories_df, title = NULL, min_sim_id = 0, wra
     histories_df$variable <- forcats::fct_reorder(histories_df$variable, variable_order)
   }
 
-  power_df <- histories_df |> group_by(sim_id, variable) |>
-    summarise(power = mean(log_p < log(0.05)), .groups = "drop") |>
-    filter(power >= 0.8) |>
-    group_by(variable) |>
-    summarise(first_power_sim_id = min(c(Inf,sim_id)))
-
+  power_df <- calculate_power_df_log_p(histories_df) |> filter(is.finite(first_power_sim_id))
 
   histories_df |>
     filter(sim_id >= min_sim_id) |>
@@ -485,7 +533,7 @@ plot_log_p_histories <- function(histories_df, title = NULL, min_sim_id = 0, wra
     geom_line(alpha = alpha) +
     geom_hline(yintercept = log(0.05), color = "lightblue", linewidth = 1) +
     scale_y_continuous(y_label, limits = ylim, breaks = log_p_breaks, labels = log_p_labels) +
-    scale_x_continuous("Number of simulations") +
+    scale_x_continuous("Number of simulations", labels = x_labels) +
     facet_wrap(~variable, ncol = wrap_cols)
 }
 
