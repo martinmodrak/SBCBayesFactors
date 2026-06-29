@@ -1,7 +1,7 @@
 ---
 title: "Large model space selection with rjags"
 format: html
-editor: visual
+editor: source
 ---
 
 Ideas: change to uniform/Beta binomial to build dependence into the model indicators
@@ -64,8 +64,9 @@ one_sim_generator <- function(N, P, rho = 0, shape1 = 1, shape2 = 1) {
 
 dq <- derived_quantities(
   model_index = as.numeric(paste0("0.", paste0(m, collapse = ""))),
-  graded_model_index = as.numeric(paste0(sum(m), paste0(m, collapse = ""))),
-  .var_attributes = var_attributes(model_index = possibly_constant_var_attribute(), graded_model_index = possibly_constant_var_attribute())
+  graded_model_index = as.numeric(paste0(sum(m), ".", paste0(m, collapse = ""))),
+  betaShift = dplyr::if_else(m == 1, beta, -10),
+  .var_attributes = var_attributes(model_index = possibly_constant_var_attribute(), graded_model_index = possibly_constant_var_attribute(), betaShift = possibly_constant_var_attribute())
 )
 
 rho <- 0.8
@@ -75,7 +76,7 @@ param_cache_text <- paste0(if_else(rho == 0, "", paste0("_rho_", rho)), "_sh_", 
 ```
 
 ```{r}
-backend_small <- SBC_backend_rjags("linear-selection.jags", n.iter = 20000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd"))
+backend_small <- SBC_backend_rjags("linear-selection.jags", n.iter = 20000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd", "prob"))
 ```
 
 
@@ -93,7 +94,6 @@ res_small <- compute_SBC(ds_small, backend_small,
                          cache_location = file.path(cache_dir, paste0("SBC_linear_rjags_small_N", length(ds_small), param_cache_text, ".rds")))
 ```
 
-
 ```{r}
 plot_ecdf_diff(res_small)
 
@@ -103,6 +103,7 @@ bp_small <- binary_probabilities_from_stats_empirical(res_small$stats)
 metrics_small <- SBCBayesFactors:::calibration_metrics_per_variable(bp_small)
 purrr::iwalk(metrics_small, \(metrics, name) {cat("\n=====", name, "====\n"); print(metrics)})
 ```
+
 
 
 ```{r}
@@ -115,20 +116,18 @@ set.seed(2465223)
 ds_large <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 100, rho = rho, shape1 = shape1, shape2 = shape2, future.chunk.size = Inf), n_sims = 500)
 ```
 
-
 ```{r large-all}
 res_large_all <- compute_SBC_cache_blocks(ds_large, backend_large, 
                          keep_fits = FALSE,
                          dquants = dq,
                          cache_prefix = file.path(cache_dir, paste0("SBC_linear_rjags_large", param_cache_text,"_")),
-                         block_size = 20)
+                         block_size = 100)
 
 ```
 
 ```{r}
-res_large <- res_large[res_large$default_diagnostics$max_rhat < 1.01 & res_large$default_diagnostics$min_ess_to_rank >= 0.5]
+res_large <- res_large_all[res_large_all$default_diagnostics$max_rhat < 1.01 & res_large_all$default_diagnostics$min_ess_to_rank >= 0.5]
 ```
-
 
 ```{r}
 plot_ecdf_diff(res_large, combine_variables = combine_array_elements)
@@ -136,7 +135,7 @@ plot_ecdf_diff(res_large, combine_variables = combine_array_elements)
 bp_large <- binary_probabilities_from_stats_empirical(res_large$stats)
 
 
-metrics_large <- SBCBayesFactors:::calibration_metrics_per_variable(bp_large, include_reliability_diag = FALSE)
+metrics_large <- SBCBayesFactors:::calibration_metrics_per_variable(bp_large, include_reliability_diag = FALSE, prob1_prior_base = "avg_true")
 metrics_large_df <- purrr::map_dfr(metrics_large, calibration_metrics_to_df)
 
 metrics_large_df |> summarise(
@@ -150,6 +149,7 @@ metrics_large_df |> summarise(
 ```
 
 ```{r}
+hist(res_large_all$stats |> filter(variable == "graded_model_index") |> pull(simulated_value) / 1e100, breaks = seq(0, 101, by = 1))
 bp_large |> filter(grepl("m\\[[0-9]\\]", variable)) |> plot_binary_calibration()
 hist(bp_large$prob)
 min(p.adjust(metrics_large_df$miscalibration_p, method = "holm"))
@@ -163,9 +163,8 @@ res_large$stats |> filter(variable == "model_index")
 
 ```{r}
 set.seed(8555855)
-ds_large_test <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 100, rho = rho, future.chunk.size = Inf), n_sims = 10)
+ds_large_test <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 100, rho = rho, future.chunk.size = Inf), n_sims = 100)
 ```
-
 
 ```{r large-all}
 res_large_test <- compute_SBC(ds_large_test, backend_large, 
@@ -183,4 +182,5 @@ res_large_test$fits |> purrr::map_int(\(fit) {
 full_model_samples <- as.matrix(fit$samples)[, paste0("m[", 1:100, "]")] |> apply(MARGIN = 1, FUN = paste0, collapse = "")
 max(table(full_model_samples))})
 ```
+
 

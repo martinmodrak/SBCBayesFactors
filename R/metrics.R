@@ -50,7 +50,7 @@ calibration_metrics <- function(res, prob1_prior = 0.5, include_reliability_diag
   log_gammas <- stats |> dplyr::group_by(variable) |>
     dplyr::filter(all(!is.na(rank))) |>
     dplyr::summarise(log_gamma = SBCBayesFactors:::log_gamma_stat(rank, !!max_rank),
-                     n_sims = n())
+                     n_sims = dplyr::n())
 
 
   n_sims <- unique(log_gammas$n_sims)
@@ -144,7 +144,7 @@ calibration_metrics_per_variable <- function(stats, prob1_prior_base = 0.5, incl
 
   furrr::future_map(bp_by_var, \(bp_sub) {
     var <- unique(bp_sub$variable)
-    if (var == "top_model") {
+    if (var == "top_model" || prob1_prior_base == "avg_true") {
       prob1_prior <- bp_sub$simulated_value
     } else {
       prob1_prior <- prob1_prior_base
