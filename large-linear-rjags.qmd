@@ -76,13 +76,39 @@ param_cache_text <- paste0(if_else(rho == 0, "", paste0("_rho_", rho)), "_sh_", 
 ```
 
 ```{r}
-backend_small <- SBC_backend_rjags("linear-selection.jags", n.iter = 20000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd", "prob"))
+backend_rjags_with_top <- function(...) {
+  res <- SBC_backend_rjags(...)
+  class(res) <- c(class(res), "my_top_model")
+  res
+}
+
+SBC_fit_specific_dquants.my_top_model <- function(fit) {
+  # Working with string representation of the models as I may need over 100bits of information so ints/doubles are not enough
+  samples_matrix <- as.matrix(fit$samples)
+  model_samples_matrix <- samples_matrix[, grepl("^m\\[[0-9]*\\]$", colnames(samples_matrix))]
+  full_model_samples <-apply(model_samples_matrix, MARGIN = 1, FUN = paste0, collapse = "")
+  full_model_table <- table(full_model_samples)
+  max_entry_id <- which.max(full_model_table)
+  max_model_string <- names(full_model_table)[max_entry_id]
+  max_model_vector <- stringr::str_split_1(max_model_string, pattern = "")
+  dq_string <- paste0("m[", 1:length(max_model_vector), "] == ", max_model_vector, collapse = " && ")
+  derived_quantities(top_model = rlang::parse_quo(dq_string, rlang::current_env()),
+                     .var_attributes = var_attributes(top_model = c(possibly_constant_var_attribute(), binary_var_attribute())))
+}
+
+my_globals <- c("SBC_fit_specific_dquants.my_top_model")
+```
+
+
+```{r}
+backend_small <- backend_rjags_with_top("linear-selection.jags", n.iter = 20000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd", "prob"))
+
 ```
 
 
 ```{r}
 set.seed(655223142)
-ds_small <- generate_datasets(SBC_generator_function(one_sim_generator, N = 50, P = 2, rho = rho, shape1 = shape1, shape2 = shape2, future.chunk.size = Inf), n_sims = 10000)
+ds_small <- generate_datasets(SBC_generator_function(one_sim_generator, N = 50, P = 2, rho = rho, shape1 = shape1, shape2 = shape2, future.chunk.size = Inf), n_sims = 10)
 ```
 
 ```{r small}
@@ -90,6 +116,7 @@ ds_small <- generate_datasets(SBC_generator_function(one_sim_generator, N = 50, 
 res_small <- compute_SBC(ds_small, backend_small, 
                          keep_fits = FALSE,
                          dquants = dq,
+                         globals = my_globals,
                          cache_mode = "results",
                          cache_location = file.path(cache_dir, paste0("SBC_linear_rjags_small_N", length(ds_small), param_cache_text, ".rds")))
 ```
@@ -163,7 +190,7 @@ res_large$stats |> filter(variable == "model_index")
 
 ```{r}
 set.seed(8555855)
-ds_large_test <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 100, rho = rho, future.chunk.size = Inf), n_sims = 100)
+ds_large_test <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 100, rho = rho, shape1 = shape1, shape2 = shape2, future.chunk.size = Inf), n_sims = 10)
 ```
 
 ```{r large-all}
