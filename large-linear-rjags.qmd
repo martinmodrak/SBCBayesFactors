@@ -9,8 +9,6 @@ Ideas: change to uniform/Beta binomial to build dependence into the model indica
 ```{r setup, message=FALSE,warning=FALSE, results="hide"}
 library(SBC)
 library(ggplot2)
-library(bridgesampling)
-library(brms)
 library(dplyr)
 library(tidyr)
 library(calibrationband)
@@ -56,18 +54,23 @@ one_sim_generator <- function(N, P, rho = 0, shape1 = 1, shape2 = 1) {
   y <- rnorm(N, mu, sd)
 
   list(
-    variables = list(beta = beta, m = m, sd = sd, prob = prob),
+    variables = list(beta = beta, m = m, m_bad = m, sd = sd, prob = prob),
     generated = list(X = X, n = N, p = P, y = y, shape1 = shape1, shape2 = shape2),
-    var_attributes = var_attributes(m = c(binary_var_attribute(), possibly_constant_var_attribute()))
+    var_attributes = var_attributes(m = c(binary_var_attribute(), possibly_constant_var_attribute()), m_bad = c(binary_var_attribute(), possibly_constant_var_attribute()))
   )
 }
 
 dq <- derived_quantities(
   log_lik = sum(dnorm(y, X %*% (beta * m),   sd, log = TRUE)),
+  log_lik_bad = sum(dnorm(y, X %*% (beta * m_bad),   sd, log = TRUE)),
   model_index = as.numeric(paste0("0.", paste0(m, collapse = ""))),
+  model_index_bad = as.numeric(paste0("0.", paste0(m_bad, collapse = ""))),
   graded_model_index = as.numeric(paste0(sum(m), ".", paste0(m, collapse = ""))),
+  graded_model_index_bad = as.numeric(paste0(sum(m_bad), ".", paste0(m_bad, collapse = ""))),
   betaShift = dplyr::if_else(m == 1, beta, -10),
-  .var_attributes = var_attributes(model_index = possibly_constant_var_attribute(), graded_model_index = possibly_constant_var_attribute(), betaShift = possibly_constant_var_attribute())
+  betaShift_bad = dplyr::if_else(m_bad == 1, beta, -10),
+  .var_attributes = var_attributes(model_index = possibly_constant_var_attribute(),model_index_bad = possibly_constant_var_attribute(), graded_model_index = possibly_constant_var_attribute(), 
+                                   graded_model_index_bad = possibly_constant_var_attribute(), betaShift = possibly_constant_var_attribute(), betaShift_bad = possibly_constant_var_attribute())
 )
 
 rho <- 0.8
@@ -77,23 +80,42 @@ param_cache_text <- paste0(if_else(rho == 0, "", paste0("_rho_", rho)), "_sh_", 
 ```
 
 ```{r}
-backend_rjags_with_top <- function(...) {
+backend_rjags_wrapped <- function(..., n_flip = 0) {
   res <- SBC_backend_rjags(...)
-  class(res) <- c("my_top_model", class(res))
+  class(res) <- c("backend_rjags_wrapped", class(res))
+  res$n_flip <- n_flip
   res
 }
 
-SBC_fit.my_top_model <- function(...) {
+SBC_fit.backend_rjags_wrapped <- function(backend, ...) {
   res <- NextMethod()
-  class(res) <- c(class(res), "my_top_model_fit")
+  class(res) <- c("backend_rjags_wrapped_fit", class(res))
+  res$n_flip <- backend$n_flip
   res
 }
 
-SBC_fit_specific_dquants.my_top_model_fit <- function(fit) {
+
+SBC_fit_to_draws_matrix.backend_rjags_wrapped_fit <- function(fit) {
+  res <- NextMethod()
+  n_flip <- fit$n_flip
+  
+  bad_draws <- posterior::as_draws_array(res)[, , grepl("^m\\[[0-9]*\\]$", posterior::variables(res))]
+  bad_draws <- apply(bad_draws, MARGIN = c(1,2), function(row) {
+    indices_to_flip <- sample.int(length(row), size = n_flip)
+    row[indices_to_flip] <- 1 - row[indices_to_flip]
+    row
+  })
+  bad_draws <- posterior::as_draws_matrix(posterior::as_draws_array(aperm(bad_draws, c("iteration", "chain", "variable"))))
+  posterior::variables(bad_draws) <- sub("m", "m_bad", posterior::variables(bad_draws))
+  posterior::bind_draws(res, bad_draws)
+}
+
+
+SBC_fit_specific_dquants.backend_rjags_wrapped_fit <- function(fit) {
   # Working with string representation of the models as I may need over 100bits of information so ints/doubles are not enough
-  samples_matrix <- as.matrix(fit$samples)
+  samples_matrix <- SBC_fit_to_draws_matrix(fit)
   model_samples_matrix <- samples_matrix[, grepl("^m\\[[0-9]*\\]$", colnames(samples_matrix))]
-  full_model_samples <-apply(model_samples_matrix, MARGIN = 1, FUN = paste0, collapse = "")
+  full_model_samples <- apply(model_samples_matrix, MARGIN = 1, FUN = paste0, collapse = "")
   full_model_table <- table(full_model_samples)
 
   max_entry_id <- which.max(full_model_table)
@@ -101,18 +123,32 @@ SBC_fit_specific_dquants.my_top_model_fit <- function(fit) {
   max_model_vector <- stringr::str_split_1(max_model_string, pattern = "")
 
   dq_string <- paste0("m[", 1:length(max_model_vector), "] == ", max_model_vector, collapse = " && ")
+  
+  ## Duplicate for _bad, a bit inelegant, sorry
+  model_samples_matrix_bad <- samples_matrix[, grepl("^m_bad\\[[0-9]*\\]$", colnames(samples_matrix))]
+  full_model_samples_bad <- apply(model_samples_matrix_bad, MARGIN = 1, FUN = paste0, collapse = "")
+  full_model_table_bad <- table(full_model_samples_bad)
+
+  max_entry_id_bad <- which.max(full_model_table_bad)
+  max_model_string_bad <- names(full_model_table_bad)[max_entry_id_bad]
+  max_model_vector_bad <- stringr::str_split_1(max_model_string_bad, pattern = "")
+
+  dq_string_bad <- paste0("m_bad[", 1:length(max_model_vector_bad), "] == ", max_model_vector_bad, collapse = " && ")
+  
   do.call(derived_quantities, list(top_model = rlang::parse_quo(dq_string, rlang::current_env()),
-                     .var_attributes = var_attributes(top_model = c(possibly_constant_var_attribute(), binary_var_attribute()))))
+                                   top_model_bad = rlang::parse_quo(dq_string_bad, rlang::current_env()),
+                     .var_attributes = var_attributes(top_model = c(possibly_constant_var_attribute(), binary_var_attribute()),
+                     top_model_bad = c(possibly_constant_var_attribute(), binary_var_attribute()))))
 }
 
-my_globals <- c("SBC_fit_specific_dquants.my_top_model_fit", "SBC_fit.my_top_model")
+my_globals <- c("SBC_fit_specific_dquants.backend_rjags_wrapped_fit", "SBC_fit.backend_rjags_wrapped", "SBC_fit_to_draws_matrix.backend_rjags_wrapped_fit")
 ```
 
 
 ## Small
 
 ```{r}
-backend_small <- backend_rjags_with_top("linear-selection.jags", n.iter = 20000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd", "prob"))
+backend_small <- backend_rjags_wrapped("linear-selection.jags", n.iter = 20000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd", "prob"), n_flip = 1)
 
 ```
 
@@ -134,7 +170,8 @@ res_small <- compute_SBC(ds_small, backend_small,
 ```
 
 ```{r}
-plot_ecdf_diff(res_small)
+plot_ecdf_diff(res_small$stats |> filter(!grepl("_bad", variable)), combine_variables = combine_array_elements)
+plot_ecdf_diff(res_small$stats |> filter(grepl("_bad", variable)), combine_variables = combine_array_elements)
 
 bp_small <- binary_probabilities_from_stats_empirical(res_small$stats)
 
@@ -142,6 +179,70 @@ bp_small <- binary_probabilities_from_stats_empirical(res_small$stats)
 metrics_small <- SBCBayesFactors:::calibration_metrics_per_variable(bp_small)
 purrr::iwalk(metrics_small, \(metrics, name) {cat("\n=====", name, "====\n"); print(metrics)})
 ```
+
+
+## Large BAD - flipped
+
+```{r}
+set.seed(2465223)
+ds_large <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 100, rho = rho, shape1 = shape1, shape2 = shape2, future.chunk.size = Inf), n_sims = 1000)
+```
+
+
+```{r}
+backend_large_bad_flip <- backend_rjags_wrapped("linear-selection.jags", n.iter = 40000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd", "prob"), n_flip = 10)
+```
+
+
+```{r large-all}
+res_large_bad_flip <- compute_SBC_cache_blocks(ds_large, backend_large_bad_flip, 
+                         keep_fits = FALSE,
+                         globals = my_globals,
+                         dquants = dq,
+                         cache_prefix = file.path(cache_dir, paste0("SBC_linear_rjags_large_bad_flip", param_cache_text,"_")),
+                         block_size = 200)
+
+```
+
+```{r}
+# res_large_bad_flip <- get_partial_cache_blocks(ds_large, backend_large_bad_flip, 
+#                          keep_fits = FALSE,
+#                          globals = my_globals,
+#                          dquants = dq,
+#                          cache_prefix = file.path(cache_dir, paste0("SBC_linear_rjags_large_bad_flip", param_cache_text,"_")),
+#                          block_size = 100)
+
+```
+
+
+```{r}
+plot_ecdf_diff(res_large_bad_flip, combine_variables = combine_array_elements)
+
+bp_large_bad_flip <- binary_probabilities_from_stats_empirical(res_large_bad_flip$stats)
+
+
+metrics_large_bad_flip <- SBCBayesFactors:::calibration_metrics_per_variable(bp_large_bad_flip, include_reliability_diag = FALSE, prob1_prior_base = "avg_true")
+metrics_large_bad_flip_df <- purrr::map_dfr(metrics_large_bad_flip, calibration_metrics_to_df)
+
+metrics_large_bad_flip_df |> summarise(
+  min_DAP_p = min(DAP_p),
+  DAP_rejection = mean(DAP_p < 0.05),
+  min_miscalibration_p = min(miscalibration_p),
+  miscalibration_rejection = mean(miscalibration_p < 0.05),
+  min_log_gamma_m_threshold = min(log_gamma - log_gamma_limit),
+  log_gamma_rejection = mean(log_gamma < log_gamma_limit)
+)
+```
+
+```{r}
+bp_large_bad_flip |> filter(grepl("m\\[[0-9]\\]", variable)) |> plot_binary_calibration()
+hist(bp_large_bad_flip$prob)
+min(p.adjust(metrics_large_bad_flip_df$miscalibration_p, method = "holm"))
+min(p.adjust(metrics_large_bad_flip_df$DAP_p, method = "holm"))
+hist(metrics_large_bad_flip_df$DAP_p)
+```
+
+
 
 
 
@@ -154,7 +255,7 @@ ds_large <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, 
 
 
 ```{r}
-backend_large_bad <- backend_rjags_with_top("linear-selection.jags", n.iter = 10000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd", "prob"))
+backend_large_bad <- backend_rjags_wrapped("linear-selection.jags", n.iter = 10000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd", "prob"))
 ```
 
 
@@ -211,7 +312,7 @@ hist(metrics_large_bad_df$DAP_p)
 ## Large OK
 
 ```{r}
-backend_large <- backend_rjags_with_top("linear-selection.jags", n.iter = 
+backend_large <- backend_rjags_wrapped("linear-selection.jags", n.iter = 
                                      400000, n.burnin = 50000, n.chains = 4, thin = 100, variable.names = c("beta", "m", "sd", "prob"))
 ```
 
