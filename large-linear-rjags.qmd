@@ -78,25 +78,33 @@ param_cache_text <- paste0(if_else(rho == 0, "", paste0("_rho_", rho)), "_sh_", 
 ```{r}
 backend_rjags_with_top <- function(...) {
   res <- SBC_backend_rjags(...)
-  class(res) <- c(class(res), "my_top_model")
+  class(res) <- c("my_top_model", class(res))
   res
 }
 
-SBC_fit_specific_dquants.my_top_model <- function(fit) {
+SBC_fit.my_top_model <- function(...) {
+  res <- NextMethod()
+  class(res) <- c(class(res), "my_top_model_fit")
+  res
+}
+
+SBC_fit_specific_dquants.my_top_model_fit <- function(fit) {
   # Working with string representation of the models as I may need over 100bits of information so ints/doubles are not enough
   samples_matrix <- as.matrix(fit$samples)
   model_samples_matrix <- samples_matrix[, grepl("^m\\[[0-9]*\\]$", colnames(samples_matrix))]
   full_model_samples <-apply(model_samples_matrix, MARGIN = 1, FUN = paste0, collapse = "")
   full_model_table <- table(full_model_samples)
+
   max_entry_id <- which.max(full_model_table)
   max_model_string <- names(full_model_table)[max_entry_id]
   max_model_vector <- stringr::str_split_1(max_model_string, pattern = "")
+
   dq_string <- paste0("m[", 1:length(max_model_vector), "] == ", max_model_vector, collapse = " && ")
-  derived_quantities(top_model = rlang::parse_quo(dq_string, rlang::current_env()),
-                     .var_attributes = var_attributes(top_model = c(possibly_constant_var_attribute(), binary_var_attribute())))
+  do.call(derived_quantities, list(top_model = rlang::parse_quo(dq_string, rlang::current_env()),
+                     .var_attributes = var_attributes(top_model = c(possibly_constant_var_attribute(), binary_var_attribute()))))
 }
 
-my_globals <- c("SBC_fit_specific_dquants.my_top_model")
+my_globals <- c("SBC_fit_specific_dquants.my_top_model_fit", "SBC_fit.my_top_model")
 ```
 
 
@@ -108,8 +116,9 @@ backend_small <- backend_rjags_with_top("linear-selection.jags", n.iter = 20000,
 
 ```{r}
 set.seed(655223142)
-ds_small <- generate_datasets(SBC_generator_function(one_sim_generator, N = 50, P = 2, rho = rho, shape1 = shape1, shape2 = shape2, future.chunk.size = Inf), n_sims = 10)
+ds_small <- generate_datasets(SBC_generator_function(one_sim_generator, N = 50, P = 2, rho = rho, shape1 = shape1, shape2 = shape2, future.chunk.size = Inf), n_sims = 10000)
 ```
+
 
 ```{r small}
 
@@ -134,8 +143,8 @@ purrr::iwalk(metrics_small, \(metrics, name) {cat("\n=====", name, "====\n"); pr
 
 
 ```{r}
-backend_large <- SBC_backend_rjags("linear-selection.jags", n.iter = 
-                                     400000, n.burnin = 50000, n.chains = 4, thin = 100, variable.names = c("beta", "m", "sd"))
+backend_large <- backend_rjags_with_top("linear-selection.jags", n.iter = 
+                                     400000, n.burnin = 50000, n.chains = 4, thin = 100, variable.names = c("beta", "m", "sd", "prob"))
 ```
 
 ```{r}
