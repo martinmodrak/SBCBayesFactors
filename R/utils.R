@@ -1,6 +1,11 @@
 compute_SBC_cache_blocks <- function(datasets, ..., block_size, cache_prefix, cache_suffix = ".rds") {
-  starts <- seq(1, length(datasets), by = block_size)
-  ends <- c(starts[2:length(starts)] - 1, length(datasets))
+  if(length(datasets) <= block_size) {
+    starts <- 1
+    ends <- length(datasets)
+  } else {
+    starts <- seq(1, length(datasets), by = block_size)
+    ends <- c(starts[2:length(starts)] - 1, length(datasets))
+  }
   res_list <- list()
   for(i in 1:length(starts)) {
     res_list[[i]] <- compute_SBC(datasets[starts[i]:ends[i]], ..., cache_mode = "results", cache_location = paste0(cache_prefix, i, cache_suffix))
