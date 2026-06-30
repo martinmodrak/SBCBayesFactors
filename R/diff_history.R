@@ -381,9 +381,17 @@ compute_bootstrapped_histories <- function(stats, history_length, n_histories, h
                                           ...,
                                           FUN = function(history_id, ...) {
       library(SBCBayesFactors)
-      stats_boot <- dplyr::group_by(stats_for_history, variable) |>
-        dplyr::sample_n(history_length) |>
-        dplyr::mutate(sim_id = 1:dplyr::n()) |>
+      # Ensure identical bootstraps for all variables, so we can
+      # aggregate later
+      sim_ids <- sample(unique(stats_for_history$sim_id), size = history_length)
+      sim_ids_order <- 1:history_length
+      names(sim_ids_order) <- sim_ids
+
+      stats_boot <-
+        dplyr::filter(stats_for_history, sim_id %in% sim_ids) |>
+        dplyr::mutate(sim_id = sim_ids_order[as.character(sim_id)]) |>
+        dplyr::group_by(variable) |>
+        dplyr::arrange(sim_id) |>
         dplyr::ungroup()
       res_df <- history_fun(stats_boot, step = step, min_sim_id = min_sim_id, ...)
       res_df$history_id = history_id
@@ -410,6 +418,11 @@ compute_bootstrapped_histories <- function(stats, history_length, n_histories, h
   #   res_df[[h]]$history_id = h
   # }
   # do.call(rbind, res_df)
+}
+
+aggregate_log_p_histories <- function(p_hist, new_var = "aggregated", method = "holm") {
+  p_hist |> dplyr::group_by(sim_id, history_id) |>
+    summarise(variable = new_var, log_p = log(min(p.adjust(exp(log_p), method = method))), .groups = "drop")
 }
 
 # upper -> upper bound of the interval for iterations, so the point where the lower part of CI is above the power target

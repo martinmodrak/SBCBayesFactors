@@ -21,7 +21,7 @@ if(!dir.exists(cache_dir)) {
   dir.create(cache_dir)
 }
 
-
+compute_histories <- FALSE
 
 
 
@@ -80,32 +80,34 @@ param_cache_text <- paste0(if_else(rho == 0, "", paste0("_rho_", rho)), "_sh_", 
 ```
 
 ```{r}
-backend_rjags_wrapped <- function(..., n_flip = 0) {
+backend_rjags_wrapped <- function(..., n_shuffle = 0) {
   res <- SBC_backend_rjags(...)
   class(res) <- c("backend_rjags_wrapped", class(res))
-  res$n_flip <- n_flip
+  res$n_shuffle <- n_shuffle
   res
 }
 
 SBC_fit.backend_rjags_wrapped <- function(backend, ...) {
   res <- NextMethod()
   class(res) <- c("backend_rjags_wrapped_fit", class(res))
-  res$n_flip <- backend$n_flip
+  res$n_shuffle <- backend$n_shuffle
   res
 }
 
 
 SBC_fit_to_draws_matrix.backend_rjags_wrapped_fit <- function(fit) {
   res <- NextMethod()
-  n_flip <- fit$n_flip
+  n_shuffle <- fit$n_shuffle
   
-  bad_draws <- posterior::as_draws_array(res)[, , grepl("^m\\[[0-9]*\\]$", posterior::variables(res))]
-  bad_draws <- apply(bad_draws, MARGIN = c(1,2), function(row) {
-    indices_to_flip <- sample.int(length(row), size = n_flip)
-    row[indices_to_flip] <- 1 - row[indices_to_flip]
-    row
-  })
-  bad_draws <- posterior::as_draws_matrix(posterior::as_draws_array(aperm(bad_draws, c("iteration", "chain", "variable"))))
+  m_draws <- posterior::as_draws_array(res)[, , grepl("^m\\[[0-9]*\\]$", posterior::variables(res))]
+
+  indices_to_shuffle <- sample.int(dim(m_draws)[3], size = n_shuffle)
+  perm_to_shuffle <- sample(indices_to_shuffle, size = n_shuffle)
+    
+  bad_draws <- m_draws
+  bad_draws[,,indices_to_shuffle] <- m_draws[,,perm_to_shuffle]
+  
+  bad_draws <- posterior::as_draws_matrix(bad_draws)
   posterior::variables(bad_draws) <- sub("m", "m_bad", posterior::variables(bad_draws))
   posterior::bind_draws(res, bad_draws)
 }
@@ -148,14 +150,14 @@ my_globals <- c("SBC_fit_specific_dquants.backend_rjags_wrapped_fit", "SBC_fit.b
 ## Small
 
 ```{r}
-backend_small <- backend_rjags_wrapped("linear-selection.jags", n.iter = 20000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd", "prob"), n_flip = 1)
+backend_small <- backend_rjags_wrapped("linear-selection.jags", n.iter = 20000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd", "prob"), n_shuffle = 2)
 
 ```
 
 
-```{r}
+```{r small-datasets}
 set.seed(655223142)
-ds_small <- generate_datasets(SBC_generator_function(one_sim_generator, N = 50, P = 2, rho = rho, shape1 = shape1, shape2 = shape2, future.chunk.size = Inf), n_sims = 10)
+ds_small <- generate_datasets(SBC_generator_function(one_sim_generator, N = 50, P = 4, rho = rho, shape1 = shape1, shape2 = shape2, future.chunk.size = Inf), n_sims = 10000)
 ```
 
 
@@ -169,195 +171,256 @@ res_small <- compute_SBC(ds_small, backend_small,
                          cache_location = file.path(cache_dir, paste0("SBC_linear_rjags_small_N", length(ds_small), param_cache_text, ".rds")))
 ```
 
-```{r}
-plot_ecdf_diff(res_small$stats |> filter(!grepl("_bad", variable)), combine_variables = combine_array_elements)
-plot_ecdf_diff(res_small$stats |> filter(grepl("_bad", variable)), combine_variables = combine_array_elements)
+```{r small-metrics}
+small_stats_ok <- res_small$stats |> filter(!grepl("_bad", variable))
+small_stats_bad <- res_small$stats |> filter(grepl("_bad", variable))
 
 bp_small <- binary_probabilities_from_stats_empirical(res_small$stats)
 
 
-metrics_small <- SBCBayesFactors:::calibration_metrics_per_variable(bp_small)
-purrr::iwalk(metrics_small, \(metrics, name) {cat("\n=====", name, "====\n"); print(metrics)})
+metrics_small <- SBCBayesFactors:::calibration_metrics_per_variable(bp_small, prob1_prior_spec = list("top_model_bad" = "avg_true"))
+metrics_small_ok <- metrics_small[!grepl("_bad", names(metrics_small))]
+metrics_small_bad <- metrics_small[grepl("_bad", names(metrics_small))]
+
 ```
 
 
-## Large BAD - flipped
+The normal stats are OK
 
 ```{r}
+plot_ecdf_diff(small_stats_ok, combine_variables = combine_array_elements)
+
+purrr::iwalk(metrics_small_ok, \(metrics, name) {cat("\n=====", name, "====\n"); print(metrics)})
+```
+
+
+The bad (shuffled) stats are bad
+
+```{r}
+plot_ecdf_diff(small_stats_bad, combine_variables = combine_array_elements)
+
+purrr::iwalk(metrics_small_bad, \(metrics, name) {cat("\n=====", name, "====\n"); print(metrics)})
+```
+
+### Histories
+
+```{r}
+n_histories <- 100
+main_vars <- c("model_index_bad","graded_model_index_bad", "top_model_bad", "log_lik_bad")
+```
+
+
+
+```{r small-histories}
+hist_length_small <- 500
+invisible(get_precomputed_gamma_thresholds(unique(res_small$stats$max_rank) + 1,min_sims = 1, max_sims = max(1000, hist_length_small)))
+
+hist_step_small <- 10
+hist_small <- compute_bootstrapped_histories(res_small$stats |> filter(variable %in% main_vars | grepl("m_bad", variable)), history_length = hist_length_small, n_histories = n_histories, step = hist_step_small,
+                                            compute_log_gamma_history)
+
+bp_small_bad <- bp_small |> filter(grepl("_bad", variable))
+
+hist_small_ttest_m <- compute_bootstrapped_histories(bp_small_bad |> filter(variable != "top_model_bad"), history_length = hist_length_small, n_histories = n_histories, step = hist_step_small,
+                                            compute_ttest_history, expected = 0.5, min_sim_id = 5)
+
+hist_small_ttest_m_aggregated <- aggregate_log_p_histories(hist_small_ttest_m, new_var = "m_aggregated")
+
+hist_small_ttest_top <- compute_bootstrapped_histories(bp_small_bad  |> filter(variable == "top_model_bad"), history_length = hist_length_small, n_histories = n_histories, step = hist_step_small,
+                                            compute_ttest_history, expected = "avg_true", min_sim_id = 5)
+
+hist_small_ttest <- rbind(hist_small_ttest_m, hist_small_ttest_m_aggregated, hist_small_ttest_top)
+
+
+
+# hist_small_ttest_short <- compute_bootstrapped_histories(bp_small_bad |> filter(variable == "is_model0"), history_length = 2000, n_histories = n_histories, step = 5,
+#                                             compute_ttest_history, expected = 0.25)
+
+
+hist_small_brier <- compute_bootstrapped_histories(bp_small_bad, history_length = hist_length_small, n_histories = n_histories, step = hist_step_small,
+                                            compute_brier_history, min_sim_id = 10)
+
+hist_small_brier_aggregated <- aggregate_log_p_histories(hist_small_brier |> filter(grepl("m_bad", variable)), new_var = "m_aggregated")
+
+
+hist_small_miscalibration <- compute_bootstrapped_histories(bp_small_bad, history_length = hist_length_small, n_histories = n_histories, step = hist_step_small,
+                                                           compute_miscalibration_history, min_sim_id = 10)
+
+hist_small_miscalibration_aggregated <- aggregate_log_p_histories(hist_small_miscalibration |> filter(grepl("m_bad", variable)), new_var = "m_aggregated")
+
+
+
+plot_log_gamma_histories(hist_small)
+plot_log_p_histories(rbind(hist_small_brier, hist_small_brier_aggregated), "Brier resampling")
+plot_log_p_histories(hist_small_ttest, "P - ttest")
+
+plot_log_p_histories(rbind(hist_small_miscalibration, hist_small_miscalibration_aggregated), "Miscalibration resampling")
+
+# save_histories("large_linear_rjags_small",
+#                log_gamma = hist_small,
+#                brier = hist_small_brier_aggregated,
+#                ttest = hist_small_ttest,
+#                #ttest_short = hist_small_ttest_short,
+#                miscalibration = hist_small_miscalibration_agregated)
+
+```
+
+
+
+## Large
+
+```{r large-datasets}
 set.seed(2465223)
 ds_large <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 100, rho = rho, shape1 = shape1, shape2 = shape2, future.chunk.size = Inf), n_sims = 1000)
 ```
 
 
 ```{r}
-backend_large_bad_flip <- backend_rjags_wrapped("linear-selection.jags", n.iter = 40000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd", "prob"), n_flip = 10)
+backend_large <- backend_rjags_wrapped("linear-selection.jags", n.iter = 400000, n.burnin = 5000, n.chains = 4, thin = 100, variable.names = c("beta", "m", "sd", "prob"),
+                                           n_shuffle = 20)
 ```
 
 
 ```{r large-all}
-res_large_bad_flip <- compute_SBC_cache_blocks(ds_large, backend_large_bad_flip, 
+res_large <- compute_SBC_cache_blocks(ds_large, backend_large, 
                          keep_fits = FALSE,
                          globals = my_globals,
                          dquants = dq,
-                         cache_prefix = file.path(cache_dir, paste0("SBC_linear_rjags_large_bad_flip", param_cache_text,"_")),
+                         cache_prefix = file.path(cache_dir, paste0("SBC_linear_rjags_large", param_cache_text,"_")),
                          block_size = 200)
 
 ```
 
 ```{r}
-# res_large_bad_flip <- get_partial_cache_blocks(ds_large, backend_large_bad_flip, 
-#                          keep_fits = FALSE,
-#                          globals = my_globals,
-#                          dquants = dq,
-#                          cache_prefix = file.path(cache_dir, paste0("SBC_linear_rjags_large_bad_flip", param_cache_text,"_")),
-#                          block_size = 100)
-
-```
-
-
-```{r}
-plot_ecdf_diff(res_large_bad_flip, combine_variables = combine_array_elements)
-
-bp_large_bad_flip <- binary_probabilities_from_stats_empirical(res_large_bad_flip$stats)
-
-
-metrics_large_bad_flip <- SBCBayesFactors:::calibration_metrics_per_variable(bp_large_bad_flip, include_reliability_diag = FALSE, prob1_prior_base = "avg_true")
-metrics_large_bad_flip_df <- purrr::map_dfr(metrics_large_bad_flip, calibration_metrics_to_df)
-
-metrics_large_bad_flip_df |> summarise(
-  min_DAP_p = min(DAP_p),
-  DAP_rejection = mean(DAP_p < 0.05),
-  min_miscalibration_p = min(miscalibration_p),
-  miscalibration_rejection = mean(miscalibration_p < 0.05),
-  min_log_gamma_m_threshold = min(log_gamma - log_gamma_limit),
-  log_gamma_rejection = mean(log_gamma < log_gamma_limit)
-)
-```
-
-```{r}
-bp_large_bad_flip |> filter(grepl("m\\[[0-9]\\]", variable)) |> plot_binary_calibration()
-hist(bp_large_bad_flip$prob)
-min(p.adjust(metrics_large_bad_flip_df$miscalibration_p, method = "holm"))
-min(p.adjust(metrics_large_bad_flip_df$DAP_p, method = "holm"))
-hist(metrics_large_bad_flip_df$DAP_p)
-```
-
-
-
-
-
-## Large BAD
-
-```{r}
-set.seed(2465223)
-ds_large <- generate_datasets(SBC_generator_function(one_sim_generator, N = 80, P = 500, rho = rho, shape1 = shape1, shape2 = shape2, future.chunk.size = Inf), n_sims = 200)
-```
-
-
-```{r}
-backend_large_bad <- backend_rjags_wrapped("linear-selection.jags", n.iter = 10000, n.burnin = 5000, n.chains = 4, thin = 10, variable.names = c("beta", "m", "sd", "prob"))
-```
-
-
-```{r large-all}
-res_large_bad <- compute_SBC_cache_blocks(ds_large, backend_large_bad, 
+res_large <- get_partial_cache_blocks(ds_large, backend_large, 
                          keep_fits = FALSE,
                          globals = my_globals,
                          dquants = dq,
-                         cache_prefix = file.path(cache_dir, paste0("SBC_linear_rjags_large_bad", param_cache_text,"_")),
-                         block_size = 200)
-
-```
-
-```{r}
-res_large_bad <- get_partial_cache_blocks(ds_large, backend_large_bad, 
-                         keep_fits = FALSE,
-                         globals = my_globals,
-                         dquants = dq,
-                         cache_prefix = file.path(cache_dir, paste0("SBC_linear_rjags_large_bad", param_cache_text,"_")),
-                         block_size = 100)
-
-```
-
-
-```{r}
-plot_ecdf_diff(res_large_bad, combine_variables = combine_array_elements)
-
-bp_large_bad <- binary_probabilities_from_stats_empirical(res_large_bad$stats)
-
-
-metrics_large_bad <- SBCBayesFactors:::calibration_metrics_per_variable(bp_large_bad, include_reliability_diag = FALSE, prob1_prior_base = "avg_true")
-metrics_large_bad_df <- purrr::map_dfr(metrics_large_bad, calibration_metrics_to_df)
-
-metrics_large_bad_df |> summarise(
-  min_DAP_p = min(DAP_p),
-  DAP_rejection = mean(DAP_p < 0.05),
-  min_miscalibration_p = min(miscalibration_p),
-  miscalibration_rejection = mean(miscalibration_p < 0.05),
-  min_log_gamma_m_threshold = min(log_gamma - log_gamma_limit),
-  log_gamma_rejection = mean(log_gamma < log_gamma_limit)
-)
-```
-
-```{r}
-bp_large_bad |> filter(grepl("m\\[[0-9]\\]", variable)) |> plot_binary_calibration()
-hist(bp_large_bad$prob)
-min(p.adjust(metrics_large_bad_df$miscalibration_p, method = "holm"))
-min(p.adjust(metrics_large_bad_df$DAP_p, method = "holm"))
-hist(metrics_large_bad_df$DAP_p)
-```
-
-
-
-## Large OK
-
-```{r}
-backend_large <- backend_rjags_wrapped("linear-selection.jags", n.iter = 
-                                     400000, n.burnin = 50000, n.chains = 4, thin = 100, variable.names = c("beta", "m", "sd", "prob"))
-```
-
-
-```{r large-all}
-res_large_all <- compute_SBC_cache_blocks(ds_large, backend_large, 
-                         keep_fits = FALSE,
-                         dquants = dq,
-                         globals = my_globals,
                          cache_prefix = file.path(cache_dir, paste0("SBC_linear_rjags_large", param_cache_text,"_")),
                          block_size = 100)
 
 ```
 
-```{r}
-res_large <- res_large_all[res_large_all$default_diagnostics$max_rhat < 1.01 & res_large_all$default_diagnostics$min_ess_to_rank >= 0.5]
-```
 
-```{r}
-plot_ecdf_diff(res_large, combine_variables = combine_array_elements)
+```{r large-metrics}
+large_stats_ok <- res_large$stats |> filter(!grepl("_bad", variable))
+large_stats_bad <- res_large$stats |> filter(grepl("_bad", variable))
 
 bp_large <- binary_probabilities_from_stats_empirical(res_large$stats)
 
+metrics_large <- SBCBayesFactors:::calibration_metrics_per_variable(bp_large |> filter(grepl("^m", variable)))
+metrics_large_ok <- metrics_large[!grepl("_bad", names(metrics_large))]
+metrics_large_bad <- metrics_large[grepl("_bad", names(metrics_large))]
 
-metrics_large <- SBCBayesFactors:::calibration_metrics_per_variable(bp_large, include_reliability_diag = FALSE, prob1_prior_base = "avg_true")
-metrics_large_df <- purrr::map_dfr(metrics_large, calibration_metrics_to_df)
+metrics_large_df <- purrr::imap_dfr(metrics_large, calibration_metrics_to_df) |> mutate(bad == grepl("_bad", variable))
 
-metrics_large_df |> summarise(
+metrics_large_df_ss |> 
+  summarise(
   min_DAP_p = min(DAP_p),
   DAP_rejection = mean(DAP_p < 0.05),
   min_miscalibration_p = min(miscalibration_p),
   miscalibration_rejection = mean(miscalibration_p < 0.05),
   min_log_gamma_m_threshold = min(log_gamma - log_gamma_limit),
-  log_gamma_rejection = mean(log_gamma < log_gamma_limit)
+  log_gamma_rejection = mean(log_gamma < log_gamma_limit),
+  .by = variable
 )
+
 ```
+
+
+The normal stats are OK
 
 ```{r}
-hist(res_large_all$stats |> filter(variable == "graded_model_index") |> pull(simulated_value) / 1e100, breaks = seq(0, 101, by = 1))
-bp_large |> filter(grepl("m\\[[0-9]\\]", variable)) |> plot_binary_calibration()
-hist(bp_large$prob)
-min(p.adjust(metrics_large_df$miscalibration_p, method = "holm"))
-min(p.adjust(metrics_large_df$DAP_p, method = "holm"))
-hist(metrics_large_df$DAP_p)
+plot_ecdf_diff(large_stats_ok, combine_variables = combine_array_elements)
+
+calibration_metrics(bp_large |> filter(variable == "top_model"))
+
+metrics_large_df_ss |> filter(!bad)
 ```
 
 
+The bad (shuffled) stats are bad
+
+```{r}
+plot_ecdf_diff(large_stats_bad, combine_variables = combine_array_elements)
+
+calibration_metrics(bp_large |> filter(variable == "top_model_bad"))
+
+metrics_large_df_ss |> filter(bad)
+```
+
+
+```{r}
+bp_large |> filter(grepl("m_bad\\[[0-9]\\]", variable)) |> plot_binary_calibration()
+min(p.adjust(metrics_large_df |> filter(bad) |> pull(miscalibration_p), method = "holm"))
+min(p.adjust(metrics_large_df |> filter(bar) |> pull(DAP_p), method = "holm"))
+```
+
+
+
+### Histories
+
+```{r}
+n_histories <- 100
+main_vars <- c("model_index_bad","graded_model_index_bad", "top_model_bad", "log_lik_bad")
+```
+
+
+
+```{r large-histories}
+hist_length_large <- 500
+invisible(get_precomputed_gamma_thresholds(unique(res_large$stats$max_rank) + 1,min_sims = 1, max_sims = max(1000, hist_length_large)))
+
+hist_step_large <- 20
+hist_large <- compute_bootstrapped_histories(res_large$stats |> filter(variable %in% main_vars | grepl("m_bad", variable)), history_length = hist_length_large, n_histories = n_histories, step = hist_step_large,
+                                            compute_log_gamma_history)
+
+bp_large_bad <- bp_large |> filter(grepl("_bad", variable))
+
+hist_large_ttest_m <- compute_bootstrapped_histories(bp_large_bad |> filter(variable != "top_model_bad"), history_length = hist_length_large, n_histories = n_histories, step = hist_step_large,
+                                            compute_ttest_history, expected = 0.5, min_sim_id = 5)
+
+hist_large_ttest_m_aggregated <- aggregate_log_p_histories(hist_large_ttest_m, new_var = "m_aggregated")
+
+hist_large_ttest_top <- compute_bootstrapped_histories(bp_large_bad  |> filter(variable == "top_model_bad"), history_length = hist_length_large, n_histories = n_histories, step = hist_step_large,
+                                            compute_ttest_history, expected = "avg_true", min_sim_id = 5)
+
+hist_large_ttest <- rbind(hist_large_ttest_m_aggregated, hist_large_ttest_top)
+
+
+
+hist_large_brier_all <- compute_bootstrapped_histories(bp_large_bad, history_length = hist_length_large, n_histories = n_histories, step = hist_step_large,
+                                            compute_brier_history, min_sim_id = 10)
+
+hist_large_brier_aggregated <- aggregate_log_p_histories(hist_large_brier_all |> filter(grepl("m_bad", variable)), new_var = "m_aggregated")
+
+hist_large_brier <- rbind(
+  hist_large_brier_all |> filter(variable == "top_model_bad"),
+  hist_large_brier_aggregated
+)
+
+hist_large_miscalibration_all <- compute_bootstrapped_histories(bp_large_bad, history_length = hist_length_large, n_histories = n_histories, step = hist_step_large,
+                                                           compute_miscalibration_history, min_sim_id = 10)
+
+hist_large_miscalibration_aggregated <- aggregate_log_p_histories(hist_large_miscalibration_all |> filter(grepl("m_bad", variable)), new_var = "m_aggregated")
+
+hist_large_miscalibration <- rbind(
+  hist_large_miscalibration_all |> filter(variable == "top_model_bad"),
+  hist_large_miscalibration_aggregated
+)
+
+
+plot_log_gamma_histories(hist_large)
+plot_log_p_histories(hist_large_brier, "Brier resampling")
+plot_log_p_histories(hist_large_miscalibration, "Miscalibration resampling")
+plot_log_p_histories(hist_large_ttest, "P - ttest")
+
+
+save_histories("large_linear_rjags_large",
+               log_gamma = hist_large,
+               brier = hist_large_brier,
+               ttest = hist_large_ttest,
+               miscalibration = hist_large_miscalibration)
+
+```
 

@@ -84,9 +84,10 @@ print.calibration_metrics <- function(m) {
 }
 
 #' @export
-calibration_metrics_to_df <- function(m) {
+calibration_metrics_to_df <- function(m, variable) {
   stopifnot(length(m$log_gammas$log_gamma) == 1)
   data.frame(
+    variable = variable,
     n_sims = m$n_sims,
     DAP_method = m$t$method,
     DAP_null_value = m$t$null.value,
@@ -133,7 +134,7 @@ success_metrics_for_table <- function(m, dap_digits = 4, miscalib_digits = 4, ec
 }
 
 
-calibration_metrics_per_variable <- function(stats, prob1_prior_base = 0.5, include_reliability_diag = TRUE) {
+calibration_metrics_per_variable <- function(stats, prob1_prior_base = 0.5, prob1_prior_spec = list(), include_reliability_diag = TRUE) {
   vars <- unique(stats$variable)
   bp_by_var <- purrr::map(vars, \(var) {
     dplyr::filter(stats, variable == var)
@@ -144,7 +145,13 @@ calibration_metrics_per_variable <- function(stats, prob1_prior_base = 0.5, incl
 
   furrr::future_map(bp_by_var, \(bp_sub) {
     var <- unique(bp_sub$variable)
-    if (var == "top_model" || prob1_prior_base == "avg_true") {
+    if(var %in% names(prob1_prior_spec)) {
+      if(prob1_prior_spec[[var]] == "avg_true") {
+        prob1_prior <- bp_sub$simulated_value
+      } else {
+        prob1_prior <- prob1_prior_spec[[var]]
+      }
+    } else if (var == "top_model" || prob1_prior_base == "avg_true") {
       prob1_prior <- bp_sub$simulated_value
     } else {
       prob1_prior <- prob1_prior_base
