@@ -2,3 +2,5 @@
 ^renv\.lock$
 ^sbc-discrete\.Rproj$
 ^\.Rproj\.user$
+^_SBC_cache$
+^cache*

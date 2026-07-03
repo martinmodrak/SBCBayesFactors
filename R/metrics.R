@@ -12,7 +12,7 @@ binary_probabilities_from_stats_empirical <- function(stats) {
 }
 
 
-calibration_metrics <- function(res, prob1_prior = 0.5, include_reliability_diag = TRUE) {
+calibration_metrics <- function(res, prob1_prior = 0.5, include_reliability_diag = TRUE, B = 1000) {
 
   if(is.data.frame(res)) {
     stats <- res
@@ -28,6 +28,10 @@ calibration_metrics <- function(res, prob1_prior = 0.5, include_reliability_diag
   }
   stopifnot(length(unique(bp$variable)) == 1)
 
+  if(prob1_prior == "avg_true") {
+    prob1_prior <- bp$simulated_value
+  }
+
   if(length(prob1_prior) == 1) {
     t_res <- t.test(bp$prob, mu = prob1_prior)
   } else if(all(prob1_prior %in% c(0,1))) {
@@ -36,7 +40,7 @@ calibration_metrics <- function(res, prob1_prior = 0.5, include_reliability_diag
   } else {
     stop("Invalid prob1_prior")
   }
-  miscalibration_stats <- miscalibration_resampling_stats(bp$prob, bp$simulated_value)
+  miscalibration_stats <- miscalibration_resampling_stats(bp$prob, bp$simulated_value, B = B)
   if(include_reliability_diag) {
     reliability_diag <- my_reliability_diag(bp)
   } else {
@@ -134,7 +138,7 @@ success_metrics_for_table <- function(m, dap_digits = 4, miscalib_digits = 4, ec
 }
 
 
-calibration_metrics_per_variable <- function(stats, prob1_prior_base = 0.5, prob1_prior_spec = list(), include_reliability_diag = TRUE) {
+calibration_metrics_per_variable <- function(stats, prob1_prior_base = 0.5, prob1_prior_spec = list(), include_reliability_diag = TRUE, B = 1000) {
   vars <- unique(stats$variable)
   bp_by_var <- purrr::map(vars, \(var) {
     dplyr::filter(stats, variable == var)
@@ -156,6 +160,6 @@ calibration_metrics_per_variable <- function(stats, prob1_prior_base = 0.5, prob
     } else {
       prob1_prior <- prob1_prior_base
     }
-    SBCBayesFactors:::calibration_metrics(bp_sub, prob1_prior, include_reliability_diag = include_reliability_diag)
+    SBCBayesFactors:::calibration_metrics(bp_sub, prob1_prior, include_reliability_diag = include_reliability_diag, B = B)
   }, .options = furrr::furrr_options(seed = TRUE))
 }

@@ -21,6 +21,7 @@ Realistic examples:
 Appendices:
 -  `good_check_examples.qmd` examples showing problematic convergence for the Good check while showing that SBC and binary calibration do well
 - `dap_metrics.qmd` comparing various tests for the data-averaged posterior criterion
+- `large-linear-rjags.qmd` sampling a large model space directly with a Gibbs sampler
 
 
 - `BF_SBC_paper.qmd` produces all of the final figures, assuming all of the above files were compiled and produce the necessary intermediate outputs
