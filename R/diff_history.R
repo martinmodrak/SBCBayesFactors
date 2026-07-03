@@ -146,24 +146,30 @@ compute_log_gamma_history <- function(stats, step = step, min_sim_id = 1) {
     dplyr::inner_join(gamma_thresholds_df, by = c("sim_id" = "N_sims"))
 }
 
-schad_bf_wrapper <- function(probs_to_test, expected, rscale = sqrt(1/12)) {
+schad_bf_wrapper <- function(probs_to_test, expected, rscale = sqrt(1/12), unpaired = FALSE) {
   n <- length(probs_to_test)
   if(n <= 5) {
     log_p <- 0
   } else if(sd(probs_to_test) == 0) {
-    if(abs(mean(probs_to_test) - expected) < 1e-8) {
+    if(abs(mean(probs_to_test) - mean(expected)) < 1e-8) {
       log_p <- 0
     } else {
       log_p <- NA_real_
     }
   } else if(sd(probs_to_test) < 0.0001) {
-    if(abs(mean(probs_to_test) - expected) < 0.001) {
+    if(abs(mean(probs_to_test) - mean(expected)) < 0.001) {
       log_p <- 0
     } else {
       log_p <- pnorm(-abs(mean(probs_to_test) - expected), 0, 0.001, log.p = TRUE) + log(2)
     }
   } else {
-    bf <- tryCatch(BayesFactor::ttestBF(probs_to_test, mu = expected, rscale = rscale),
+    bf <- tryCatch(
+      if(length(expected) == 1) {
+        BayesFactor::ttestBF(probs_to_test, mu = expected, rscale = rscale)
+      } else {
+        BayesFactor::ttestBF(probs_to_test, expected, paired = !unpaired, rscale = rscale)
+      },
+
                    error = \(e) { message("ttestBF failed for c(",paste0(probs_to_test, collapse = ", "), ")");  NA_real_ })
     log_p <-  plogis(-bf@bayesFactor[1, "bf"], log.p = TRUE)
   }
@@ -567,23 +573,39 @@ load_histories <- function(name, producer_script) {
 }
 
 
-dap_power_single <- function(id, probs_all, N, expected, B = 10000, rscale = c("1/12" = 1/12, "sqrt(2)/2" = sqrt(2)/2, "1.5" = 1.5)) {
-  probs <- sample(probs_all, size = N, replace = TRUE)
+dap_power_single <- function(id, probs_all, N, expected, B = 10000, rscale = c("1/12" = 1/12, "sqrt(2)/2" = sqrt(2)/2, "1.5" = 1.5), unpaired = FALSE) {
+  indices <- sample.int(length(probs_all), size = N, replace = TRUE)
+  probs <- probs_all[indices]
+
+  if(length(expected) > 1) {
+    expected <- expected[indices]
+  }
+
   if(sd(probs) == 0) {
-    if(abs(mean(probs) - expected) < 1e-8) {
+    if(abs(mean(probs) - mean(expected)) < 1e-8) {
       p_t <- 1
     } else {
       p_t <- NA_real_
     }
-  } else {
+  } else if(length(expected) == 1) {
     p_t <- t.test(probs, mu = expected)$p.value
+  } else {
+    p_t <- t.test(probs, expected, paired = !unpaired, mu = 0)$p.value
   }
   p_schad <- numeric(length(rscale))
-  schad_bf <- numeric(length)
   for(i in 1:length(rscale)) {
-    p_schad[i] <- exp(schad_bf_wrapper(probs, expected, rscale = rscale[i]))
+    p_schad[i] <- exp(schad_bf_wrapper(probs, expected, rscale = rscale[i], unpaired = unpaired))
   }
-  p_gaffke <- gaffke_p(probs, mu = expected)
+
+  if(length(expected) == 1) {
+    p_gaffke <- gaffke_p(probs, mu = expected, B = B)
+  } else if(unpaired) {
+    # No unpaired version of Gaffke
+    p_gaffke <- NA_real_
+  } else {
+    # paired test by taking the difference and transforming from [-1,1] to [0,1] range
+    p_gaffke <- gaffke_p((probs - expected + 1) * 0.5, mu = 0.5, B = B)
+  }
   data.frame(id = id, method = c("t", "gaffke", paste0("schad_", names(rscale))), p = c(p_t, p_gaffke, p_schad))
 }
 
@@ -634,13 +656,13 @@ plot_dap_power <- function(summary_df, highlight = NULL) {
 
 }
 
-dap_power_table <- function(summary_df) {
+dap_power_table <- function(summary_df, ...) {
   # Unique values, keeping original ordering
   methods <- as.character(summary_df$method[!duplicated(summary_df$method)])
   schad_methods <- methods[grepl("schad", methods)]
   schad_r <- gsub("schad_", "", schad_methods)
   summary_df |> mutate(
-    value = paste0(scales::percent(power, accuracy = 0.01)),
+    value = paste0(scales::percent(power, accuracy = 0.1)),
     method = factor(
       as.character(method),
       levels = c("t", "gaffke", schad_methods),
@@ -654,5 +676,5 @@ dap_power_table <- function(summary_df) {
     mutate(scenario = if_else(N == min(N), scenario, "")) |>
     # arrange(N) |>
     # mutate(N = if_else(scenario == min(scenario), as.character(N), "")) |>
-    knitr::kable()
+    knitr::kable(...)
 }

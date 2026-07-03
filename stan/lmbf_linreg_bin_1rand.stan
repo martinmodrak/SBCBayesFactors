@@ -9,7 +9,6 @@ data {
   vector[N] y;      // outcome vector
   real<lower=0> r_fixed;
   real<lower=0> r_random;
-  real<int
 }
 
 transformed data {

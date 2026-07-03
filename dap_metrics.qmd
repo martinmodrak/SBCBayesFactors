@@ -85,12 +85,17 @@ res_pnb_bias <- load_precomputed_file(here::here("cache/poisson_nb_bias.rds"), "
 
 
 bp_turtles_bad_norm <- binary_probabilities_from_stats(res_turtles_bad_norm$stats)
+
+# warning("Hack, figure out the problem")
+# bp_turtles_bad_norm$prob <- 1 - bp_turtles_bad_norm$prob
+
 bp_ranef_constant <- binary_probabilities_from_stats(res_ranef_constant$stats)
 bp_pnb_bias <- binary_probabilities_from_stats(res_pnb_bias$stats)
 
 N_to_test <- c(10, 20, 50, 100)
 bp_wrong <- list("Poisson NB - bias" = list(bp = bp_pnb_bias, prob1_prior = 0.5),
-                   "Turtles - bad normalization" = list(bp = bp_turtles_bad_norm, prob1_prior = 0.5),
+                   "Turtles - bad normalization" = list(bp = bp_turtles_bad_norm, prob1_prior = bp_turtles_bad_norm$simulated_value),
+                   "Turtles - bad normalization - unpaired" = list(bp = bp_turtles_bad_norm, prob1_prior = bp_turtles_bad_norm$simulated_value, unpaired = TRUE),
                    "Ranef presence fixed" = list(bp = bp_ranef_constant, prob1_prior = metrics_ranef_constant$prob1_prior))
 ```
 
@@ -100,12 +105,13 @@ res_wrong_list <- list()
 for(N in N_to_test){
   for(bp_name in names(bp_wrong)) {
      probs <- bp_wrong[[bp_name]]$bp$prob
-     cache_file <- file.path(cache_dir, paste0("dap_metrics_wrong_", rlang::hash(list(probs, N))))
+     unpaired <- !is.null(bp_wrong[[bp_name]]$unpaired) && bp_wrong[[bp_name]]$unpaired
+     cache_file <- file.path(cache_dir, paste0("dap_metrics_wrong_", rlang::hash(list(probs, N)), if_else(unpaired, "_unpaired", "")))
      if(file.exists(cache_file)) {
        dap_power_res <- readRDS(cache_file)
      } else {
        dap_power_res <- 
-         dap_power_scenario(bp_name, N_sims = 1000,  probs, N = N, bp_wrong[[bp_name]]$prob1_prior)
+         dap_power_scenario(bp_name, N_sims = 1000,  probs, N = N, bp_wrong[[bp_name]]$prob1_prior, unpaired = unpaired)
        saveRDS(dap_power_res, file = cache_file)
      }
      res_wrong_list[[length(res_wrong_list) + 1]] <- dap_power_res
@@ -113,6 +119,7 @@ for(N in N_to_test){
 }
 res_df_wrong <- do.call(rbind, res_wrong_list)
 ```
+
 
 ```{r}
 probs_wrong_df <- purrr::imap_dfr(bp_wrong, \(x, name) data.frame(scenario = name, prob = x$bp$prob)) 

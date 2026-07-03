@@ -9,10 +9,13 @@ setup_cluster <- function(max_local_workers = Inf, max_server_workers = 140, for
     # future::plan(future.mirai::mirai_cluster)
   }
   withr::with_envvar(new = c("RENV_CONFIG_STARTUP_QUIET" = "true", "RENV_CONFIG_SANDBOX_ENABLED" = "FALSE"),
-    #                 future::plan(future::multisession, workers = n_workers)
     {
-      mirai::daemons(n_workers, dispatcher = TRUE, force = force)
-      future::plan(future.mirai::mirai_cluster)
+      if(is_local) {
+        future::plan(future::multisession, workers = n_workers)
+      } else {
+        mirai::daemons(n_workers, dispatcher = TRUE, force = force)
+        future::plan(future.mirai::mirai_cluster)
+      }
     }
                      )
   options(SBC.generator_chunk_size = 500)
