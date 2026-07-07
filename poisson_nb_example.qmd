@@ -103,7 +103,7 @@ binary_to_cdf <- function(variables, prob1, simulated_value) {
 }
 
 SBC_posterior_cdf.SBC_fit_bf_examples <- function(fit, variables) {
-  binary_to_cdf("model", fit$pm1, variables["model"])
+  SBC:::binary_to_cdf("model", fit$pm1, variables["model"])
 }
 
 
@@ -144,12 +144,8 @@ res_pnb_correct <- compute_SBC(ds_pnb, SBC_backend_pnb_example(100),
 
 
 ```{r}
-binary_probabilities_from_stats(res_pnb_correct$stats) %>% pull(prob) %>% hist()
-```
-
-```{r}
 plot_ecdf_diff(res_pnb_correct)
-plot_binary_calibration_diff(res_pnb_correct$stats, method = "round")
+calibration_metrics(res_pnb_correct)
 ```
 
 ```{r}
@@ -170,8 +166,8 @@ res_pnb_ignore_all <-  compute_SBC(ds_pnb[1:1000], SBC_backend_pnb_example(100, 
                                cache_mode = "results", cache_location = file.path(cache_dir, "poisson_nb_ignore_all.rds"))
 
 plot_ecdf_diff(res_pnb_ignore_all)
-plot_binary_calibration_diff(res_pnb_ignore_all$stats, method = "round")
 
+bp_pnb_ignore_all <- binary_probabilities_from_stats(res_pnb_ignore_all$stats)
 ```
 
 
@@ -184,7 +180,6 @@ hist_pnb_ignore_all <- compute_bootstrapped_histories(res_pnb_ignore_all$stats, 
                                                        step = hist_step_ignore_all,
                                             compute_log_gamma_history)
 
-bp_pnb_ignore_all <- binary_probabilities_from_stats(res_pnb_ignore_all$stats)
 
 hist_pnb_ignore_all_ttest <- compute_bootstrapped_histories(bp_pnb_ignore_all, history_length = hist_length_ignore_all, n_histories = 100, step = hist_step_ignore_all,
                                             compute_ttest_history, min_sim_id = 10)
@@ -212,6 +207,8 @@ res_pnb_ignore_half <-  compute_SBC(ds_pnb, SBC_backend_pnb_example(100, ignore_
                                globals = poisson_nb_globals,
                                cache_mode = "results", cache_location = file.path(cache_dir, "poisson_nb_ignore_half.rds"))
 
+plot_ecdf_diff(res_pnb_ignore_half)
+calibration_metrics(res_pnb_ignore_half)
 ```
 
 
@@ -253,7 +250,10 @@ res_pnb_vari <-  compute_SBC(ds_pnb, SBC_backend_pnb_example(100, sd = 2),
                                cache_mode = "results", cache_location = file.path(cache_dir, "poisson_nb_vari.rds"))
 
 plot_ecdf_diff(res_pnb_vari)
-plot_binary_calibration_diff(res_pnb_vari$stats, method = "round")
+calibration_metrics(res_pnb_vari)
+bp_pnb_vari <- binary_probabilities_from_stats(res_pnb_vari$stats)
+
+
 ```
 
 
@@ -264,7 +264,6 @@ hist_pnb_vari <- compute_bootstrapped_histories(res_pnb_vari$stats, history_leng
                                                        step = hist_step_vari,
                                             compute_log_gamma_history)
 
-bp_pnb_vari <- binary_probabilities_from_stats(res_pnb_vari$stats)
 
 hist_pnb_vari_ttest <- compute_bootstrapped_histories(bp_pnb_vari, history_length = hist_length_vari, n_histories = 100, step = hist_step_vari,
                                             compute_ttest_history, min_sim_id = 10)
@@ -301,7 +300,7 @@ res_pnb_bias <-  compute_SBC(ds_pnb[1:1000], SBC_backend_pnb_example(100, bias =
                                cache_mode = "results", cache_location = file.path(cache_dir, "poisson_nb_bias.rds"))
 
 plot_ecdf_diff(res_pnb_bias)
-plot_binary_calibration_diff(res_pnb_bias$stats, method = "round")
+calibration_metrics(res_pnb_bias)
 ```
 ```{r}
 hist_length_bias <- 200
@@ -347,7 +346,7 @@ res_pnb_bias_vari <-  compute_SBC(ds_pnb, SBC_backend_pnb_example(100, bias = 1,
                                cache_mode = "results", cache_location = file.path(cache_dir, "poisson_nb_bias_vari.rds"))
 
 plot_ecdf_diff(res_pnb_bias_vari)
-my_reliability_diag(binary_probabilities_from_stats(res_pnb_bias_vari$stats))
+calibration_metrics(res_pnb_bias_vari)
 ```
 
 

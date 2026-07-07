@@ -163,7 +163,7 @@ res_bin_flip <- compute_SBC(ds_bin[1:1000], SBC_backend_bin_example(rev(compute_
                             cache_mode = "results", cache_location = file.path(cache_dir, "binary_flip.rds"))
 
 plot_ecdf_diff(res_bin_flip)
-my_reliability_diag(binary_probabilities_from_stats(res_bin_flip$stats))
+calibration_metrics(res_bin_flip)
 ```
 
 
@@ -236,8 +236,8 @@ res_bin_small <- compute_SBC(ds_bin, SBC_backend_bin_example(0.9 * compute_corre
                             cache_mode = "results", cache_location = file.path(cache_dir, "binary_small.rds"))
 
 plot_ecdf_diff(res_bin_small)
-my_reliability_diag(binary_probabilities_from_stats(res_bin_small$stats))
 
+calibration_metrics(res_bin_small)
 ```
 
 ```{r}
@@ -257,7 +257,10 @@ res_bin_bad <- compute_SBC(ds_bin[1:1000], SBC_backend_bin_example(c(0.3,0.5), 1
                             cache_mode = "results", cache_location = file.path(cache_dir, "binary_bad.rds"))
 
 plot_ecdf_diff(res_bin_bad)
-plot_binary_calibration_diff(res_bin_bad$stats)
+
+bp_bin_bad <- binary_probabilities_from_stats(res_bin_bad$stats)
+
+calibration_metrics(res_bin_bad)
 ```
 
 
@@ -268,14 +271,14 @@ hist_bad <- compute_bootstrapped_histories(res_bin_bad$stats, history_length = 1
 
 
 
-hist_bad_ttest <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
+hist_bad_ttest <- compute_bootstrapped_histories(bp_bin_bad , history_length = 100, n_histories = 100,
                                             compute_ttest_history, min_sim_id = 5)
 
 
-hist_bad_brier <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
+hist_bad_brier <- compute_bootstrapped_histories(bp_bin_bad, history_length = 100, n_histories = 100,
                                             compute_brier_history, min_sim_id = 5)
 
-hist_bad_miscalibration <- compute_bootstrapped_histories(binary_probabilities_from_stats(res_bin_bad$stats) , history_length = 100, n_histories = 100,
+hist_bad_miscalibration <- compute_bootstrapped_histories(bp_bin_bad, history_length = 100, n_histories = 100,
                                             compute_miscalibration_history, min_sim_id = 10)
 
 

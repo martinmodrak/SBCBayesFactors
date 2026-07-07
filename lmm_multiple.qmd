@@ -710,11 +710,11 @@ bp_comparison <- bp_bs_notop |>
   rename(prob_bs = prob) |> 
   mutate(prob_savd = bp_savd_notop$prob)
 
-print(
-bp_comparison |> ggplot() + aes(x = prob_bs, y = prob_savd) + geom_abline(color = "orangered", intercept = 0, slope = 1) +
-  ggpointdensity::geom_pointdensity() + facet_wrap(~variable) + coord_fixed() + 
-  ggtitle(prefix)
-)
+# print(
+# bp_comparison |> ggplot() + aes(x = prob_bs, y = prob_savd) + geom_abline(color = "orangered", intercept = 0, slope = 1) +
+#   ggpointdensity::geom_pointdensity() + facet_wrap(~variable) + coord_fixed() + 
+#   ggtitle(prefix)
+# )
 print(bp_comparison |> group_by(sim_id) |> 
   mutate(EvidR_bs = pmax(1e-15, prob_bs / prob_bs[variable == "is_model3"]),
          EvidR_savd = pmax(1e-15, prob_savd / prob_savd[variable == "is_model3"])) |> 
