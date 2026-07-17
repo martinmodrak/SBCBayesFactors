@@ -5,9 +5,6 @@ format: html
 
 Note - this computation is particularly expensive (about 200 - 300 CPU days)
 
-TODO: SBC bind_results and submodel classes, dependency on MCMCpack,
-BF diags - always start with HX:
-
 Let's setup the environment (bridgesampling currently works only with rstan):
 
 ```{r setup, message=FALSE,warning=FALSE, results="hide"}

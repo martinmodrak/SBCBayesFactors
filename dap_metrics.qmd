@@ -86,9 +86,6 @@ res_pnb_bias <- load_precomputed_file(here::here("cache/poisson_nb_bias.rds"), "
 
 bp_turtles_bad_norm <- binary_probabilities_from_stats(res_turtles_bad_norm$stats)
 
-# warning("Hack, figure out the problem")
-# bp_turtles_bad_norm$prob <- 1 - bp_turtles_bad_norm$prob
-
 bp_ranef_constant <- binary_probabilities_from_stats(res_ranef_constant$stats)
 bp_pnb_bias <- binary_probabilities_from_stats(res_pnb_bias$stats)
 
