@@ -556,8 +556,37 @@ metrics_large_model_space <- load_precomputed_file(here::here("cache/metrics_lar
 ```
 
 ```{r}
-plot_log_gamma_histories(hist_large_model_space$log_gamma |> filter(!grepl("m_bad", variable) | grepl("m_bad.[16].$", variable)) |> mutate(variable = gsub("_bad", "", variable)))
-plot_log_gamma_histories(hist_large_model_space$log_gamma_short)
+cat("Number of simulations after removing non-converging: ", metrics_large_model_space$good_top$n, "\n")
+report_success_metrics(metrics_large_model_space$good_top)
+```
+
+
+
+```{r fig-large-model-space}
+#| fig-width: 7
+#| fig-height: 8
+#| fig-cap: "Caption"
+
+large_gamma_long <- plot_log_gamma_histories(hist_large_model_space$log_gamma |> filter(!grepl("m_bad", variable) | grepl("m_bad.[16].$", variable)) |> mutate(variable = gsub("_bad", "", variable)))
+large_gamma_short <- plot_log_gamma_histories(hist_large_model_space$log_gamma_short |> mutate(variable = gsub("_bad", "", variable)))
+
+large_miscalib <- plot_log_p_histories(hist_large_model_space$miscalibration |> filter(!grepl("m_bad", variable) | grepl("m_bad.[16].$", variable))  |> mutate(variable = gsub("_bad", "", variable)))
+large_brier <- plot_log_p_histories(hist_large_model_space$brier |> filter(!grepl("m_bad", variable) | grepl("m_bad.[16].$", variable))  |> mutate(variable = gsub("_bad", "", variable)))
+
+large_t_test <- plot_log_p_histories(hist_large_model_space$ttest |> filter(!grepl("m_bad", variable) | grepl("m_bad.[16].$", variable))  |> mutate(variable = gsub("_bad", "", variable)))
+
+(large_gamma_short + labs(tag = "A) SBC (few simulations)") + tag_theme) /
+  (large_gamma_long + labs(tag = "B) SBC (more simulations)") + tag_theme) /
+  (large_brier + labs(tag = "C) Binary calibration - Brier") + tag_theme ) /
+  (large_miscalib  + labs(tag = "D)  Binary calibration - Miscalibration") + tag_theme) /
+  (large_t_test + labs(tag = "E) DAP") + tag_theme)
+```
+
+```{r}
+cat("Removed")
+power_miscalib_500 <- hist_large_model_space$miscalibration |> filter(sim_id == 500, variable == "m_aggregated") |> summarise(power = mean(log_p <= log(0.05))) |> pull(power)
+cat("The power of aggregatd miscalibration test after 500 simulations is:", scales::percent(power_miscalib_500), "\n")
+cat("In the full set of simulations, binary calibration with miscalibration metric rejected calibration for ", scales::percent(metrics_large_model_space$bad_summary$miscalibration_rejection), " of model indicators, with minimal p after Holm adjustment of ", metrics_large_model_space$bad_summary$min_miscalibration_adj_p)
 ```
 
 
@@ -587,6 +616,10 @@ all_metrics |> purrr::imap_dfr(\(cases, package) {
 ```
 
 ### Power table
+
+```{r}
+hist_large_linear <- load_precomputed_file(here::here("cache/hist_large_linear_rjags_large.rds"), "large-linear-rjags.qmd")
+```
 
 
 ```{r results = 'asis'}
