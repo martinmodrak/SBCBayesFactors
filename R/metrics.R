@@ -28,7 +28,7 @@ calibration_metrics <- function(res, prob1_prior = 0.5, include_reliability_diag
   }
   stopifnot(length(unique(bp$variable)) == 1)
 
-  if(prob1_prior == "avg_true") {
+  if(length(prob1_prior) == 1 && prob1_prior == "avg_true") {
     prob1_prior <- bp$simulated_value
   }
 

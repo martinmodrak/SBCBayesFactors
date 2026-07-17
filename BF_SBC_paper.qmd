@@ -356,7 +356,6 @@ lmm_multiple_OKfew_log_gamma_prepared <- hist_lmm_multiple_OKfew$log_gamma |> fi
 ```
 
 
-
 ## Appendix
 
 ### Metrics to assess data-averaged posterior
@@ -549,9 +548,16 @@ compare_binary_probs(mult_bp_by_prefix_notop$bs, mult_bp_by_prefix_notop$OKfew, 
   plot_layout(ncol = 1) + plot_annotation(tag_levels = "A")
 ```
 
-```{r}
-hist_large_linear <- load_precomputed_file(here::here("cache/hist_large_linear_rjags_large.rds"), "large-linear-rjags.qmd")
+### Large model space
 
+```{r}
+hist_large_model_space <- load_precomputed_file(here::here("cache/hist_large_linear_rjags_large.rds"), "large-linear-rjags.qmd")
+metrics_large_model_space <- load_precomputed_file(here::here("cache/metrics_large_linear_rjags_large.rds"), "large-linear-rjags.qmd")
+```
+
+```{r}
+plot_log_gamma_histories(hist_large_model_space$log_gamma |> filter(!grepl("m_bad", variable) | grepl("m_bad.[16].$", variable)) |> mutate(variable = gsub("_bad", "", variable)))
+plot_log_gamma_histories(hist_large_model_space$log_gamma_short)
 ```
 
 
@@ -568,7 +574,8 @@ all_metrics <- list(
   "BayesFactor" = 
     list("Random effect presence via lmBF" = ranef_test,
          "Bayesian t-test via ttestBF" = ttest_post
-         )
+         ),
+  "JAGS" = list("Large model space - top model" = metrics_large_model_space$good_top)
   )
 
 all_metrics |> purrr::imap_dfr(\(cases, package) {
