@@ -301,8 +301,8 @@ res_large_all <- get_partial_cache_blocks(ds_large, backend_large,
 
 filter_bad_fits <- TRUE
 if(filter_bad_fits) {
-  res_large <- res_large_all[res_large$default_diagnostics$max_rhat < 1.01 &
-                               res_large$default_diagnostics$min_ess_to_rank >= 0.5]
+  res_large <- res_large_all[res_large_all$default_diagnostics$max_rhat < 1.01 &
+                               res_large_all$default_diagnostics$min_ess_to_rank >= 0.5]
 } else {
   res_large <- res_large_all
 }
@@ -324,8 +324,10 @@ metrics_large_df <- purrr::imap_dfr(metrics_large, calibration_metrics_to_df) |>
 metrics_large_df_ss <- metrics_large_df |> 
   summarise(
   min_DAP_p = min(DAP_p),
+  min_DAP_adj_p = min(p.adjust(DAP_p, method = "holm")),
   DAP_rejection = mean(DAP_p < 0.05),
   min_miscalibration_p = min(miscalibration_p),
+  min_miscalibration_adj_p = min(p.adjust(miscalibration_p, method = "holm")),
   miscalibration_rejection = mean(miscalibration_p < 0.05),
   min_log_gamma_m_threshold = min(log_gamma - log_gamma_limit),
   log_gamma_rejection = mean(log_gamma < log_gamma_limit),
@@ -340,9 +342,11 @@ The normal stats are OK
 ```{r}
 plot_ecdf_diff(large_stats_ok, combine_variables = combine_array_elements)
 
-calibration_metrics(bp_large |> filter(variable == "top_model"), prob1_prior = "avg_true" )
+metrics_good_top <- calibration_metrics(bp_large |> filter(variable == "top_model"), prob1_prior = "avg_true" )
+metrics_good_top
 
-metrics_large_df_ss |> filter(!bad) |> select(-bad)
+metrics_good_summary <- metrics_large_df_ss |> filter(!bad) |> select(-bad)
+metrics_good_summary
 ```
 
 
@@ -351,9 +355,19 @@ The bad (shuffled) stats are bad
 ```{r}
 plot_ecdf_diff(large_stats_bad, combine_variables = combine_array_elements)
 
-calibration_metrics(bp_large |> filter(variable == "top_model_bad"), prob1_prior = "avg_true" )
+metrics_bad_top <- calibration_metrics(bp_large |> filter(variable == "top_model_bad"), prob1_prior = "avg_true" )
+metrics_bad_top
 
-metrics_large_df_ss |> filter(bad) |> select(-bad)
+metrics_bad_summary <- metrics_large_df_ss |> filter(bad) |> select(-bad)
+metrics_bad_summary
+```
+
+```{r}
+saveRDS(list(good_top = metrics_good_top,
+             good_summary = metrics_good_summary,
+             bad_top = metrics_bad_top,
+             bad_summary = metrics_bad_summary),
+        file.path(cache_dir, "metrics_large_linear_rjags_large.rds"))
 ```
 
 
