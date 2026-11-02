@@ -157,7 +157,8 @@ ttest_globals <- c("SBC_fit.SBC_backend_ttestBF", "SBC_fit_to_draws_matrix.SBC_f
 ```{r}
 dquants_ttest <- derived_quantities(
   pseudo_log_lik = sum(dnorm(y, mean = ifelse(model == 0, 0, mu), sd = sd(y), log = TRUE)),
-  model_sd_m1 = (model - 0.5) * (sd(y) - 1)
+  model_sd_m1 = (model - 0.5) * (sd(y) - 1),
+  .var_attributes = SBC::var_attributes(pseudo_log_lik = SBC::possibly_constant_var_attribute(), model_sd_m1 = SBC::possibly_constant_var_attribute())
 )
 ```
 
@@ -283,14 +284,15 @@ plot_log_gamma_histories(hist_fixed)
 
 ```{r}
 high_sd_fixed <- ds_fixed$generated %>% purrr::map_lgl(\(x) sd(x$y) >= 1)
+no_error_fixed <- res_fixed$errors |> purrr::map_lgl(is.null)
 
-res_fixed_high <- res_fixed[high_sd_fixed] 
-res_fixed_low <- res_fixed[!high_sd_fixed] 
+res_fixed_high <- res_fixed[high_sd_fixed & no_error_fixed] 
+res_fixed_low <- res_fixed[!high_sd_fixed & no_error_fixed] 
 
 true_model_fixed <- as.numeric(ds_fixed$variables[,"model"])
 
-metrics_fixed_high <- calibration_metrics(res_fixed_high, prob1_prior = true_model_fixed[high_sd_fixed])
-metrics_fixed_low <- calibration_metrics(res_fixed_low, prob1_prior = true_model_fixed[!high_sd_fixed])
+metrics_fixed_high <- calibration_metrics(res_fixed_high, prob1_prior = true_model_fixed[high_sd_fixed & no_error_fixed])
+metrics_fixed_low <- calibration_metrics(res_fixed_low, prob1_prior = true_model_fixed[!high_sd_fixed & no_error_fixed])
 
 
 print(metrics_fixed_high)
@@ -311,13 +313,14 @@ saveRDS(list(
 Using
 
 $$
-\pi(\sigma^2) = \frac{1}{1 + \sigma^2}
+\pi(\sigma^2) = \frac{1}{(1 + \sigma)^2}
 $$
 
 ```{r}
 r_inv1psquared <- function() {
   p <- runif(1)
-  return( tan(p * pi * 0.5))
+  sigma2 <-  p / (1 - p)
+  return(sqrt(sigma2))
 }
 
 set.seed(5422223)
@@ -393,14 +396,16 @@ print(metrics_cauchy)
 
 ```{r}
 high_sd_cauchy <- ds_cauchy$generated %>% purrr::map_lgl(\(x) sd(x$y) >= 1)
+no_error_cauchy <- res_cauchy$errors |> purrr::map_lgl(is.null)
 
-res_cauchy_high <- res_cauchy[high_sd_cauchy] 
-res_cauchy_low <- res_cauchy[!high_sd_cauchy] 
+
+res_cauchy_high <- res_cauchy[high_sd_cauchy & no_error_cauchy] 
+res_cauchy_low <- res_cauchy[!high_sd_cauchy & no_error_cauchy] 
 
 true_model_cauchy <- as.numeric(ds_cauchy$variables[,"model"])
 
-metrics_cauchy_high <- calibration_metrics(res_cauchy_high, prob1_prior = true_model_cauchy[high_sd_cauchy])
-metrics_cauchy_low <- calibration_metrics(res_cauchy_low, prob1_prior = true_model_cauchy[!high_sd_cauchy])
+metrics_cauchy_high <- calibration_metrics(res_cauchy_high, prob1_prior = true_model_cauchy[high_sd_cauchy & no_error_cauchy])
+metrics_cauchy_low <- calibration_metrics(res_cauchy_low, prob1_prior = true_model_cauchy[!high_sd_cauchy & no_error_cauchy])
 
 print(metrics_cauchy_high)
 print(metrics_cauchy_low)
